@@ -69,10 +69,13 @@ def create_app(config_name=None):
     # Context processors
     @app.context_processor
     def inject_globals():
-        from .models.user import Role
-        return {
-            'roles': Role.query.all() if Role.query.first() else []
-        }
+        try:
+            from .models.user import Role
+            return {
+                'roles': Role.query.all() if Role.query.first() else []
+            }
+        except Exception:
+            return {'roles': []}
 
     return app
 
