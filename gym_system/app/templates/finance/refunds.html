@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}المرتجعات{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-arrow-counterclockwise"></i>
+        المرتجعات
+    </h1>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        {% if refunds.items %}
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>التاريخ</th>
+                        <th>العضو</th>
+                        <th>المبلغ</th>
+                        <th>السبب</th>
+                        <th>بواسطة</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for refund in refunds.items %}
+                    <tr>
+                        <td>{{ refund.refund_date.strftime('%Y-%m-%d') }}</td>
+                        <td>{{ refund.subscription.member.name }}</td>
+                        <td>{{ refund.amount }} ر.س</td>
+                        <td>{{ refund.reason or '-' }}</td>
+                        <td>{{ refund.created_by_user.name if refund.created_by_user else '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if refunds.pages > 1 %}
+        <nav class="mt-3">
+            <ul class="pagination justify-content-center">
+                {% for page in refunds.iter_pages() %}
+                {% if page %}
+                <li class="page-item {% if page == refunds.page %}active{% endif %}">
+                    <a class="page-link" href="?page={{ page }}">{{ page }}</a>
+                </li>
+                {% else %}
+                <li class="page-item disabled"><span class="page-link">...</span></li>
+                {% endif %}
+                {% endfor %}
+            </ul>
+        </nav>
+        {% endif %}
+        {% else %}
+        <div class="empty-state">
+            <i class="bi bi-inbox"></i>
+            <p>لا توجد مرتجعات</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

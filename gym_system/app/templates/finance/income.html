@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+
+{% block title %}الإيرادات{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-graph-up-arrow"></i> الإيرادات</h1>
+</div>
+
+<!-- Filter -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">من تاريخ</label>
+                <input type="date" name="date_from" class="form-control"
+                       value="{{ date_from }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">إلى تاريخ</label>
+                <input type="date" name="date_to" class="form-control"
+                       value="{{ date_to }}">
+            </div>
+            {% if current_user.is_owner and brands %}
+            <div class="col-md-3">
+                <label class="form-label">البراند</label>
+                <select name="brand_id" class="form-select">
+                    <option value="">جميع البراندات</option>
+                    {% for brand in brands %}
+                    <option value="{{ brand.id }}" {{ 'selected' if request.args.get('brand_id')|int == brand.id }}>
+                        {{ brand.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-secondary w-100">
+                    <i class="bi bi-funnel"></i> تصفية
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Total -->
+<div class="alert alert-success d-flex justify-content-between align-items-center mb-4">
+    <span><i class="bi bi-calculator"></i> إجمالي الإيرادات:</span>
+    <strong class="fs-5">{{ "{:,.0f}".format(total) }} ر.س</strong>
+</div>
+
+<!-- Income List -->
+<div class="card">
+    <div class="card-body">
+        {% if income.items %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>التاريخ</th>
+                        <th>النوع</th>
+                        <th>الوصف</th>
+                        {% if current_user.is_owner %}
+                        <th>البراند</th>
+                        {% endif %}
+                        <th>المبلغ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in income.items %}
+                    <tr>
+                        <td>{{ item.date.strftime('%Y-%m-%d') }}</td>
+                        <td>
+                            {% if item.type == 'subscription' %}
+                            <span class="badge bg-success">اشتراك جديد</span>
+                            {% elif item.type == 'renewal' %}
+                            <span class="badge bg-info">تجديد</span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ item.type or 'أخرى' }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ item.description or '-' }}</td>
+                        {% if current_user.is_owner %}
+                        <td>
+                            <span class="badge bg-secondary">{{ item.brand.name if item.brand else '-' }}</span>
+                        </td>
+                        {% endif %}
+                        <td class="text-success fw-bold">+{{ "{:,.0f}".format(item.amount) }} ر.س</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if income.pages > 1 %}
+        <nav class="mt-4">
+            <ul class="pagination justify-content-center">
+                {% if income.has_prev %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('finance.income_list', page=income.prev_num, **request.args) }}">
+                        <i class="bi bi-chevron-right"></i>
+                    </a>
+                </li>
+                {% endif %}
+
+                {% for page_num in income.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                {% if page_num %}
+                <li class="page-item {{ 'active' if page_num == income.page else '' }}">
+                    <a class="page-link" href="{{ url_for('finance.income_list', page=page_num, **request.args) }}">
+                        {{ page_num }}
+                    </a>
+                </li>
+                {% else %}
+                <li class="page-item disabled"><span class="page-link">...</span></li>
+                {% endif %}
+                {% endfor %}
+
+                {% if income.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('finance.income_list', page=income.next_num, **request.args) }}">
+                        <i class="bi bi-chevron-left"></i>
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+
+        {% else %}
+        <div class="empty-state">
+            <i class="bi bi-cash-stack"></i>
+            <h5>لا توجد إيرادات</h5>
+            <p class="text-muted">لم يتم العثور على سجلات إيرادات في هذه الفترة</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

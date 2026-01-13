@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block title %}{% if expense %}تعديل{% else %}إضافة{% endif %} مصروف{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-receipt"></i>
+        {% if expense %}تعديل مصروف{% else %}إضافة مصروف جديد{% endif %}
+    </h1>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-building"></i>
+                {{ brand.name }}
+            </div>
+            <div class="card-body">
+                <form method="POST" enctype="multipart/form-data">
+                    {{ form.hidden_tag() }}
+
+                    <div class="mb-3">
+                        <label class="form-label">التصنيف *</label>
+                        {{ form.category_name(class="form-select") }}
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">المبلغ *</label>
+                            {{ form.amount(class="form-control", type="number", min="0", step="0.01", placeholder="0.00") }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">التاريخ *</label>
+                            {{ form.date(class="form-control", type="date") }}
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">الوصف</label>
+                        {{ form.description(class="form-control", rows="2", placeholder="وصف المصروف...") }}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">صورة الإيصال (اختياري)</label>
+                        <input type="file" name="receipt_image" class="form-control" accept="image/*">
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-danger">
+                            <i class="bi bi-check-lg"></i>
+                            {% if expense %}حفظ التعديلات{% else %}إضافة المصروف{% endif %}
+                        </button>
+                        <a href="{{ url_for('finance.expenses_list') }}" class="btn btn-secondary">
+                            <i class="bi bi-x-lg"></i>
+                            إلغاء
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-info-circle"></i>
+                تصنيفات المصروفات
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled mb-0">
+                    <li class="mb-2"><i class="bi bi-people text-primary"></i> رواتب - رواتب الموظفين</li>
+                    <li class="mb-2"><i class="bi bi-house text-success"></i> إيجار - إيجار المبنى</li>
+                    <li class="mb-2"><i class="bi bi-lightning text-warning"></i> كهرباء - فاتورة الكهرباء</li>
+                    <li class="mb-2"><i class="bi bi-droplet text-info"></i> ماء - فاتورة المياه</li>
+                    <li class="mb-2"><i class="bi bi-wrench text-secondary"></i> صيانة - إصلاحات وصيانة</li>
+                    <li class="mb-2"><i class="bi bi-box text-danger"></i> معدات - شراء معدات</li>
+                    <li class="mb-2"><i class="bi bi-megaphone text-primary"></i> تسويق - إعلانات وتسويق</li>
+                    <li><i class="bi bi-three-dots text-muted"></i> أخرى - مصروفات متنوعة</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

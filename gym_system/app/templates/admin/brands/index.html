@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+
+{% block title %}إدارة البراندات{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-building"></i> إدارة البراندات</h1>
+    <a href="{{ url_for('admin.brands_create') }}" class="btn btn-primary">
+        <i class="bi bi-plus-lg"></i>
+        إضافة براند
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        {% if brands %}
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>الاسم</th>
+                        <th>البصمة</th>
+                        <th>الفروع</th>
+                        <th>الأعضاء</th>
+                        <th>الحالة</th>
+                        <th>الإجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for brand in brands %}
+                    <tr>
+                        <td>{{ brand.id }}</td>
+                        <td>
+                            <strong>{{ brand.name }}</strong>
+                        </td>
+                        <td>
+                            {% if brand.uses_fingerprint %}
+                            <span class="badge bg-info">
+                                <i class="bi bi-fingerprint"></i> مفعل
+                            </span>
+                            <br><small class="text-muted">{{ brand.fingerprint_ip }}:{{ brand.fingerprint_port }}</small>
+                            {% else %}
+                            <span class="badge bg-secondary">غير مفعل</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ brand.branches.count() if brand.branches else 0 }}</td>
+                        <td>{{ brand.members.count() if brand.members else 0 }}</td>
+                        <td>
+                            {% if brand.is_active %}
+                            <span class="badge bg-success">نشط</span>
+                            {% else %}
+                            <span class="badge bg-danger">متوقف</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('admin.brands_edit', brand_id=brand.id) }}"
+                               class="btn btn-sm btn-outline-primary" title="تعديل">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <a href="{{ url_for('admin.branches_list', brand_id=brand.id) }}"
+                               class="btn btn-sm btn-outline-secondary" title="الفروع">
+                                <i class="bi bi-geo-alt"></i>
+                            </a>
+                            <a href="{{ url_for('members.index') }}?brand_id={{ brand.id }}"
+                               class="btn btn-sm btn-outline-info" title="الأعضاء">
+                                <i class="bi bi-people"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i class="bi bi-building"></i>
+            <h5>لا توجد براندات</h5>
+            <p class="text-muted">قم بإضافة أول براند للبدء</p>
+            <a href="{{ url_for('admin.brands_create') }}" class="btn btn-primary">
+                <i class="bi bi-plus-lg"></i>
+                إضافة براند
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

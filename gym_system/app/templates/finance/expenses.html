@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+
+{% block title %}المصروفات{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-arrow-up-circle"></i> المصروفات</h1>
+    {% if current_user.is_owner and brands %}
+    <div class="dropdown">
+        <button class="btn btn-danger dropdown-toggle" type="button" data-bs-toggle="dropdown">
+            <i class="bi bi-plus-lg"></i>
+            إضافة مصروف
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+            <li><h6 class="dropdown-header">اختر البراند</h6></li>
+            {% for brand in brands %}
+            <li>
+                <a class="dropdown-item" href="{{ url_for('finance.expenses_create', brand_id=brand.id) }}">
+                    <i class="bi bi-building"></i>
+                    {{ brand.name }}
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% elif current_user.brand_id %}
+    <a href="{{ url_for('finance.expenses_create') }}" class="btn btn-danger">
+        <i class="bi bi-plus-lg"></i>
+        إضافة مصروف
+    </a>
+    {% endif %}
+</div>
+
+<!-- Filter -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">من تاريخ</label>
+                <input type="date" name="date_from" class="form-control"
+                       value="{{ date_from }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">إلى تاريخ</label>
+                <input type="date" name="date_to" class="form-control"
+                       value="{{ date_to }}">
+            </div>
+            {% if current_user.is_owner and brands %}
+            <div class="col-md-3">
+                <label class="form-label">البراند</label>
+                <select name="brand_id" class="form-select">
+                    <option value="">جميع البراندات</option>
+                    {% for brand in brands %}
+                    <option value="{{ brand.id }}" {{ 'selected' if request.args.get('brand_id')|int == brand.id }}>
+                        {{ brand.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-secondary w-100">
+                    <i class="bi bi-funnel"></i> تصفية
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Total -->
+<div class="alert alert-danger d-flex justify-content-between align-items-center mb-4">
+    <span><i class="bi bi-calculator"></i> إجمالي المصروفات:</span>
+    <strong class="fs-5">{{ "{:,.0f}".format(total) }} ر.س</strong>
+</div>
+
+<!-- Expenses List -->
+<div class="card">
+    <div class="card-body">
+        {% if expenses.items %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>التاريخ</th>
+                        <th>التصنيف</th>
+                        <th>الوصف</th>
+                        {% if current_user.is_owner %}
+                        <th>البراند</th>
+                        {% endif %}
+                        <th>المبلغ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for expense in expenses.items %}
+                    <tr>
+                        <td>{{ expense.date.strftime('%Y-%m-%d') }}</td>
+                        <td>
+                            <span class="badge bg-secondary">{{ expense.category_name or '-' }}</span>
+                        </td>
+                        <td>{{ expense.description or '-' }}</td>
+                        {% if current_user.is_owner %}
+                        <td>
+                            <span class="badge bg-info">{{ expense.brand.name if expense.brand else '-' }}</span>
+                        </td>
+                        {% endif %}
+                        <td class="text-danger fw-bold">-{{ "{:,.0f}".format(expense.amount) }} ر.س</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if expenses.pages > 1 %}
+        <nav class="mt-4">
+            <ul class="pagination justify-content-center">
+                {% if expenses.has_prev %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('finance.expenses_list', page=expenses.prev_num, **request.args) }}">
+                        <i class="bi bi-chevron-right"></i>
+                    </a>
+                </li>
+                {% endif %}
+
+                {% for page_num in expenses.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                {% if page_num %}
+                <li class="page-item {{ 'active' if page_num == expenses.page else '' }}">
+                    <a class="page-link" href="{{ url_for('finance.expenses_list', page=page_num, **request.args) }}">
+                        {{ page_num }}
+                    </a>
+                </li>
+                {% else %}
+                <li class="page-item disabled"><span class="page-link">...</span></li>
+                {% endif %}
+                {% endfor %}
+
+                {% if expenses.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('finance.expenses_list', page=expenses.next_num, **request.args) }}">
+                        <i class="bi bi-chevron-left"></i>
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+
+        {% else %}
+        <div class="empty-state">
+            <i class="bi bi-receipt"></i>
+            <h5>لا توجد مصروفات</h5>
+            <p class="text-muted">لم يتم العثور على مصروفات في هذه الفترة</p>
+            {% if current_user.is_owner and brands %}
+            <div class="dropdown">
+                <button class="btn btn-danger dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    <i class="bi bi-plus-lg"></i>
+                    إضافة مصروف
+                </button>
+                <ul class="dropdown-menu">
+                    <li><h6 class="dropdown-header">اختر البراند</h6></li>
+                    {% for brand in brands %}
+                    <li>
+                        <a class="dropdown-item" href="{{ url_for('finance.expenses_create', brand_id=brand.id) }}">
+                            <i class="bi bi-building"></i>
+                            {{ brand.name }}
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% elif current_user.brand_id %}
+            <a href="{{ url_for('finance.expenses_create') }}" class="btn btn-danger">
+                <i class="bi bi-plus-lg"></i>
+                إضافة مصروف
+            </a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

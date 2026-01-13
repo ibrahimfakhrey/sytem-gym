@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}صرف راتب{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-wallet2"></i>
+        صرف راتب
+    </h1>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-body">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+
+                    <div class="mb-3">
+                        <label class="form-label">الموظف *</label>
+                        {{ form.user_id(class="form-select") }}
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">الشهر *</label>
+                            {{ form.month(class="form-select") }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">السنة *</label>
+                            {{ form.year(class="form-select") }}
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">الراتب الأساسي *</label>
+                        {{ form.base_salary(class="form-control", type="number", min="0", step="0.01") }}
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">البدلات</label>
+                            {{ form.allowances(class="form-control", type="number", min="0", step="0.01", id="allowances") }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">الخصومات</label>
+                            {{ form.deductions(class="form-control", type="number", min="0", step="0.01", id="deductions") }}
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">صافي الراتب</label>
+                        <input type="text" class="form-control" id="net-salary" readonly>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">ملاحظات</label>
+                        {{ form.notes(class="form-control", rows="2", placeholder="ملاحظات...") }}
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg"></i>
+                            صرف الراتب
+                        </button>
+                        <a href="{{ url_for('finance.salaries') }}" class="btn btn-secondary">
+                            <i class="bi bi-x-lg"></i>
+                            إلغاء
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const baseSalary = document.querySelector('input[name="base_salary"]');
+    const allowances = document.getElementById('allowances');
+    const deductions = document.getElementById('deductions');
+    const netSalary = document.getElementById('net-salary');
+
+    function calculateNet() {
+        const base = parseFloat(baseSalary.value) || 0;
+        const allow = parseFloat(allowances.value) || 0;
+        const deduct = parseFloat(deductions.value) || 0;
+        const net = base + allow - deduct;
+        netSalary.value = net.toLocaleString() + ' ر.س';
+    }
+
+    baseSalary.addEventListener('input', calculateNet);
+    allowances.addEventListener('input', calculateNet);
+    deductions.addEventListener('input', calculateNet);
+
+    calculateNet();
+});
+</script>
+{% endblock %}

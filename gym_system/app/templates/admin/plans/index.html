@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+
+{% block title %}باقات الاشتراك{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-tags"></i>
+        باقات الاشتراك
+    </h1>
+    {% if current_user.is_owner and brands %}
+    <div class="dropdown">
+        <button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+            <i class="bi bi-plus-lg"></i>
+            إضافة باقة
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+            <li><h6 class="dropdown-header">اختر البراند</h6></li>
+            {% for brand in brands %}
+            <li>
+                <a class="dropdown-item" href="{{ url_for('admin.plans_create', brand_id=brand.id) }}">
+                    <i class="bi bi-building"></i>
+                    {{ brand.name }}
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% elif not current_user.is_owner %}
+    <a href="{{ url_for('admin.plans_create') }}" class="btn btn-primary">
+        <i class="bi bi-plus-lg"></i>
+        إضافة باقة
+    </a>
+    {% endif %}
+</div>
+
+{% if current_user.is_owner and not brands %}
+<div class="alert alert-warning">
+    <i class="bi bi-exclamation-triangle"></i>
+    لا توجد براندات. يرجى <a href="{{ url_for('admin.brands_create') }}">إنشاء براند</a> أولاً قبل إضافة الباقات.
+</div>
+{% endif %}
+
+<div class="card">
+    <div class="card-body">
+        {% if plans %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>اسم الباقة</th>
+                        <th>المدة</th>
+                        <th>السعر</th>
+                        <th>التجميد</th>
+                        {% if current_user.is_owner %}
+                        <th>البراند</th>
+                        {% endif %}
+                        <th>الحالة</th>
+                        <th>الإجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for plan in plans %}
+                    <tr>
+                        <td>{{ plan.id }}</td>
+                        <td>
+                            <strong>{{ plan.name }}</strong>
+                            {% if plan.description %}
+                            <br><small class="text-muted">{{ plan.description[:50] }}{% if plan.description|length > 50 %}...{% endif %}</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge bg-info">{{ plan.duration_days }} يوم</span>
+                            {% if plan.duration_days == 30 %}
+                            <small class="text-muted d-block">شهر</small>
+                            {% elif plan.duration_days == 90 %}
+                            <small class="text-muted d-block">3 شهور</small>
+                            {% elif plan.duration_days == 180 %}
+                            <small class="text-muted d-block">6 شهور</small>
+                            {% elif plan.duration_days == 365 %}
+                            <small class="text-muted d-block">سنة</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <strong class="text-success">{{ "{:,.0f}".format(plan.price) }}</strong>
+                            <small>ر.س</small>
+                        </td>
+                        <td>
+                            <small>
+                                {{ plan.max_freezes }} مرة
+                                <br>
+                                <span class="text-muted">حتى {{ plan.max_freeze_days }} يوم</span>
+                            </small>
+                        </td>
+                        {% if current_user.is_owner %}
+                        <td>
+                            <span class="badge bg-secondary">{{ plan.brand.name }}</span>
+                        </td>
+                        {% endif %}
+                        <td>
+                            {% if plan.is_active %}
+                            <span class="badge-status active">نشطة</span>
+                            {% else %}
+                            <span class="badge-status danger">متوقفة</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group">
+                                <a href="{{ url_for('admin.plans_edit', plan_id=plan.id) }}"
+                                   class="btn btn-sm btn-outline-primary" title="تعديل">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i class="bi bi-tags"></i>
+            <h5>لا توجد باقات اشتراك</h5>
+            <p class="text-muted">قم بإضافة باقات اشتراك للبدء (شهري، ربع سنوي، سنوي...)</p>
+            {% if current_user.is_owner and brands %}
+            <div class="dropdown">
+                <button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    <i class="bi bi-plus-lg"></i>
+                    إضافة باقة
+                </button>
+                <ul class="dropdown-menu">
+                    <li><h6 class="dropdown-header">اختر البراند</h6></li>
+                    {% for brand in brands %}
+                    <li>
+                        <a class="dropdown-item" href="{{ url_for('admin.plans_create', brand_id=brand.id) }}">
+                            <i class="bi bi-building"></i>
+                            {{ brand.name }}
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% elif not current_user.is_owner %}
+            <a href="{{ url_for('admin.plans_create') }}" class="btn btn-primary">
+                <i class="bi bi-plus-lg"></i>
+                إضافة باقة
+            </a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if plans %}
+<div class="card mt-4">
+    <div class="card-header">
+        <i class="bi bi-lightbulb"></i>
+        نصائح
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-4">
+                <div class="d-flex align-items-center mb-2">
+                    <i class="bi bi-calendar-month text-primary fs-4 me-2"></i>
+                    <div>
+                        <strong>باقة شهرية</strong>
+                        <br><small class="text-muted">30 يوم - للتجربة</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="d-flex align-items-center mb-2">
+                    <i class="bi bi-calendar3 text-success fs-4 me-2"></i>
+                    <div>
+                        <strong>باقة ربع سنوية</strong>
+                        <br><small class="text-muted">90 يوم - الأكثر شيوعاً</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="d-flex align-items-center mb-2">
+                    <i class="bi bi-calendar-check text-warning fs-4 me-2"></i>
+                    <div>
+                        <strong>باقة سنوية</strong>
+                        <br><small class="text-muted">365 يوم - أفضل قيمة</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

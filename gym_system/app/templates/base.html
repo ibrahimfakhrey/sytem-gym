@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}نظام إدارة الجيم{% endblock %}</title>
+
+    <!-- Bootstrap RTL CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.rtl.min.css" rel="stylesheet">
+
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+
+    <!-- Google Fonts - Arabic -->
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Custom CSS -->
+    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    {% if current_user.is_authenticated %}
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary sticky-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{ url_for('dashboard.index') }}">
+                <i class="bi bi-building"></i>
+                نظام إدارة الجيم
+            </a>
+
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    {% if current_user.brand %}
+                    <li class="nav-item">
+                        <span class="nav-link">
+                            <i class="bi bi-shop"></i>
+                            {{ current_user.brand.name }}
+                        </span>
+                    </li>
+                    {% endif %}
+                </ul>
+
+                <ul class="navbar-nav">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+                            <i class="bi bi-person-circle"></i>
+                            {{ current_user.name }}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li>
+                                <span class="dropdown-item-text text-muted">
+                                    {{ current_user.role.name }}
+                                </span>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <a class="dropdown-item" href="{{ url_for('auth.change_password') }}">
+                                    <i class="bi bi-key"></i>
+                                    تغيير كلمة المرور
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item text-danger" href="{{ url_for('auth.logout') }}">
+                                    <i class="bi bi-box-arrow-right"></i>
+                                    تسجيل الخروج
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <nav class="col-md-3 col-lg-2 d-md-block bg-light sidebar collapse" id="sidebar">
+                <div class="position-sticky pt-3">
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint and request.endpoint == 'dashboard.index' %}active{% endif %}"
+                               href="{{ url_for('dashboard.index') }}">
+                                <i class="bi bi-speedometer2"></i>
+                                لوحة التحكم
+                            </a>
+                        </li>
+
+                        {% if current_user.can_manage_members %}
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint and 'members' in request.endpoint %}active{% endif %}"
+                               href="{{ url_for('members.index') }}">
+                                <i class="bi bi-people"></i>
+                                الأعضاء
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        {% if current_user.can_manage_subscriptions %}
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint and 'subscriptions' in request.endpoint %}active{% endif %}"
+                               href="{{ url_for('subscriptions.index') }}">
+                                <i class="bi bi-card-checklist"></i>
+                                الاشتراكات
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        {% if current_user.can_manage_members %}
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint and 'attendance' in request.endpoint %}active{% endif %}"
+                               href="{{ url_for('attendance.index') }}">
+                                <i class="bi bi-check2-square"></i>
+                                الحضور
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        {% if current_user.can_manage_finance %}
+                        <li class="nav-item">
+                            <a class="nav-link" data-bs-toggle="collapse" href="#financeMenu">
+                                <i class="bi bi-cash-stack"></i>
+                                المالية
+                                <i class="bi bi-chevron-down float-start"></i>
+                            </a>
+                            <div class="collapse {% if request.endpoint and 'finance' in request.endpoint %}show{% endif %}" id="financeMenu">
+                                <ul class="nav flex-column ms-3">
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="{{ url_for('finance.income_list') }}">
+                                            <i class="bi bi-arrow-down-circle text-success"></i>
+                                            الدخل
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="{{ url_for('finance.expenses_list') }}">
+                                            <i class="bi bi-arrow-up-circle text-danger"></i>
+                                            المصروفات
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="{{ url_for('finance.salaries_list') }}">
+                                            <i class="bi bi-wallet2"></i>
+                                            الرواتب
+                                        </a>
+                                    </li>
+                                </ul>
+                            </div>
+                        </li>
+                        {% endif %}
+
+                        {% if current_user.can_view_reports %}
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint and 'reports' in request.endpoint %}active{% endif %}"
+                               href="{{ url_for('reports.index') }}">
+                                <i class="bi bi-bar-chart"></i>
+                                التقارير
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        {% if current_user.can_manage_users or current_user.is_owner %}
+                        <li class="nav-item mt-3">
+                            <span class="nav-link text-muted small">الإعدادات</span>
+                        </li>
+
+                        {% if current_user.is_owner %}
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint and 'brands' in request.endpoint %}active{% endif %}"
+                               href="{{ url_for('admin.brands_list') }}">
+                                <i class="bi bi-building"></i>
+                                البراندات
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint and 'users' in request.endpoint %}active{% endif %}"
+                               href="{{ url_for('admin.users_list') }}">
+                                <i class="bi bi-person-gear"></i>
+                                المستخدمين
+                            </a>
+                        </li>
+
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint and 'plans' in request.endpoint %}active{% endif %}"
+                               href="{{ url_for('admin.plans_list') }}">
+                                <i class="bi bi-tags"></i>
+                                الباقات
+                            </a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </div>
+            </nav>
+
+            <!-- Main Content -->
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 py-4">
+                <!-- Flash Messages -->
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                <div class="flash-messages">
+                    {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% endwith %}
+
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+    </div>
+
+    {% else %}
+    <!-- Content without sidebar (login page) -->
+    <main class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="flash-messages mt-3">
+            {% for category, message in messages %}
+            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        {% block login_content %}{% endblock %}
+    </main>
+    {% endif %}
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Custom JS -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

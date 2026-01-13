@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block title %}الاشتراكات{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-card-checklist"></i> الاشتراكات</h1>
+</div>
+
+<!-- Filter -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            <div class="col-md-3">
+                <select name="status" class="form-select">
+                    <option value="">جميع الحالات</option>
+                    <option value="active" {{ 'selected' if request.args.get('status') == 'active' }}>نشط</option>
+                    <option value="frozen" {{ 'selected' if request.args.get('status') == 'frozen' }}>مجمد</option>
+                    <option value="expired" {{ 'selected' if request.args.get('status') == 'expired' }}>منتهي</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <select name="expiring" class="form-select">
+                    <option value="">الكل</option>
+                    <option value="7" {{ 'selected' if request.args.get('expiring') == '7' }}>ينتهي خلال 7 أيام</option>
+                    <option value="30" {{ 'selected' if request.args.get('expiring') == '30' }}>ينتهي خلال 30 يوم</option>
+                </select>
+            </div>
+            {% if current_user.role.can_view_all_brands %}
+            <div class="col-md-3">
+                <select name="brand_id" class="form-select">
+                    <option value="">جميع البراندات</option>
+                    {% for brand in brands %}
+                    <option value="{{ brand.id }}" {{ 'selected' if request.args.get('brand_id')|int == brand.id }}>
+                        {{ brand.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+            <div class="col-md-3">
+                <button type="submit" class="btn btn-secondary w-100">
+                    <i class="bi bi-funnel"></i> تصفية
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Subscriptions List -->
+<div class="card">
+    <div class="card-body">
+        {% if subscriptions.items %}
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>العضو</th>
+                        <th>الخطة</th>
+                        {% if current_user.role.can_view_all_brands %}
+                        <th>البراند</th>
+                        {% endif %}
+                        <th>تاريخ البدء</th>
+                        <th>تاريخ الانتهاء</th>
+                        <th>المتبقي</th>
+                        <th>الحالة</th>
+                        <th>الإجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for sub in subscriptions.items %}
+                    <tr>
+                        <td>{{ sub.id }}</td>
+                        <td>
+                            <a href="{{ url_for('members.view', member_id=sub.member.id) }}">
+                                {{ sub.member.name }}
+                            </a>
+                            <br><small class="text-muted">{{ sub.member.phone }}</small>
+                        </td>
+                        <td>{{ sub.plan.name }}</td>
+                        {% if current_user.role.can_view_all_brands %}
+                        <td>{{ sub.brand.name }}</td>
+                        {% endif %}
+                        <td>{{ sub.start_date.strftime('%Y-%m-%d') }}</td>
+                        <td>{{ sub.end_date.strftime('%Y-%m-%d') }}</td>
+                        <td>
+                            {% if sub.days_remaining > 7 %}
+                            <span class="text-success">{{ sub.days_remaining }} يوم</span>
+                            {% elif sub.days_remaining > 0 %}
+                            <span class="text-warning">{{ sub.days_remaining }} يوم</span>
+                            {% else %}
+                            <span class="text-danger">منتهي</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge bg-{{ sub.status_class }}">{{ sub.status_text }}</span>
+                        </td>
+                        <td>
+                            <a href="{{ url_for('members.view', member_id=sub.member.id) }}"
+                               class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                            <a href="{{ url_for('subscriptions.renew', subscription_id=sub.id) }}"
+                               class="btn btn-sm btn-outline-success">
+                                <i class="bi bi-arrow-repeat"></i>
+                            </a>
+                            {% if sub.status == 'active' and sub.freeze_count < sub.plan.max_freezes %}
+                            <a href="{{ url_for('subscriptions.freeze', subscription_id=sub.id) }}"
+                               class="btn btn-sm btn-outline-warning">
+                                <i class="bi bi-snow"></i>
+                            </a>
+                            {% elif sub.status == 'frozen' %}
+                            <form action="{{ url_for('subscriptions.unfreeze', subscription_id=sub.id) }}"
+                                  method="POST" class="d-inline">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm btn-success">
+                                    <i class="bi bi-play"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if subscriptions.pages > 1 %}
+        <nav class="mt-4">
+            <ul class="pagination justify-content-center">
+                {% if subscriptions.has_prev %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('subscriptions.index', page=subscriptions.prev_num, **request.args) }}">
+                        <i class="bi bi-chevron-right"></i>
+                    </a>
+                </li>
+                {% endif %}
+
+                {% for page_num in subscriptions.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                {% if page_num %}
+                <li class="page-item {{ 'active' if page_num == subscriptions.page else '' }}">
+                    <a class="page-link" href="{{ url_for('subscriptions.index', page=page_num, **request.args) }}">
+                        {{ page_num }}
+                    </a>
+                </li>
+                {% else %}
+                <li class="page-item disabled"><span class="page-link">...</span></li>
+                {% endif %}
+                {% endfor %}
+
+                {% if subscriptions.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('subscriptions.index', page=subscriptions.next_num, **request.args) }}">
+                        <i class="bi bi-chevron-left"></i>
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+
+        {% else %}
+        <div class="empty-state">
+            <i class="bi bi-card-checklist"></i>
+            <h5>لا توجد اشتراكات</h5>
+            <p class="text-muted">لم يتم العثور على اشتراكات مطابقة للفلتر</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

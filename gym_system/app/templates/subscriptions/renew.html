@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+
+{% block title %}تجديد اشتراك - {{ subscription.member.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-arrow-repeat"></i>
+        تجديد الاشتراك
+    </h1>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-person"></i>
+                {{ subscription.member.name }}
+                <span class="badge bg-secondary">{{ subscription.member.phone }}</span>
+            </div>
+            <div class="card-body">
+                <!-- Current Subscription Info -->
+                <div class="alert alert-info mb-4">
+                    <h6><i class="bi bi-info-circle"></i> الاشتراك الحالي</h6>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <strong>الخطة:</strong> {{ subscription.plan.name }}
+                        </div>
+                        <div class="col-md-4">
+                            <strong>ينتهي:</strong> {{ subscription.end_date.strftime('%Y-%m-%d') }}
+                        </div>
+                        <div class="col-md-4">
+                            <strong>الحالة:</strong>
+                            <span class="badge bg-{{ subscription.status_class }}">{{ subscription.status_text }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+
+                    <div class="mb-3">
+                        <label class="form-label">خطة الاشتراك الجديدة *</label>
+                        {{ form.plan_id(class="form-select", id="plan-select") }}
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">تاريخ البدء *</label>
+                            {{ form.start_date(class="form-control", type="date") }}
+                            <small class="text-muted">يبدأ من تاريخ انتهاء الاشتراك الحالي أو اليوم</small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">تاريخ الانتهاء</label>
+                            <input type="date" class="form-control" id="end-date" readonly>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+                    <h5 class="mb-3"><i class="bi bi-cash"></i> الدفع</h5>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">السعر</label>
+                            <input type="text" class="form-control" id="original-price" readonly>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">الخصم</label>
+                            {{ form.discount(class="form-control", type="number", min="0", step="0.01", id="discount") }}
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">المبلغ النهائي</label>
+                            <input type="text" class="form-control" id="final-amount" readonly>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">المبلغ المدفوع *</label>
+                            {{ form.amount_paid(class="form-control", type="number", min="0", step="0.01", id="amount-paid") }}
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">ملاحظات</label>
+                        {{ form.notes(class="form-control", rows="2") }}
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-success">
+                            <i class="bi bi-check-lg"></i>
+                            تجديد الاشتراك
+                        </button>
+                        <a href="{{ url_for('members.view', member_id=subscription.member.id) }}" class="btn btn-secondary">
+                            <i class="bi bi-x-lg"></i>
+                            إلغاء
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-clock-history"></i>
+                سجل الاشتراكات
+            </div>
+            <div class="card-body">
+                {% if subscription.member.subscriptions.count() > 0 %}
+                <ul class="list-group list-group-flush">
+                    {% for sub in subscription.member.subscriptions.order_by(db.desc('created_at')).limit(5) %}
+                    <li class="list-group-item px-0">
+                        <div class="d-flex justify-content-between">
+                            <span>{{ sub.plan.name }}</span>
+                            <span class="badge bg-{{ sub.status_class }}">{{ sub.status_text }}</span>
+                        </div>
+                        <small class="text-muted">
+                            {{ sub.start_date.strftime('%Y-%m-%d') }} - {{ sub.end_date.strftime('%Y-%m-%d') }}
+                        </small>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted text-center mb-0">لا يوجد سجل</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const planSelect = document.getElementById('plan-select');
+    const startDate = document.querySelector('input[name="start_date"]');
+    const endDate = document.getElementById('end-date');
+    const originalPrice = document.getElementById('original-price');
+    const discount = document.getElementById('discount');
+    const finalAmount = document.getElementById('final-amount');
+    const amountPaid = document.getElementById('amount-paid');
+
+    function updateCalculations() {
+        const option = planSelect.options[planSelect.selectedIndex];
+        if (!option) return;
+
+        const duration = parseInt(option.dataset.duration || 30);
+        const price = parseFloat(option.dataset.price || 0);
+
+        originalPrice.value = price.toLocaleString() + ' ر.س';
+
+        if (startDate.value) {
+            const start = new Date(startDate.value);
+            start.setDate(start.getDate() + duration);
+            endDate.value = start.toISOString().split('T')[0];
+        }
+
+        const discountVal = parseFloat(discount.value) || 0;
+        const final = price - discountVal;
+        finalAmount.value = final.toLocaleString() + ' ر.س';
+    }
+
+    planSelect.addEventListener('change', updateCalculations);
+    startDate.addEventListener('change', updateCalculations);
+    discount.addEventListener('input', updateCalculations);
+
+    updateCalculations();
+});
+</script>
+{% endblock %}

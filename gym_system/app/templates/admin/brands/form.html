@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% block title %}{% if brand %}تعديل{% else %}إضافة{% endif %} براند{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-building"></i>
+        {% if brand %}تعديل براند: {{ brand.name }}{% else %}إضافة براند جديد{% endif %}
+    </h1>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-body">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+
+                    <div class="mb-3">
+                        <label class="form-label">اسم البراند *</label>
+                        {{ form.name(class="form-control", placeholder="مثال: صالة الأبطال") }}
+                    </div>
+
+                    <hr class="my-4">
+                    <h5 class="mb-3"><i class="bi bi-fingerprint"></i> إعدادات البصمة</h5>
+
+                    <div class="mb-3">
+                        <div class="form-check">
+                            {{ form.uses_fingerprint(class="form-check-input", id="uses_fingerprint") }}
+                            <label class="form-check-label" for="uses_fingerprint">
+                                تفعيل نظام البصمة لهذا البراند
+                            </label>
+                        </div>
+                    </div>
+
+                    <div id="fingerprint-settings" style="display: none;">
+                        <div class="row">
+                            <div class="col-md-8 mb-3">
+                                <label class="form-label">عنوان IP لجهاز البصمة</label>
+                                {{ form.fingerprint_ip(class="form-control", placeholder="192.168.1.224") }}
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">المنفذ</label>
+                                {{ form.fingerprint_port(class="form-control", placeholder="5005") }}
+                            </div>
+                        </div>
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i>
+                            تأكد من أن جهاز البصمة متصل بنفس الشبكة وأن الإعدادات صحيحة.
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <div class="mb-3">
+                        <div class="form-check">
+                            {{ form.is_active(class="form-check-input", id="is_active") }}
+                            <label class="form-check-label" for="is_active">
+                                البراند نشط
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg"></i>
+                            {% if brand %}حفظ التعديلات{% else %}إنشاء البراند{% endif %}
+                        </button>
+                        <a href="{{ url_for('admin.brands_list') }}" class="btn btn-secondary">
+                            <i class="bi bi-x-lg"></i>
+                            إلغاء
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-info-circle"></i>
+                معلومات
+            </div>
+            <div class="card-body">
+                <p class="text-muted">
+                    البراند هو الكيان الرئيسي الذي يمثل صالة رياضية أو سلسلة صالات.
+                </p>
+                <ul class="text-muted small">
+                    <li>كل براند له أعضاء واشتراكات مستقلة</li>
+                    <li>يمكن تعيين موظفين لكل براند</li>
+                    <li>البصمة اختيارية لكل براند</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const checkbox = document.getElementById('uses_fingerprint');
+    const settings = document.getElementById('fingerprint-settings');
+
+    function toggleSettings() {
+        settings.style.display = checkbox.checked ? 'block' : 'none';
+    }
+
+    checkbox.addEventListener('change', toggleSettings);
+    toggleSettings();
+});
+</script>
+{% endblock %}

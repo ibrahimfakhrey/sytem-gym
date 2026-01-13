@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+
+{% block title %}تقارير الحضور{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-calendar-check"></i> تقارير الحضور</h1>
+</div>
+
+<!-- Filter -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            <div class="col-md-2">
+                <label class="form-label">الفترة</label>
+                <select name="period" class="form-select">
+                    <option value="week" {{ 'selected' if period == 'week' }}>هذا الأسبوع</option>
+                    <option value="month" {{ 'selected' if period == 'month' }}>هذا الشهر</option>
+                    <option value="year" {{ 'selected' if period == 'year' }}>هذه السنة</option>
+                    <option value="custom" {{ 'selected' if period == 'custom' }}>تاريخ محدد</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">من تاريخ</label>
+                <input type="date" name="start_date" class="form-control" value="{{ start_date }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">إلى تاريخ</label>
+                <input type="date" name="end_date" class="form-control" value="{{ end_date }}">
+            </div>
+            {% if current_user.is_owner and brands %}
+            <div class="col-md-3">
+                <label class="form-label">البراند</label>
+                <select name="brand_id" class="form-select">
+                    <option value="">جميع البراندات</option>
+                    {% for brand in brands %}
+                    <option value="{{ brand.id }}" {{ 'selected' if request.args.get('brand_id')|int == brand.id }}>
+                        {{ brand.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="bi bi-funnel"></i> عرض التقرير
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Report by Brand -->
+{% if report_data %}
+{% for item in report_data %}
+<div class="card mb-4">
+    <div class="card-header">
+        <i class="bi bi-building"></i>
+        {{ item.brand.name }}
+    </div>
+    <div class="card-body">
+        <div class="row g-4">
+            <div class="col-md-4">
+                <div class="stat-card stat-primary">
+                    <div class="stat-icon"><i class="bi bi-calendar-check"></i></div>
+                    <div class="stat-value">{{ item.total_attendance }}</div>
+                    <div class="stat-label">إجمالي الحضور</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="stat-card stat-info">
+                    <div class="stat-icon"><i class="bi bi-graph-up"></i></div>
+                    <div class="stat-value">{{ "{:.1f}".format(item.daily_average) }}</div>
+                    <div class="stat-label">المتوسط اليومي</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="stat-card stat-success">
+                    <div class="stat-icon"><i class="bi bi-calendar3"></i></div>
+                    <div class="stat-value">{{ item.days }}</div>
+                    <div class="stat-label">عدد الأيام</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+<!-- Summary -->
+{% if report_data|length > 1 %}
+<div class="card">
+    <div class="card-header bg-dark text-white">
+        <i class="bi bi-calculator"></i>
+        الإجمالي
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>البراند</th>
+                        <th>إجمالي الحضور</th>
+                        <th>المتوسط اليومي</th>
+                        <th>عدد الأيام</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% set total_attendance = namespace(value=0) %}
+                    {% set total_avg = namespace(value=0) %}
+
+                    {% for item in report_data %}
+                    {% set total_attendance.value = total_attendance.value + item.total_attendance %}
+                    {% set total_avg.value = total_avg.value + item.daily_average %}
+                    <tr>
+                        <td>{{ item.brand.name }}</td>
+                        <td class="fw-bold">{{ item.total_attendance }}</td>
+                        <td>{{ "{:.1f}".format(item.daily_average) }}</td>
+                        <td>{{ item.days }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-dark">
+                    <tr>
+                        <th>الإجمالي</th>
+                        <th>{{ total_attendance.value }}</th>
+                        <th>{{ "{:.1f}".format(total_avg.value) }}</th>
+                        <th>-</th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% else %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <i class="bi bi-calendar-check"></i>
+            <h5>لا توجد بيانات حضور</h5>
+            <p class="text-muted">لم يتم العثور على سجلات حضور للفترة المحددة</p>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+
+{% block title %}لوحة التحكم - الاستقبال{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-speedometer2"></i> لوحة التحكم</h1>
+</div>
+
+<!-- Quick Actions -->
+<div class="quick-actions">
+    <a href="{{ url_for('members.create', brand_id=brand.id) }}" class="quick-action-btn">
+        <i class="bi bi-person-plus text-primary"></i>
+        <span>عضو جديد</span>
+    </a>
+    <a href="{{ url_for('subscriptions.index') }}" class="quick-action-btn">
+        <i class="bi bi-card-checklist text-success"></i>
+        <span>الاشتراكات</span>
+    </a>
+    <a href="{{ url_for('attendance.index') }}" class="quick-action-btn">
+        <i class="bi bi-check2-square text-info"></i>
+        <span>تسجيل حضور</span>
+    </a>
+    <a href="{{ url_for('members.index') }}" class="quick-action-btn">
+        <i class="bi bi-search text-secondary"></i>
+        <span>بحث عن عضو</span>
+    </a>
+</div>
+
+<!-- Stats -->
+<div class="row g-4 mb-4">
+    <div class="col-md-6">
+        <div class="card stat-card bg-primary text-white">
+            <div class="stat-icon">
+                <i class="bi bi-check2-all"></i>
+            </div>
+            <div class="stat-value">{{ today_attendance }}</div>
+            <div class="stat-label">حضور اليوم</div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card stat-card bg-success text-white">
+            <div class="stat-icon">
+                <i class="bi bi-people"></i>
+            </div>
+            <div class="stat-value">{{ active_members }}</div>
+            <div class="stat-label">الأعضاء النشطين</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Expiring Today -->
+    <div class="col-lg-6">
+        <div class="card border-danger">
+            <div class="card-header bg-danger text-white">
+                <i class="bi bi-exclamation-triangle"></i>
+                اشتراكات تنتهي اليوم
+            </div>
+            <div class="card-body">
+                {% if expiring_today %}
+                <ul class="list-group list-group-flush">
+                    {% for sub in expiring_today %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ sub.member.name }}</strong>
+                            <br>
+                            <small class="text-muted">{{ sub.member.phone }}</small>
+                        </div>
+                        <a href="{{ url_for('subscriptions.renew', subscription_id=sub.id) }}"
+                           class="btn btn-sm btn-success">
+                            تجديد
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted text-center mb-0">لا توجد اشتراكات تنتهي اليوم</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Expiring Soon -->
+    <div class="col-lg-6">
+        <div class="card border-warning">
+            <div class="card-header bg-warning">
+                <i class="bi bi-clock"></i>
+                اشتراكات تنتهي خلال 7 أيام
+            </div>
+            <div class="card-body">
+                {% if expiring_soon %}
+                <ul class="list-group list-group-flush">
+                    {% for sub in expiring_soon %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ sub.member.name }}</strong>
+                            <br>
+                            <small class="text-muted">{{ sub.member.phone }}</small>
+                        </div>
+                        <span class="badge bg-warning text-dark">{{ sub.days_remaining }} يوم</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted text-center mb-0">لا توجد اشتراكات تنتهي قريباً</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if brand.uses_fingerprint and pending_enrollment %}
+<!-- Pending Fingerprint Enrollment -->
+<div class="card border-info mt-4">
+    <div class="card-header bg-info text-white">
+        <i class="bi bi-fingerprint"></i>
+        في انتظار تسجيل البصمة
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>الاسم</th>
+                        <th>الهاتف</th>
+                        <th>رقم البصمة</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for member in pending_enrollment %}
+                    <tr>
+                        <td>{{ member.name }}</td>
+                        <td>{{ member.phone }}</td>
+                        <td><span class="badge bg-secondary">{{ member.fingerprint_id }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <small class="text-muted">
+            <i class="bi bi-info-circle"></i>
+            يرجى تسجيل بصمة هؤلاء الأعضاء في برنامج AAS باستخدام رقم البصمة المذكور
+        </small>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

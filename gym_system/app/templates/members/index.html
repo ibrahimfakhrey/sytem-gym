@@ -1,0 +1,249 @@
+{% extends "base.html" %}
+
+{% block title %}الأعضاء{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-people"></i> الأعضاء</h1>
+    {% if current_user.is_owner and brands %}
+    <div class="dropdown">
+        <button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+            <i class="bi bi-person-plus"></i>
+            عضو جديد
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+            <li><h6 class="dropdown-header">اختر البراند</h6></li>
+            {% for brand in brands %}
+            <li>
+                <a class="dropdown-item" href="{{ url_for('members.create', brand_id=brand.id) }}">
+                    <i class="bi bi-building"></i>
+                    {{ brand.name }}
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% elif current_user.brand_id %}
+    <a href="{{ url_for('members.create', brand_id=current_user.brand_id) }}" class="btn btn-primary">
+        <i class="bi bi-person-plus"></i>
+        عضو جديد
+    </a>
+    {% endif %}
+</div>
+
+{% if current_user.is_owner and not brands %}
+<div class="alert alert-warning">
+    <i class="bi bi-exclamation-triangle"></i>
+    لا توجد براندات. يرجى <a href="{{ url_for('admin.brands_create') }}">إنشاء براند</a> أولاً.
+</div>
+{% endif %}
+
+<!-- Search and Filter -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            <div class="col-md-4">
+                <div class="search-box">
+                    <i class="bi bi-search"></i>
+                    <input type="text" name="search" class="form-control"
+                           placeholder="بحث بالاسم أو الهاتف..."
+                           value="{{ request.args.get('search', '') }}">
+                </div>
+            </div>
+            <div class="col-md-3">
+                <select name="status" class="form-select">
+                    <option value="">جميع الحالات</option>
+                    <option value="active" {{ 'selected' if request.args.get('status') == 'active' }}>نشط</option>
+                    <option value="expired" {{ 'selected' if request.args.get('status') == 'expired' }}>منتهي</option>
+                    <option value="frozen" {{ 'selected' if request.args.get('status') == 'frozen' }}>مجمد</option>
+                    <option value="no_subscription" {{ 'selected' if request.args.get('status') == 'no_subscription' }}>بدون اشتراك</option>
+                </select>
+            </div>
+            {% if current_user.is_owner and brands %}
+            <div class="col-md-3">
+                <select name="brand_id" class="form-select">
+                    <option value="">جميع البراندات</option>
+                    {% for brand in brands %}
+                    <option value="{{ brand.id }}" {{ 'selected' if request.args.get('brand_id')|int == brand.id }}>
+                        {{ brand.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-secondary w-100">
+                    <i class="bi bi-funnel"></i> تصفية
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Members List -->
+<div class="card">
+    <div class="card-body">
+        {% if members.items %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>الاسم</th>
+                        <th>الهاتف</th>
+                        {% if current_user.is_owner %}
+                        <th>البراند</th>
+                        {% endif %}
+                        <th>الاشتراك</th>
+                        <th>الحالة</th>
+                        <th>الإجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for member in members.items %}
+                    <tr>
+                        <td>{{ member.id }}</td>
+                        <td>
+                            <strong>{{ member.name }}</strong>
+                            {% if member.fingerprint_id %}
+                            <br><small class="text-muted">
+                                <i class="bi bi-fingerprint"></i> {{ member.fingerprint_id }}
+                                {% if not member.fingerprint_enrolled %}
+                                <span class="badge bg-warning">غير مسجل</span>
+                                {% endif %}
+                            </small>
+                            {% endif %}
+                        </td>
+                        <td>{{ member.phone }}</td>
+                        {% if current_user.is_owner %}
+                        <td>
+                            <span class="badge bg-secondary">{{ member.brand.name }}</span>
+                        </td>
+                        {% endif %}
+                        <td>
+                            {% if member.active_subscription %}
+                            {{ member.active_subscription.plan.name }}
+                            <br><small class="text-muted">
+                                ينتهي: {{ member.active_subscription.end_date.strftime('%Y-%m-%d') }}
+                            </small>
+                            {% else %}
+                            <span class="text-muted">لا يوجد</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge-status {{ member.subscription_status }}">
+                                {% if member.subscription_status == 'active' %}
+                                نشط
+                                {% elif member.subscription_status == 'frozen' %}
+                                مجمد
+                                {% elif member.subscription_status == 'expired' %}
+                                منتهي
+                                {% else %}
+                                بدون اشتراك
+                                {% endif %}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="btn-group">
+                                <a href="{{ url_for('members.view', member_id=member.id) }}"
+                                   class="btn btn-sm btn-outline-primary" title="عرض">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                <a href="{{ url_for('members.edit', member_id=member.id) }}"
+                                   class="btn btn-sm btn-outline-secondary" title="تعديل">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                {% if member.active_subscription %}
+                                <a href="{{ url_for('subscriptions.renew', subscription_id=member.active_subscription.id) }}"
+                                   class="btn btn-sm btn-outline-success" title="تجديد">
+                                    <i class="bi bi-arrow-repeat"></i>
+                                </a>
+                                {% else %}
+                                <a href="{{ url_for('subscriptions.create', member_id=member.id) }}"
+                                   class="btn btn-sm btn-success" title="اشتراك جديد">
+                                    <i class="bi bi-plus"></i>
+                                </a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if members.pages > 1 %}
+        <nav class="mt-4">
+            <ul class="pagination justify-content-center">
+                {% if members.has_prev %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('members.index', page=members.prev_num, **request.args) }}">
+                        <i class="bi bi-chevron-right"></i>
+                    </a>
+                </li>
+                {% endif %}
+
+                {% for page_num in members.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                {% if page_num %}
+                <li class="page-item {{ 'active' if page_num == members.page else '' }}">
+                    <a class="page-link" href="{{ url_for('members.index', page=page_num, **request.args) }}">
+                        {{ page_num }}
+                    </a>
+                </li>
+                {% else %}
+                <li class="page-item disabled"><span class="page-link">...</span></li>
+                {% endif %}
+                {% endfor %}
+
+                {% if members.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('members.index', page=members.next_num, **request.args) }}">
+                        <i class="bi bi-chevron-left"></i>
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+
+        {% else %}
+        <div class="empty-state">
+            <i class="bi bi-people"></i>
+            <h5>لا يوجد أعضاء</h5>
+            <p class="text-muted">
+                {% if request.args.get('search') or request.args.get('status') %}
+                لا توجد نتائج مطابقة للبحث
+                {% else %}
+                قم بإضافة أول عضو للبدء
+                {% endif %}
+            </p>
+            {% if current_user.is_owner and brands %}
+            <div class="dropdown">
+                <button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    <i class="bi bi-person-plus"></i>
+                    عضو جديد
+                </button>
+                <ul class="dropdown-menu">
+                    <li><h6 class="dropdown-header">اختر البراند</h6></li>
+                    {% for brand in brands %}
+                    <li>
+                        <a class="dropdown-item" href="{{ url_for('members.create', brand_id=brand.id) }}">
+                            <i class="bi bi-building"></i>
+                            {{ brand.name }}
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% elif current_user.brand_id %}
+            <a href="{{ url_for('members.create', brand_id=current_user.brand_id) }}" class="btn btn-primary">
+                <i class="bi bi-person-plus"></i>
+                عضو جديد
+            </a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

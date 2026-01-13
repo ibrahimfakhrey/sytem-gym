@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block title %}لوحة التحكم - المالية العامة{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-cash-stack"></i> المالية العامة</h1>
+</div>
+
+<!-- Total Stats -->
+<div class="row g-4 mb-4">
+    <div class="col-md-4">
+        <div class="card stat-card bg-success text-white">
+            <div class="stat-icon">
+                <i class="bi bi-arrow-down-circle"></i>
+            </div>
+            <div class="stat-value">{{ "{:,.0f}".format(total_income) }}</div>
+            <div class="stat-label">إجمالي الدخل (هذا الشهر)</div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card stat-card bg-danger text-white">
+            <div class="stat-icon">
+                <i class="bi bi-arrow-up-circle"></i>
+            </div>
+            <div class="stat-value">{{ "{:,.0f}".format(total_expenses) }}</div>
+            <div class="stat-label">إجمالي المصروفات</div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card stat-card {% if total_profit >= 0 %}bg-primary{% else %}bg-warning{% endif %} text-white">
+            <div class="stat-icon">
+                <i class="bi bi-graph-up"></i>
+            </div>
+            <div class="stat-value">{{ "{:,.0f}".format(total_profit) }}</div>
+            <div class="stat-label">صافي الربح</div>
+        </div>
+    </div>
+</div>
+
+<!-- Brand Comparison -->
+<div class="card">
+    <div class="card-header">
+        <i class="bi bi-bar-chart"></i>
+        مقارنة البراندات
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>البراند</th>
+                        <th>الدخل</th>
+                        <th>المصروفات</th>
+                        <th>الربح</th>
+                        <th>نسبة الربح</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in brand_stats %}
+                    <tr>
+                        <td><strong>{{ item.brand.name }}</strong></td>
+                        <td class="text-success">{{ "{:,.0f}".format(item.income) }} ر.س</td>
+                        <td class="text-danger">{{ "{:,.0f}".format(item.expenses) }} ر.س</td>
+                        <td class="{% if item.profit >= 0 %}text-success{% else %}text-danger{% endif %}">
+                            {{ "{:,.0f}".format(item.profit) }} ر.س
+                        </td>
+                        <td>
+                            {% if item.income > 0 %}
+                            {{ "{:.1f}".format((item.profit / item.income) * 100) }}%
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-dark">
+                    <tr>
+                        <th>الإجمالي</th>
+                        <th>{{ "{:,.0f}".format(total_income) }} ر.س</th>
+                        <th>{{ "{:,.0f}".format(total_expenses) }} ر.س</th>
+                        <th>{{ "{:,.0f}".format(total_profit) }} ر.س</th>
+                        <th>
+                            {% if total_income > 0 %}
+                            {{ "{:.1f}".format((total_profit / total_income) * 100) }}%
+                            {% endif %}
+                        </th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Links -->
+<div class="row g-4 mt-4">
+    <div class="col-md-4">
+        <a href="{{ url_for('reports.financial') }}" class="card text-decoration-none">
+            <div class="card-body text-center py-4">
+                <i class="bi bi-file-earmark-bar-graph display-4 text-primary"></i>
+                <h5 class="mt-3">التقارير المالية</h5>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-4">
+        <a href="{{ url_for('reports.members') }}" class="card text-decoration-none">
+            <div class="card-body text-center py-4">
+                <i class="bi bi-people display-4 text-success"></i>
+                <h5 class="mt-3">تقارير الأعضاء</h5>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-4">
+        <a href="{{ url_for('reports.attendance') }}" class="card text-decoration-none">
+            <div class="card-body text-center py-4">
+                <i class="bi bi-calendar-check display-4 text-info"></i>
+                <h5 class="mt-3">تقارير الحضور</h5>
+            </div>
+        </a>
+    </div>
+</div>
+{% endblock %}

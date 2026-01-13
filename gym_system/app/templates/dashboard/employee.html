@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}لوحة التحكم - الموظف{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-speedometer2"></i> لوحة التحكم</h1>
+</div>
+
+<!-- Quick Actions -->
+<div class="quick-actions">
+    <a href="{{ url_for('attendance.index') }}" class="quick-action-btn">
+        <i class="bi bi-check2-square text-primary"></i>
+        <span>تسجيل حضور</span>
+    </a>
+    <a href="{{ url_for('members.index') }}" class="quick-action-btn">
+        <i class="bi bi-people text-success"></i>
+        <span>الأعضاء</span>
+    </a>
+</div>
+
+<!-- Today's Stats -->
+<div class="row g-4 mb-4">
+    <div class="col-md-6">
+        <div class="card stat-card bg-primary text-white">
+            <div class="stat-icon">
+                <i class="bi bi-check2-all"></i>
+            </div>
+            <div class="stat-value">{{ today_attendance }}</div>
+            <div class="stat-label">حضور اليوم</div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card stat-card bg-info text-white">
+            <div class="stat-icon">
+                <i class="bi bi-calendar-check"></i>
+            </div>
+            <div class="stat-value">{{ my_attendance }}</div>
+            <div class="stat-label">حضوري هذا الشهر</div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Attendance -->
+<div class="card">
+    <div class="card-header">
+        <i class="bi bi-clock-history"></i>
+        آخر الحضور اليوم
+    </div>
+    <div class="card-body">
+        {% if recent_attendance %}
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>العضو</th>
+                        <th>الوقت</th>
+                        <th>المصدر</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for att in recent_attendance %}
+                    <tr>
+                        <td>{{ att.member.name }}</td>
+                        <td>{{ att.check_in.strftime('%H:%M') }}</td>
+                        <td>
+                            <span class="badge bg-secondary">{{ att.source_text }}</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted text-center mb-0">لا يوجد حضور اليوم</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

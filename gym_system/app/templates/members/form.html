@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+
+{% block title %}{% if member %}تعديل{% else %}إضافة{% endif %} عضو{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-person"></i>
+        {% if member %}تعديل عضو: {{ member.name }}{% else %}تسجيل عضو جديد{% endif %}
+    </h1>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-body">
+                <form method="POST" enctype="multipart/form-data">
+                    {{ form.hidden_tag() }}
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">الاسم الكامل *</label>
+                            {{ form.name(class="form-control", placeholder="الاسم الثلاثي") }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">رقم الهاتف *</label>
+                            {{ form.phone(class="form-control", placeholder="05xxxxxxxx") }}
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">البريد الإلكتروني</label>
+                            {{ form.email(class="form-control", placeholder="example@email.com") }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">تاريخ الميلاد</label>
+                            {{ form.birth_date(class="form-control", type="date") }}
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">الجنس</label>
+                            {{ form.gender(class="form-select") }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">رقم الهوية</label>
+                            {{ form.national_id(class="form-control", placeholder="رقم الهوية الوطنية") }}
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">العنوان</label>
+                        {{ form.address(class="form-control", placeholder="العنوان") }}
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">اسم الطوارئ</label>
+                            {{ form.emergency_contact(class="form-control", placeholder="اسم جهة الاتصال للطوارئ") }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">هاتف الطوارئ</label>
+                            {{ form.emergency_phone(class="form-control", placeholder="رقم هاتف الطوارئ") }}
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">ملاحظات</label>
+                        {{ form.notes(class="form-control", rows="2", placeholder="أي ملاحظات...") }}
+                    </div>
+
+                    {% if brand and brand.uses_fingerprint %}
+                    <hr class="my-4">
+                    <h5 class="mb-3"><i class="bi bi-fingerprint"></i> البصمة</h5>
+
+                    {% if member and member.fingerprint_id %}
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        رقم البصمة: <strong>{{ member.fingerprint_id }}</strong>
+                        {% if member.fingerprint_enrolled %}
+                        <span class="badge bg-success">مسجل</span>
+                        {% else %}
+                        <span class="badge bg-warning">في انتظار التسجيل في برنامج AAS</span>
+                        {% endif %}
+                    </div>
+                    {% else %}
+                    <div class="alert alert-secondary">
+                        <i class="bi bi-info-circle"></i>
+                        سيتم تعيين رقم بصمة تلقائياً عند إنشاء العضو. يجب تسجيل البصمة في برنامج AAS باستخدام هذا الرقم.
+                    </div>
+                    {% endif %}
+                    {% endif %}
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg"></i>
+                            {% if member %}حفظ التعديلات{% else %}تسجيل العضو{% endif %}
+                        </button>
+                        <a href="{{ url_for('members.index') }}" class="btn btn-secondary">
+                            <i class="bi bi-x-lg"></i>
+                            إلغاء
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        {% if not member %}
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-info-circle"></i>
+                معلومات
+            </div>
+            <div class="card-body">
+                <p class="text-muted small">
+                    بعد تسجيل العضو، يمكنك:
+                </p>
+                <ul class="text-muted small">
+                    <li>إنشاء اشتراك جديد له</li>
+                    <li>تسجيل حضوره يدوياً</li>
+                    {% if brand and brand.uses_fingerprint %}
+                    <li>تسجيل بصمته في برنامج AAS</li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if member %}
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-card-checklist"></i>
+                الاشتراك الحالي
+            </div>
+            <div class="card-body">
+                {% if member.active_subscription %}
+                <div class="mb-2">
+                    <strong>{{ member.active_subscription.plan.name }}</strong>
+                </div>
+                <div class="text-muted small">
+                    <div>من: {{ member.active_subscription.start_date.strftime('%Y-%m-%d') }}</div>
+                    <div>إلى: {{ member.active_subscription.end_date.strftime('%Y-%m-%d') }}</div>
+                    <div class="mt-2">
+                        <span class="badge bg-{{ member.active_subscription.status_class }}">
+                            {{ member.active_subscription.status_text }}
+                        </span>
+                    </div>
+                </div>
+                {% else %}
+                <p class="text-muted mb-2">لا يوجد اشتراك نشط</p>
+                <a href="{{ url_for('subscriptions.create', member_id=member.id) }}" class="btn btn-sm btn-success">
+                    <i class="bi bi-plus"></i>
+                    إنشاء اشتراك
+                </a>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <i class="bi bi-clock-history"></i>
+                إحصائيات
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-6">
+                        <div class="h4 text-primary">{{ member.attendances.count() }}</div>
+                        <small class="text-muted">إجمالي الحضور</small>
+                    </div>
+                    <div class="col-6">
+                        <div class="h4 text-success">{{ member.subscriptions.count() }}</div>
+                        <small class="text-muted">الاشتراكات</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

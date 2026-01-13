@@ -1,0 +1,243 @@
+{% extends "base.html" %}
+
+{% block title %}إنشاء اشتراك - {{ member.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-card-plus"></i>
+        إنشاء اشتراك جديد
+    </h1>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-person"></i>
+                {{ member.name }}
+                <span class="badge bg-secondary">{{ member.phone }}</span>
+                {% if member.brand %}
+                <span class="badge bg-info">{{ member.brand.name }}</span>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+
+                    <div class="mb-3">
+                        <label class="form-label">باقة الاشتراك *</label>
+                        {{ form.plan_id(class="form-select", id="plan-select") }}
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">تاريخ البدء</label>
+                            <input type="date" class="form-control" id="start-date" value="{{ today }}" readonly>
+                            <small class="text-muted">يبدأ من اليوم</small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">تاريخ الانتهاء</label>
+                            <input type="date" class="form-control" id="end-date" readonly>
+                            <small class="text-muted">يحسب تلقائياً حسب الباقة</small>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+                    <h5 class="mb-3"><i class="bi bi-cash"></i> الدفع</h5>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">سعر الباقة</label>
+                            <input type="text" class="form-control" id="original-price" readonly>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">الخصم</label>
+                            {{ form.discount(class="form-control", type="number", min="0", step="0.01", id="discount", placeholder="0") }}
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">المبلغ النهائي</label>
+                            <input type="text" class="form-control bg-light" id="final-amount" readonly>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">المبلغ المدفوع *</label>
+                            {{ form.paid_amount(class="form-control", type="number", min="0", step="0.01", id="amount-paid") }}
+                        </div>
+                    </div>
+
+                    <div id="remaining-alert" class="alert alert-warning" style="display: none;">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        المبلغ المتبقي: <strong id="remaining-amount">0</strong> ر.س
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">ملاحظات</label>
+                        {{ form.notes(class="form-control", rows="2", placeholder="أي ملاحظات إضافية...") }}
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-success">
+                            <i class="bi bi-check-lg"></i>
+                            إنشاء الاشتراك
+                        </button>
+                        <a href="{{ url_for('members.view', member_id=member.id) }}" class="btn btn-secondary">
+                            <i class="bi bi-x-lg"></i>
+                            إلغاء
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-tags"></i>
+                الباقات المتاحة
+            </div>
+            <div class="card-body">
+                {% if plans %}
+                {% for plan in plans %}
+                <div class="plan-option p-3 mb-2 rounded border" data-plan-id="{{ plan.id }}"
+                     data-duration="{{ plan.duration_days }}" data-price="{{ plan.price }}"
+                     style="cursor: pointer;">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <strong>{{ plan.name }}</strong>
+                        <span class="badge bg-success">{{ "{:,.0f}".format(plan.price) }} ر.س</span>
+                    </div>
+                    <div class="small text-muted mt-1">
+                        <i class="bi bi-calendar3"></i> {{ plan.duration_days }} يوم
+                        {% if plan.duration_days == 30 %}(شهر){% endif %}
+                        {% if plan.duration_days == 90 %}(3 شهور){% endif %}
+                        {% if plan.duration_days == 180 %}(6 شهور){% endif %}
+                        {% if plan.duration_days == 365 %}(سنة){% endif %}
+                    </div>
+                    <div class="small text-muted">
+                        <i class="bi bi-snow"></i> تجميد: {{ plan.max_freezes }} مرة / {{ plan.max_freeze_days }} يوم
+                    </div>
+                </div>
+                {% endfor %}
+                {% else %}
+                <div class="text-center text-muted py-3">
+                    <i class="bi bi-exclamation-circle fs-1"></i>
+                    <p class="mt-2">لا توجد باقات متاحة</p>
+                    <a href="{{ url_for('admin.plans_list') }}" class="btn btn-sm btn-primary">
+                        إضافة باقات
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if member.fingerprint_id and not member.fingerprint_enrolled %}
+        <div class="card mt-3 border-warning">
+            <div class="card-header bg-warning text-dark">
+                <i class="bi bi-fingerprint"></i>
+                تسجيل البصمة
+            </div>
+            <div class="card-body">
+                <p class="mb-2">رقم البصمة: <strong>{{ member.fingerprint_id }}</strong></p>
+                <small class="text-muted">
+                    بعد إنشاء الاشتراك، يرجى تسجيل بصمة العضو في جهاز البصمة باستخدام هذا الرقم.
+                </small>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const planSelect = document.getElementById('plan-select');
+    const startDate = document.getElementById('start-date');
+    const endDate = document.getElementById('end-date');
+    const originalPrice = document.getElementById('original-price');
+    const discount = document.getElementById('discount');
+    const finalAmount = document.getElementById('final-amount');
+    const amountPaid = document.getElementById('amount-paid');
+    const remainingAlert = document.getElementById('remaining-alert');
+    const remainingAmount = document.getElementById('remaining-amount');
+
+    // Set today's date
+    const today = new Date().toISOString().split('T')[0];
+    startDate.value = today;
+
+    // Build plans data
+    const plans = {};
+    document.querySelectorAll('.plan-option').forEach(el => {
+        plans[el.dataset.planId] = {
+            duration: parseInt(el.dataset.duration),
+            price: parseFloat(el.dataset.price)
+        };
+
+        // Click to select plan
+        el.addEventListener('click', function() {
+            planSelect.value = this.dataset.planId;
+            planSelect.dispatchEvent(new Event('change'));
+
+            // Highlight selected
+            document.querySelectorAll('.plan-option').forEach(p => p.classList.remove('border-primary', 'bg-light'));
+            this.classList.add('border-primary', 'bg-light');
+        });
+    });
+
+    function updateCalculations() {
+        const planId = planSelect.value;
+        if (!planId || !plans[planId]) return;
+
+        const plan = plans[planId];
+        originalPrice.value = plan.price.toLocaleString('ar-SA') + ' ر.س';
+
+        // Calculate end date
+        const start = new Date(startDate.value);
+        start.setDate(start.getDate() + plan.duration);
+        endDate.value = start.toISOString().split('T')[0];
+
+        // Calculate final amount
+        const discountVal = parseFloat(discount.value) || 0;
+        const final = plan.price - discountVal;
+        finalAmount.value = final.toLocaleString('ar-SA') + ' ر.س';
+
+        // Check remaining
+        const paid = parseFloat(amountPaid.value) || 0;
+        const remaining = final - paid;
+
+        if (remaining > 0) {
+            remainingAlert.style.display = 'block';
+            remainingAmount.textContent = remaining.toLocaleString('ar-SA');
+        } else {
+            remainingAlert.style.display = 'none';
+        }
+
+        // Highlight selected plan
+        document.querySelectorAll('.plan-option').forEach(p => {
+            p.classList.remove('border-primary', 'bg-light');
+            if (p.dataset.planId === planId) {
+                p.classList.add('border-primary', 'bg-light');
+            }
+        });
+    }
+
+    planSelect.addEventListener('change', function() {
+        const plan = plans[this.value];
+        if (plan) {
+            amountPaid.value = plan.price;
+            discount.value = 0;
+        }
+        updateCalculations();
+    });
+
+    discount.addEventListener('input', updateCalculations);
+    amountPaid.addEventListener('input', updateCalculations);
+
+    // Initial calculation
+    if (planSelect.value) {
+        updateCalculations();
+    }
+});
+</script>
+{% endblock %}

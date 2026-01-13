@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block title %}{% if plan %}تعديل{% else %}إضافة{% endif %} خطة اشتراك{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-card-list"></i>
+        {% if plan %}تعديل خطة: {{ plan.name }}{% else %}إضافة خطة اشتراك جديدة{% endif %}
+    </h1>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-body">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+
+                    <div class="mb-3">
+                        <label class="form-label">اسم الخطة *</label>
+                        {{ form.name(class="form-control", placeholder="مثال: اشتراك شهري") }}
+                    </div>
+
+                    {% if brand %}
+                    <div class="mb-3">
+                        <label class="form-label">البراند</label>
+                        <input type="text" class="form-control" value="{{ brand.name }}" disabled>
+                    </div>
+                    {% endif %}
+
+                    <div class="mb-3">
+                        <label class="form-label">الوصف</label>
+                        {{ form.description(class="form-control", rows="2", placeholder="وصف مختصر للخطة...") }}
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">مدة الاشتراك (بالأيام) *</label>
+                            {{ form.duration_days(class="form-control", type="number", min="1") }}
+                            <small class="text-muted">مثال: 30 يوم = شهر</small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">السعر (ر.س) *</label>
+                            {{ form.price(class="form-control", type="number", min="0", step="0.01") }}
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+                    <h5 class="mb-3"><i class="bi bi-snow"></i> إعدادات التجميد</h5>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">عدد مرات التجميد المسموحة</label>
+                            {{ form.max_freezes(class="form-control", type="number", min="0") }}
+                            <small class="text-muted">0 = غير مسموح بالتجميد</small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">أقصى أيام تجميد</label>
+                            {{ form.max_freeze_days(class="form-control", type="number", min="0") }}
+                            <small class="text-muted">مجموع أيام التجميد المسموحة</small>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <div class="mb-3">
+                        <div class="form-check">
+                            {{ form.is_active(class="form-check-input", id="is_active") }}
+                            <label class="form-check-label" for="is_active">
+                                الخطة نشطة (متاحة للاشتراكات الجديدة)
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg"></i>
+                            {% if plan %}حفظ التعديلات{% else %}إنشاء الخطة{% endif %}
+                        </button>
+                        <a href="{{ url_for('admin.plans_list') }}" class="btn btn-secondary">
+                            <i class="bi bi-x-lg"></i>
+                            إلغاء
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-lightbulb"></i>
+                أمثلة شائعة
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled small">
+                    <li class="mb-3 p-2 bg-light rounded">
+                        <strong>اشتراك شهري</strong>
+                        <br>المدة: 30 يوم
+                        <br>التجميد: 1 مرة / 7 أيام
+                    </li>
+                    <li class="mb-3 p-2 bg-light rounded">
+                        <strong>اشتراك ربع سنوي</strong>
+                        <br>المدة: 90 يوم
+                        <br>التجميد: 2 مرات / 14 يوم
+                    </li>
+                    <li class="mb-3 p-2 bg-light rounded">
+                        <strong>اشتراك سنوي</strong>
+                        <br>المدة: 365 يوم
+                        <br>التجميد: 4 مرات / 30 يوم
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        {% if plan and plan.subscriptions.count() > 0 %}
+        <div class="card mt-4 border-warning">
+            <div class="card-header bg-warning">
+                <i class="bi bi-exclamation-triangle"></i>
+                تنبيه
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-0">
+                    يوجد {{ plan.subscriptions.count() }} اشتراك مرتبط بهذه الخطة.
+                    التعديلات لن تؤثر على الاشتراكات الحالية.
+                </p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

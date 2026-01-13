@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block title %}{% if user %}تعديل{% else %}إضافة{% endif %} مستخدم{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-person"></i>
+        {% if user %}تعديل مستخدم: {{ user.name }}{% else %}إضافة مستخدم جديد{% endif %}
+    </h1>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-body">
+                {% if form.errors %}
+                <div class="alert alert-danger">
+                    <strong>يوجد أخطاء في النموذج:</strong>
+                    <ul class="mb-0">
+                    {% for field, errors in form.errors.items() %}
+                        {% for error in errors %}
+                        <li>{{ error }}</li>
+                        {% endfor %}
+                    {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">الاسم *</label>
+                            {{ form.name(class="form-control", placeholder="الاسم الكامل", required=true) }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">رقم الهاتف</label>
+                            {{ form.phone(class="form-control", placeholder="05xxxxxxxx") }}
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">البريد الإلكتروني *</label>
+                        {{ form.email(class="form-control", placeholder="example@email.com", type="email", required=true) }}
+                    </div>
+
+                    {% if not user %}
+                    <div class="mb-3">
+                        <label class="form-label">كلمة المرور * (6 أحرف على الأقل)</label>
+                        {{ form.password(class="form-control", placeholder="••••••••", minlength="6", required=true) }}
+                    </div>
+                    {% endif %}
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">الدور *</label>
+                            {{ form.role_id(class="form-select", required=true) }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">البراند</label>
+                            {{ form.brand_id(class="form-select") }}
+                            <small class="text-muted">اختياري للمالك، إلزامي للأدوار الأخرى</small>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="form-check">
+                            {{ form.is_active(class="form-check-input", id="is_active") }}
+                            <label class="form-check-label" for="is_active">
+                                المستخدم نشط
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg"></i>
+                            {% if user %}حفظ التعديلات{% else %}إنشاء المستخدم{% endif %}
+                        </button>
+                        <a href="{{ url_for('admin.users_list') }}" class="btn btn-secondary">
+                            <i class="bi bi-x-lg"></i>
+                            إلغاء
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-shield-check"></i>
+                صلاحيات الأدوار
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled small">
+                    <li class="mb-2">
+                        <strong class="text-primary">المالك:</strong>
+                        <br>صلاحيات كاملة على جميع البراندات
+                    </li>
+                    <li class="mb-2">
+                        <strong class="text-success">مدير البراند:</strong>
+                        <br>إدارة براند محدد بالكامل
+                    </li>
+                    <li class="mb-2">
+                        <strong class="text-info">موظف الاستقبال:</strong>
+                        <br>إدارة الأعضاء والحضور
+                    </li>
+                    <li class="mb-2">
+                        <strong class="text-warning">المالية:</strong>
+                        <br>إدارة المصروفات والدخل
+                    </li>
+                    <li class="mb-2">
+                        <strong class="text-secondary">مدير المالية:</strong>
+                        <br>عرض التقارير المالية لجميع البراندات
+                    </li>
+                    <li>
+                        <strong class="text-dark">موظف/مدرب:</strong>
+                        <br>صلاحيات محدودة
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

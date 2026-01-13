@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}تجميد اشتراك - {{ subscription.member.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-snow"></i>
+        تجميد الاشتراك
+    </h1>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-person"></i>
+                {{ subscription.member.name }}
+            </div>
+            <div class="card-body">
+                <!-- Current Status -->
+                <div class="alert alert-info mb-4">
+                    <div class="row text-center">
+                        <div class="col-4">
+                            <div class="h5 mb-0">{{ subscription.freeze_count }}</div>
+                            <small class="text-muted">مرات مستخدمة</small>
+                        </div>
+                        <div class="col-4">
+                            <div class="h5 mb-0">{{ subscription.plan.max_freezes }}</div>
+                            <small class="text-muted">الحد الأقصى</small>
+                        </div>
+                        <div class="col-4">
+                            <div class="h5 mb-0">{{ subscription.plan.max_freeze_days - subscription.total_freeze_days }}</div>
+                            <small class="text-muted">أيام متبقية</small>
+                        </div>
+                    </div>
+                </div>
+
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">تاريخ بدء التجميد *</label>
+                            {{ form.start_date(class="form-control", type="date") }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">عدد أيام التجميد *</label>
+                            {{ form.days(class="form-control", type="number", min="1", max=subscription.plan.max_freeze_days - subscription.total_freeze_days) }}
+                            <small class="text-muted">
+                                الحد الأقصى: {{ subscription.plan.max_freeze_days - subscription.total_freeze_days }} يوم
+                            </small>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">سبب التجميد</label>
+                        {{ form.reason(class="form-control", rows="2", placeholder="سبب التجميد (اختياري)...") }}
+                    </div>
+
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        عند تجميد الاشتراك، سيتم إضافة أيام التجميد إلى تاريخ انتهاء الاشتراك.
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-warning">
+                            <i class="bi bi-snow"></i>
+                            تجميد الاشتراك
+                        </button>
+                        <a href="{{ url_for('members.view', member_id=subscription.member.id) }}" class="btn btn-secondary">
+                            <i class="bi bi-x-lg"></i>
+                            إلغاء
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        {% if subscription.freezes.count() > 0 %}
+        <div class="card mt-4">
+            <div class="card-header">
+                <i class="bi bi-clock-history"></i>
+                سجل التجميد
+            </div>
+            <div class="card-body">
+                <ul class="list-group list-group-flush">
+                    {% for freeze in subscription.freezes %}
+                    <li class="list-group-item px-0">
+                        <div class="d-flex justify-content-between">
+                            <span>{{ freeze.start_date.strftime('%Y-%m-%d') }}</span>
+                            <span>{{ freeze.days }} يوم</span>
+                        </div>
+                        {% if freeze.reason %}
+                        <small class="text-muted">{{ freeze.reason }}</small>
+                        {% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

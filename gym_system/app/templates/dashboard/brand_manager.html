@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+
+{% block title %}لوحة التحكم - {{ brand.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-shop"></i>
+        {{ brand.name }}
+        {% if brand.uses_fingerprint %}
+        <span class="badge bg-info">
+            <i class="bi bi-fingerprint"></i> بصمة
+        </span>
+        {% endif %}
+    </h1>
+</div>
+
+<!-- Sync Status (for fingerprint brands) -->
+{% if brand.uses_fingerprint and sync_status %}
+<div class="alert alert-{{ sync_status.class }} d-flex align-items-center mb-4">
+    <i class="bi bi-wifi me-2"></i>
+    <div>
+        <strong>حالة المزامنة:</strong> {{ sync_status.message }}
+    </div>
+</div>
+{% endif %}
+
+<!-- Stats Cards -->
+<div class="row g-4 mb-4">
+    <div class="col-md-6 col-lg-3">
+        <div class="card stat-card">
+            <div class="stat-icon text-primary">
+                <i class="bi bi-people"></i>
+            </div>
+            <div class="stat-value">{{ stats.members }}</div>
+            <div class="stat-label">الأعضاء</div>
+        </div>
+    </div>
+
+    <div class="col-md-6 col-lg-3">
+        <div class="card stat-card">
+            <div class="stat-icon text-success">
+                <i class="bi bi-card-checklist"></i>
+            </div>
+            <div class="stat-value">{{ stats.active_subscriptions }}</div>
+            <div class="stat-label">الاشتراكات النشطة</div>
+        </div>
+    </div>
+
+    <div class="col-md-6 col-lg-3">
+        <div class="card stat-card">
+            <div class="stat-icon text-info">
+                <i class="bi bi-cash"></i>
+            </div>
+            <div class="stat-value">{{ "{:,.0f}".format(stats.income) }}</div>
+            <div class="stat-label">الدخل (هذا الشهر)</div>
+        </div>
+    </div>
+
+    <div class="col-md-6 col-lg-3">
+        <div class="card stat-card">
+            <div class="stat-icon text-warning">
+                <i class="bi bi-graph-up"></i>
+            </div>
+            <div class="stat-value">{{ "{:,.0f}".format(stats.profit) }}</div>
+            <div class="stat-label">صافي الربح</div>
+        </div>
+    </div>
+</div>
+
+<!-- Today's Attendance -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-4">
+        <div class="card bg-primary text-white">
+            <div class="card-body text-center py-4">
+                <div class="display-3 fw-bold">{{ stats.today_attendance }}</div>
+                <p class="mb-0">حضور اليوم</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-clock-history"></i>
+                آخر الحضور
+            </div>
+            <div class="card-body">
+                {% if recent_attendance %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>العضو</th>
+                                <th>الوقت</th>
+                                <th>المصدر</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for att in recent_attendance %}
+                            <tr>
+                                <td>{{ att.member.name }}</td>
+                                <td>{{ att.check_in.strftime('%H:%M') }}</td>
+                                <td>
+                                    <span class="badge bg-secondary">{{ att.source_text }}</span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted text-center mb-0">لا يوجد حضور اليوم</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Expiring Soon -->
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-exclamation-triangle text-warning"></i>
+                اشتراكات تنتهي قريباً
+            </div>
+            <div class="card-body">
+                {% if expiring_soon %}
+                <ul class="list-group list-group-flush">
+                    {% for sub in expiring_soon %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ sub.member.name }}</strong>
+                            <br>
+                            <small class="text-muted">{{ sub.member.phone }}</small>
+                        </div>
+                        <div class="text-end">
+                            <span class="badge bg-warning text-dark">{{ sub.days_remaining }} يوم</span>
+                            <br>
+                            <a href="{{ url_for('subscriptions.renew', subscription_id=sub.id) }}"
+                               class="btn btn-sm btn-outline-success mt-1">تجديد</a>
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted text-center mb-0">لا توجد اشتراكات تنتهي قريباً</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Subscriptions -->
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-plus-circle text-success"></i>
+                آخر الاشتراكات
+            </div>
+            <div class="card-body">
+                {% if recent_subscriptions %}
+                <ul class="list-group list-group-flush">
+                    {% for sub in recent_subscriptions %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ sub.member.name }}</strong>
+                            <br>
+                            <small class="text-muted">{{ sub.plan.name }}</small>
+                        </div>
+                        <span class="badge bg-{{ sub.status_class }}">{{ sub.status_text }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted text-center mb-0">لا توجد اشتراكات حديثة</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,262 @@
+{% extends "base.html" %}
+
+{% block title %}{{ member.name }} - تفاصيل العضو{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-person"></i>
+        {{ member.name }}
+        <span class="member-status {{ member.subscription_status }}">
+            {% if member.subscription_status == 'active' %}نشط
+            {% elif member.subscription_status == 'frozen' %}مجمد
+            {% elif member.subscription_status == 'expired' %}منتهي
+            {% else %}بدون اشتراك{% endif %}
+        </span>
+    </h1>
+    <div>
+        <a href="{{ url_for('members.edit', member_id=member.id) }}" class="btn btn-outline-primary">
+            <i class="bi bi-pencil"></i>
+            تعديل
+        </a>
+        {% if member.active_subscription %}
+        <a href="{{ url_for('subscriptions.renew', subscription_id=member.active_subscription.id) }}"
+           class="btn btn-success">
+            <i class="bi bi-arrow-repeat"></i>
+            تجديد
+        </a>
+        {% else %}
+        <a href="{{ url_for('subscriptions.create', member_id=member.id) }}" class="btn btn-success">
+            <i class="bi bi-plus"></i>
+            اشتراك جديد
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row">
+    <!-- Member Info -->
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-person-badge"></i>
+                معلومات العضو
+            </div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr>
+                        <th>الهاتف:</th>
+                        <td>{{ member.phone }}</td>
+                    </tr>
+                    {% if member.email %}
+                    <tr>
+                        <th>البريد:</th>
+                        <td>{{ member.email }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if member.birth_date %}
+                    <tr>
+                        <th>تاريخ الميلاد:</th>
+                        <td>{{ member.birth_date.strftime('%Y-%m-%d') }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if member.gender %}
+                    <tr>
+                        <th>الجنس:</th>
+                        <td>{{ 'ذكر' if member.gender == 'male' else 'أنثى' }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if member.national_id %}
+                    <tr>
+                        <th>رقم الهوية:</th>
+                        <td>{{ member.national_id }}</td>
+                    </tr>
+                    {% endif %}
+                    <tr>
+                        <th>تاريخ التسجيل:</th>
+                        <td>{{ member.created_at.strftime('%Y-%m-%d') }}</td>
+                    </tr>
+                </table>
+
+                {% if member.brand.uses_fingerprint %}
+                <hr>
+                <h6><i class="bi bi-fingerprint"></i> البصمة</h6>
+                {% if member.fingerprint_id %}
+                <p class="mb-1">
+                    رقم البصمة: <strong>{{ member.fingerprint_id }}</strong>
+                </p>
+                {% if member.fingerprint_enrolled %}
+                <span class="badge bg-success">مسجلة</span>
+                {% else %}
+                <span class="badge bg-warning">في انتظار التسجيل</span>
+                {% endif %}
+                {% else %}
+                <p class="text-muted">لم يتم تعيين رقم بصمة</p>
+                {% endif %}
+                {% endif %}
+            </div>
+        </div>
+
+        {% if member.emergency_contact_name %}
+        <div class="card mt-3">
+            <div class="card-header">
+                <i class="bi bi-telephone"></i>
+                جهة اتصال الطوارئ
+            </div>
+            <div class="card-body">
+                <p class="mb-1"><strong>{{ member.emergency_contact_name }}</strong></p>
+                <p class="mb-0">{{ member.emergency_contact_phone }}</p>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if member.health_notes %}
+        <div class="card mt-3 border-warning">
+            <div class="card-header bg-warning">
+                <i class="bi bi-heart-pulse"></i>
+                ملاحظات صحية
+            </div>
+            <div class="card-body">
+                {{ member.health_notes }}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Current Subscription -->
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-card-checklist"></i>
+                الاشتراك الحالي
+            </div>
+            <div class="card-body">
+                {% if member.active_subscription %}
+                {% set sub = member.active_subscription %}
+                <div class="row">
+                    <div class="col-md-6">
+                        <h5>{{ sub.plan.name }}</h5>
+                        <p class="text-muted mb-2">
+                            {{ sub.start_date.strftime('%Y-%m-%d') }} - {{ sub.end_date.strftime('%Y-%m-%d') }}
+                        </p>
+                        <span class="badge bg-{{ sub.status_class }} mb-3">{{ sub.status_text }}</span>
+
+                        <div class="progress mb-2" style="height: 8px;">
+                            {% set progress = ((sub.end_date - sub.start_date).days - sub.days_remaining) / (sub.end_date - sub.start_date).days * 100 %}
+                            <div class="progress-bar" style="width: {{ progress }}%"></div>
+                        </div>
+                        <small class="text-muted">متبقي {{ sub.days_remaining }} يوم</small>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>التجميد</h6>
+                        <p class="text-muted small">
+                            استخدم {{ sub.freeze_count }} من {{ sub.plan.max_freezes }} مرات
+                            <br>
+                            استخدم {{ sub.total_freeze_days }} من {{ sub.plan.max_freeze_days }} يوم
+                        </p>
+
+                        {% if sub.status == 'active' and sub.freeze_count < sub.plan.max_freezes %}
+                        <a href="{{ url_for('subscriptions.freeze', subscription_id=sub.id) }}"
+                           class="btn btn-sm btn-outline-warning">
+                            <i class="bi bi-snow"></i>
+                            تجميد الاشتراك
+                        </a>
+                        {% elif sub.status == 'frozen' %}
+                        <form action="{{ url_for('subscriptions.unfreeze', subscription_id=sub.id) }}"
+                              method="POST" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm btn-success">
+                                <i class="bi bi-play"></i>
+                                إلغاء التجميد
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="bi bi-card-x display-4 text-muted"></i>
+                    <h5 class="mt-3">لا يوجد اشتراك نشط</h5>
+                    <a href="{{ url_for('subscriptions.create', member_id=member.id) }}" class="btn btn-success">
+                        <i class="bi bi-plus"></i>
+                        إنشاء اشتراك
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Subscription History -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <i class="bi bi-clock-history"></i>
+                سجل الاشتراكات
+            </div>
+            <div class="card-body">
+                {% if subscriptions %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>الخطة</th>
+                                <th>من</th>
+                                <th>إلى</th>
+                                <th>المبلغ</th>
+                                <th>الحالة</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for sub in subscriptions %}
+                            <tr>
+                                <td>{{ sub.plan.name }}</td>
+                                <td>{{ sub.start_date.strftime('%Y-%m-%d') }}</td>
+                                <td>{{ sub.end_date.strftime('%Y-%m-%d') }}</td>
+                                <td>{{ "{:,.0f}".format(sub.amount_paid) }} ر.س</td>
+                                <td><span class="badge bg-{{ sub.status_class }}">{{ sub.status_text }}</span></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted text-center mb-0">لا يوجد سجل اشتراكات</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Recent Attendance -->
+        <div class="card mt-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-calendar-check"></i> آخر الحضور</span>
+                <span class="badge bg-primary">{{ member.attendance.count() }} إجمالي</span>
+            </div>
+            <div class="card-body">
+                {% if recent_attendance %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>التاريخ</th>
+                                <th>الوقت</th>
+                                <th>المصدر</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for att in recent_attendance %}
+                            <tr>
+                                <td>{{ att.check_in.strftime('%Y-%m-%d') }}</td>
+                                <td>{{ att.check_in.strftime('%H:%M') }}</td>
+                                <td><span class="badge bg-secondary">{{ att.source_text }}</span></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted text-center mb-0">لا يوجد سجل حضور</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

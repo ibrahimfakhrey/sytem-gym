@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block title %}تفاصيل الاشتراك{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-card-checklist"></i>
+        تفاصيل الاشتراك
+    </h1>
+    <div>
+        <a href="{{ url_for('members.view', member_id=subscription.member_id) }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-right"></i>
+            العودة للعضو
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-info-circle"></i>
+                معلومات الاشتراك
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>العضو:</strong> {{ subscription.member.name }}</p>
+                        <p><strong>الباقة:</strong> {{ subscription.plan.name }}</p>
+                        <p><strong>تاريخ البداية:</strong> {{ subscription.start_date.strftime('%Y-%m-%d') }}</p>
+                        <p><strong>تاريخ النهاية:</strong> {{ subscription.end_date.strftime('%Y-%m-%d') }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>السعر:</strong> {{ subscription.total_amount }} ر.س</p>
+                        <p><strong>المدفوع:</strong> {{ subscription.paid_amount }} ر.س</p>
+                        <p><strong>المتبقي:</strong> {{ subscription.remaining_amount }} ر.س</p>
+                        <p>
+                            <strong>الحالة:</strong>
+                            <span class="badge bg-{{ subscription.status_class }}">{{ subscription.status_text }}</span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% if subscription.payments %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-cash"></i>
+                سجل المدفوعات
+            </div>
+            <div class="card-body">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>التاريخ</th>
+                            <th>المبلغ</th>
+                            <th>ملاحظات</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for payment in subscription.payments %}
+                        <tr>
+                            <td>{{ payment.payment_date.strftime('%Y-%m-%d') }}</td>
+                            <td>{{ payment.amount }} ر.س</td>
+                            <td>{{ payment.notes or '-' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if subscription.freezes %}
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-snow"></i>
+                سجل التجميد
+            </div>
+            <div class="card-body">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>من</th>
+                            <th>إلى</th>
+                            <th>السبب</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for freeze in subscription.freezes %}
+                        <tr>
+                            <td>{{ freeze.start_date.strftime('%Y-%m-%d') }}</td>
+                            <td>{{ freeze.end_date.strftime('%Y-%m-%d') }}</td>
+                            <td>{{ freeze.reason or '-' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-gear"></i>
+                الإجراءات
+            </div>
+            <div class="card-body">
+                {% if subscription.status == 'active' %}
+                {% if subscription.remaining_amount > 0 %}
+                <a href="{{ url_for('subscriptions.add_payment', subscription_id=subscription.id) }}" class="btn btn-success w-100 mb-2">
+                    <i class="bi bi-plus"></i>
+                    إضافة دفعة
+                </a>
+                {% endif %}
+                <a href="{{ url_for('subscriptions.freeze', subscription_id=subscription.id) }}" class="btn btn-warning w-100 mb-2">
+                    <i class="bi bi-snow"></i>
+                    تجميد
+                </a>
+                {% endif %}
+                {% if subscription.status == 'expired' %}
+                <a href="{{ url_for('subscriptions.renew', subscription_id=subscription.id) }}" class="btn btn-primary w-100">
+                    <i class="bi bi-arrow-repeat"></i>
+                    تجديد
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

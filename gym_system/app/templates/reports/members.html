@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+
+{% block title %}تقارير الأعضاء{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-people"></i> تقارير الأعضاء</h1>
+    <div>
+        <a href="{{ url_for('reports.export', report_type='members', **request.args) }}" class="btn btn-success">
+            <i class="bi bi-file-earmark-excel"></i>
+            تصدير Excel
+        </a>
+    </div>
+</div>
+
+<!-- Filter -->
+{% if current_user.is_owner and brands %}
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">البراند</label>
+                <select name="brand_id" class="form-select">
+                    <option value="">جميع البراندات</option>
+                    {% for brand in brands %}
+                    <option value="{{ brand.id }}" {{ 'selected' if request.args.get('brand_id')|int == brand.id }}>
+                        {{ brand.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="bi bi-funnel"></i> عرض التقرير
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<!-- Report by Brand -->
+{% if report_data %}
+{% for item in report_data %}
+<div class="card mb-4">
+    <div class="card-header">
+        <i class="bi bi-building"></i>
+        {{ item.brand.name }}
+    </div>
+    <div class="card-body">
+        <div class="row g-4">
+            <div class="col-md-2">
+                <div class="text-center">
+                    <div class="display-6 text-primary">{{ item.total_members }}</div>
+                    <small class="text-muted">إجمالي الأعضاء</small>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="text-center">
+                    <div class="display-6 text-success">{{ item.active_members }}</div>
+                    <small class="text-muted">أعضاء نشطين</small>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="text-center">
+                    <div class="display-6 text-info">{{ item.active_subscriptions }}</div>
+                    <small class="text-muted">اشتراكات فعالة</small>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="text-center">
+                    <div class="display-6 text-warning">{{ item.expiring_soon }}</div>
+                    <small class="text-muted">تنتهي قريباً</small>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="text-center">
+                    <div class="display-6 text-danger">{{ item.expired }}</div>
+                    <small class="text-muted">منتهية</small>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="text-center">
+                    {% set inactive = item.total_members - item.active_members %}
+                    <div class="display-6 text-secondary">{{ inactive }}</div>
+                    <small class="text-muted">غير نشطين</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Progress bars -->
+        <div class="mt-4">
+            <div class="mb-2">
+                <div class="d-flex justify-content-between mb-1">
+                    <span>نسبة الأعضاء النشطين</span>
+                    <span>{{ "{:.1f}".format(item.active_members / item.total_members * 100) if item.total_members > 0 else 0 }}%</span>
+                </div>
+                <div class="progress" style="height: 10px;">
+                    <div class="progress-bar bg-success" style="width: {{ (item.active_members / item.total_members * 100) if item.total_members > 0 else 0 }}%"></div>
+                </div>
+            </div>
+            <div class="mb-2">
+                <div class="d-flex justify-content-between mb-1">
+                    <span>نسبة الاشتراكات الفعالة</span>
+                    <span>{{ "{:.1f}".format(item.active_subscriptions / item.total_members * 100) if item.total_members > 0 else 0 }}%</span>
+                </div>
+                <div class="progress" style="height: 10px;">
+                    <div class="progress-bar bg-info" style="width: {{ (item.active_subscriptions / item.total_members * 100) if item.total_members > 0 else 0 }}%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+<!-- Summary -->
+{% if report_data|length > 1 %}
+<div class="card">
+    <div class="card-header bg-dark text-white">
+        <i class="bi bi-calculator"></i>
+        الإجمالي
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>البراند</th>
+                        <th>إجمالي الأعضاء</th>
+                        <th>نشطين</th>
+                        <th>اشتراكات فعالة</th>
+                        <th>تنتهي قريباً</th>
+                        <th>منتهية</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% set total_members = namespace(value=0) %}
+                    {% set total_active = namespace(value=0) %}
+                    {% set total_subs = namespace(value=0) %}
+                    {% set total_expiring = namespace(value=0) %}
+                    {% set total_expired = namespace(value=0) %}
+
+                    {% for item in report_data %}
+                    {% set total_members.value = total_members.value + item.total_members %}
+                    {% set total_active.value = total_active.value + item.active_members %}
+                    {% set total_subs.value = total_subs.value + item.active_subscriptions %}
+                    {% set total_expiring.value = total_expiring.value + item.expiring_soon %}
+                    {% set total_expired.value = total_expired.value + item.expired %}
+                    <tr>
+                        <td>{{ item.brand.name }}</td>
+                        <td>{{ item.total_members }}</td>
+                        <td class="text-success">{{ item.active_members }}</td>
+                        <td class="text-info">{{ item.active_subscriptions }}</td>
+                        <td class="text-warning">{{ item.expiring_soon }}</td>
+                        <td class="text-danger">{{ item.expired }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-dark">
+                    <tr>
+                        <th>الإجمالي</th>
+                        <th>{{ total_members.value }}</th>
+                        <th>{{ total_active.value }}</th>
+                        <th>{{ total_subs.value }}</th>
+                        <th>{{ total_expiring.value }}</th>
+                        <th>{{ total_expired.value }}</th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% else %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <i class="bi bi-people"></i>
+            <h5>لا توجد بيانات</h5>
+            <p class="text-muted">لم يتم العثور على بيانات أعضاء</p>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
