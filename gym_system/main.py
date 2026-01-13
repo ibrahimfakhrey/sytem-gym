@@ -5,7 +5,7 @@ import sys
 # Set environment variables
 os.environ.setdefault('FLASK_ENV', 'production')
 os.environ.setdefault('SECRET_KEY', 'your-secret-key-change-this-in-production')
-os.environ.setdefault('DATABASE_URL', 'sqlite:///gym.db')
+os.environ.setdefault('DATABASE_URL', 'sqlite:////home/gymsystem/sytem-gym/gym_system/instance/gym_system.db')
 
 from app import create_app, db
 
