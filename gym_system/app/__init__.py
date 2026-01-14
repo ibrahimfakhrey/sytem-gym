@@ -59,6 +59,7 @@ def create_app(config_name=None):
     app.register_blueprint(finance_bp, url_prefix='/finance')
     app.register_blueprint(reports_bp, url_prefix='/reports')
     app.register_blueprint(api_bp, url_prefix='/api')
+    csrf.exempt(api_bp)  # API uses API key auth, not CSRF
 
     # Register error handlers
     register_error_handlers(app)
