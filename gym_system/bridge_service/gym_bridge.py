@@ -72,9 +72,9 @@ def get_os_info():
     return f"{platform.system()} {platform.release()}"
 
 
-def find_adb_databases():
+def find_mdb_databases():
     """
-    Search for .adb (AAS database) files on the system.
+    Search for .mdb (Microsoft Access database) files on the system.
     Returns list of found paths.
     """
     found_files = []
@@ -85,12 +85,16 @@ def find_adb_databases():
         r"C:\Program Files\AAS",
         r"C:\Program Files (x86)\AAS",
         r"D:\AAS",
+        r"C:\Attendance",
+        r"D:\Attendance",
         os.path.expanduser("~\\Documents\\AAS"),
         os.path.expanduser("~\\Desktop\\AAS"),
+        os.path.expanduser("~\\Documents"),
+        os.path.expanduser("~\\Desktop"),
         os.path.expanduser("~"),
     ]
 
-    logger.info("Searching for AAS database files (.adb)...")
+    logger.info("Searching for Access database files (.mdb)...")
 
     # Search priority paths first
     for base_path in priority_paths:
@@ -101,7 +105,7 @@ def find_adb_databases():
                     dirs[:] = [d for d in dirs if not d.startswith('.') and d not in ['Windows', 'System32', '$Recycle.Bin']]
 
                     for file in files:
-                        if file.lower().endswith('.adb'):
+                        if file.lower().endswith('.mdb'):
                             full_path = os.path.join(root, file)
                             found_files.append(full_path)
                             logger.info(f"  Found: {full_path}")
@@ -131,7 +135,7 @@ def find_adb_databases():
                     ]]
 
                     for file in files:
-                        if file.lower().endswith('.adb'):
+                        if file.lower().endswith('.mdb'):
                             full_path = os.path.join(root, file)
                             found_files.append(full_path)
                             logger.info(f"  Found: {full_path}")
@@ -148,7 +152,7 @@ def find_adb_databases():
     if found_files:
         logger.info(f"Found {len(found_files)} database file(s)")
     else:
-        logger.warning("No .adb database files found")
+        logger.warning("No .mdb database files found")
 
     return found_files
 
@@ -344,7 +348,7 @@ def main():
 
     # Search for database files
     print("\nSearching for fingerprint database...")
-    db_files = find_adb_databases()
+    db_files = find_mdb_databases()
 
     database_path = db_files[0] if db_files else None
     database_found = len(db_files) > 0
