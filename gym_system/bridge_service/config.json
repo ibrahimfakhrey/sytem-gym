@@ -1,0 +1,15 @@
+{
+    "cloud_api": {
+        "url": "https://gymsystem.pythonanywhere.com",
+        "api_key": "fingerprint-api-key",
+        "brand_id": 1
+    },
+    "device": {
+        "ip": "192.168.1.224",
+        "port": 5005
+    },
+    "sync": {
+        "interval_seconds": 30
+    },
+    "_comment": "Change api_key to match FINGERPRINT_API_KEY on PythonAnywhere"
+}

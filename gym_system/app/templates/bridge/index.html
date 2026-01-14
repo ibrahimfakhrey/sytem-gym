@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+
+{% block title %}حالة جهاز البصمة{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center">
+    <h1><i class="bi bi-hdd-network"></i> حالة جهاز البصمة</h1>
+    <button class="btn btn-primary" onclick="refreshStatus()">
+        <i class="bi bi-arrow-clockwise"></i> تحديث
+    </button>
+</div>
+
+{% if brands|length > 1 %}
+<div class="mb-4">
+    <select class="form-select" style="width: auto; display: inline-block;" onchange="window.location.href='?brand_id=' + this.value">
+        {% for brand in brands %}
+        <option value="{{ brand.id }}" {% if brand.id == selected_brand_id %}selected{% endif %}>
+            {{ brand.name }}
+        </option>
+        {% endfor %}
+    </select>
+</div>
+{% endif %}
+
+<!-- Bridge Status Cards -->
+<div class="row mb-4" id="bridge-cards">
+    {% if bridges %}
+        {% for bridge in bridges %}
+        <div class="col-md-6 col-lg-4 mb-3">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-pc-display"></i> {{ bridge.computer_name or 'جهاز غير معروف' }}</span>
+                    <span class="badge bg-{{ bridge.status_class }}">{{ bridge.status_text }}</span>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm table-borderless mb-0">
+                        <tr>
+                            <td class="text-muted" style="width: 40%;">عنوان IP:</td>
+                            <td><code>{{ bridge.ip_address or '-' }}</code></td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">نظام التشغيل:</td>
+                            <td>{{ bridge.os_info or '-' }}</td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">قاعدة البيانات:</td>
+                            <td>
+                                {% if bridge.database_found %}
+                                <span class="text-success"><i class="bi bi-check-circle"></i> موجودة</span>
+                                {% else %}
+                                <span class="text-danger"><i class="bi bi-x-circle"></i> غير موجودة</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% if bridge.database_path %}
+                        <tr>
+                            <td class="text-muted">مسار الملف:</td>
+                            <td><small class="text-break"><code>{{ bridge.database_path }}</code></small></td>
+                        </tr>
+                        {% endif %}
+                        <tr>
+                            <td class="text-muted">آخر اتصال:</td>
+                            <td>{{ bridge.last_heartbeat.strftime('%Y-%m-%d %H:%M') if bridge.last_heartbeat else '-' }}</td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">عدد المزامنات:</td>
+                            <td><span class="badge bg-info">{{ bridge.total_syncs or 0 }}</span></td>
+                        </tr>
+                        {% if bridge.last_error %}
+                        <tr>
+                            <td class="text-muted">آخر خطأ:</td>
+                            <td><small class="text-danger">{{ bridge.last_error[:100] }}</small></td>
+                        </tr>
+                        {% endif %}
+                    </table>
+                </div>
+                <div class="card-footer text-muted small">
+                    أول اتصال: {{ bridge.first_seen.strftime('%Y-%m-%d') if bridge.first_seen else '-' }}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="col-12">
+            <div class="alert alert-warning">
+                <h5><i class="bi bi-exclamation-triangle"></i> لم يتم العثور على أي جهاز متصل</h5>
+                <p class="mb-0">
+                    لم يتم تسجيل أي اتصال من برنامج Bridge بعد.
+                    تأكد من تشغيل البرنامج على جهاز الجيم.
+                </p>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-info-circle"></i> تعليمات الإعداد
+                </div>
+                <div class="card-body">
+                    <ol class="mb-0">
+                        <li>قم بنقل مجلد <code>bridge_service</code> إلى جهاز الجيم</li>
+                        <li>اضغط مرتين على <code>run_bridge.bat</code></li>
+                        <li>انتظر حتى يظهر الجهاز هنا</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</div>
+
+<!-- Sync Logs -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-clock-history"></i> سجل المزامنة</span>
+        <span class="badge bg-secondary">آخر 20 عملية</span>
+    </div>
+    <div class="card-body">
+        {% if sync_logs %}
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>الوقت</th>
+                        <th>النوع</th>
+                        <th>السجلات</th>
+                        <th>الحالة</th>
+                        <th>الأخطاء</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in sync_logs %}
+                    <tr>
+                        <td>{{ log.synced_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                        <td>
+                            {% if log.sync_type == 'attendance' %}
+                            <span class="badge bg-primary">حضور</span>
+                            {% elif log.sync_type == 'enrollment' %}
+                            <span class="badge bg-success">تسجيل بصمة</span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ log.sync_type }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ log.records_synced }}</td>
+                        <td>
+                            <span class="badge bg-{{ log.status_class }}">{{ log.status_text }}</span>
+                        </td>
+                        <td>
+                            {% if log.error_message %}
+                            <small class="text-danger" title="{{ log.error_message }}">
+                                {{ log.error_message[:50] }}{% if log.error_message|length > 50 %}...{% endif %}
+                            </small>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted text-center mb-0">لا توجد سجلات مزامنة بعد</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function refreshStatus() {
+    const brandId = {{ selected_brand_id or 0 }};
+    if (!brandId) return;
+
+    fetch('/bridge/api/refresh?brand_id=' + brandId)
+        .then(r => r.json())
+        .then(data => {
+            // Reload page for simplicity
+            location.reload();
+        })
+        .catch(err => {
+            console.error('Error refreshing:', err);
+        });
+}
+
+// Auto-refresh every 30 seconds
+setInterval(function() {
+    refreshStatus();
+}, 30000);
+</script>
+{% endblock %}

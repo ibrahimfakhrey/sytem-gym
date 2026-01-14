@@ -7,7 +7,7 @@ from app.models.company import Brand
 from app.models.member import Member
 from app.models.subscription import Subscription
 from app.models.attendance import MemberAttendance
-from app.models.fingerprint import FingerprintSyncLog
+from app.models.fingerprint import FingerprintSyncLog, BridgeStatus
 
 api_bp = Blueprint('api', __name__)
 
@@ -270,4 +270,90 @@ def sync_status():
         'message': status['message'],
         'last_sync': last_sync.synced_at.isoformat() if last_sync else None,
         'last_sync_records': last_sync.records_synced if last_sync else 0
+    })
+
+
+@api_bp.route('/fingerprint/bridge/heartbeat', methods=['POST'])
+@require_api_key
+def bridge_heartbeat():
+    """
+    Receive heartbeat from bridge service
+
+    Request body:
+    {
+        "brand_id": 1,
+        "computer_name": "GYM-PC-01",
+        "ip_address": "192.168.1.100",
+        "os_info": "Windows 10",
+        "database_path": "C:\\AAS\\Data\\AAS.adb",
+        "database_found": true,
+        "error": null
+    }
+    """
+    data = request.get_json()
+
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+
+    brand_id = data.get('brand_id')
+    computer_name = data.get('computer_name', 'Unknown')
+
+    if not brand_id:
+        return jsonify({'error': 'brand_id is required'}), 400
+
+    # Get or create bridge status
+    bridge = BridgeStatus.get_or_create(brand_id, computer_name)
+
+    # Update info
+    bridge.ip_address = data.get('ip_address')
+    bridge.os_info = data.get('os_info')
+    bridge.database_path = data.get('database_path')
+    bridge.database_found = data.get('database_found', False)
+    bridge.last_heartbeat = datetime.utcnow()
+    bridge.is_online = True
+
+    if data.get('error'):
+        bridge.last_error = data.get('error')
+
+    if data.get('sync_count'):
+        bridge.total_syncs = (bridge.total_syncs or 0) + data.get('sync_count')
+
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'message': 'Heartbeat received',
+        'server_time': datetime.utcnow().isoformat()
+    })
+
+
+@api_bp.route('/fingerprint/bridge/status')
+@require_api_key
+def get_bridge_status():
+    """Get all bridge statuses for a brand"""
+    brand_id = request.args.get('brand_id', type=int)
+
+    if not brand_id:
+        return jsonify({'error': 'brand_id is required'}), 400
+
+    bridges = BridgeStatus.query.filter_by(brand_id=brand_id).all()
+
+    return jsonify({
+        'bridges': [
+            {
+                'id': b.id,
+                'computer_name': b.computer_name,
+                'ip_address': b.ip_address,
+                'os_info': b.os_info,
+                'database_path': b.database_path,
+                'database_found': b.database_found,
+                'status': b.status_text,
+                'status_class': b.status_class,
+                'last_heartbeat': b.last_heartbeat.isoformat() if b.last_heartbeat else None,
+                'first_seen': b.first_seen.isoformat() if b.first_seen else None,
+                'total_syncs': b.total_syncs,
+                'last_error': b.last_error
+            }
+            for b in bridges
+        ]
     })

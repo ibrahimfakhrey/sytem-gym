@@ -49,6 +49,7 @@ def create_app(config_name=None):
     from .routes.finance import finance_bp
     from .routes.reports import reports_bp
     from .routes.api import api_bp
+    from .routes.bridge import bridge_bp
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(dashboard_bp)
@@ -59,6 +60,7 @@ def create_app(config_name=None):
     app.register_blueprint(finance_bp, url_prefix='/finance')
     app.register_blueprint(reports_bp, url_prefix='/reports')
     app.register_blueprint(api_bp, url_prefix='/api')
+    app.register_blueprint(bridge_bp, url_prefix='/bridge')
     csrf.exempt(api_bp)  # API uses API key auth, not CSRF
 
     # Register error handlers

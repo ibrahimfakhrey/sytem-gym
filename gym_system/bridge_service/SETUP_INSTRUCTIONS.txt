@@ -1,0 +1,62 @@
+=============================================
+   GYM FINGERPRINT BRIDGE - SETUP GUIDE
+=============================================
+
+This service syncs fingerprint attendance to the cloud system.
+
+STEP 1: INSTALL PYTHON
+----------------------
+1. Download Python from: https://www.python.org/downloads/
+2. Run installer
+3. IMPORTANT: Check "Add Python to PATH" during installation
+4. Restart computer after installation
+
+
+STEP 2: CONFIGURE THE BRIDGE
+----------------------------
+1. Open the file "config.json" with Notepad
+2. Change these settings:
+
+   "api_key": "CHANGE_THIS_KEY"
+   --> Replace with the API key provided by the developer
+
+   "brand_id": 1
+   --> Your gym's brand ID (ask developer)
+
+
+STEP 3: SET UP DATA SOURCE
+--------------------------
+Option A - If AAS database is accessible:
+   - The bridge will auto-detect common AAS database locations
+
+Option B - Export CSV from AAS:
+   1. In AAS software, export attendance to CSV
+   2. Save CSV files to the "exports" folder (create it if needed)
+   3. The bridge will read from newest CSV file
+
+
+STEP 4: RUN THE BRIDGE
+----------------------
+1. Double-click "run_bridge.bat"
+2. A window will open showing sync status
+3. Keep this window open while gym is operating
+4. Press Ctrl+C to stop
+
+
+TROUBLESHOOTING
+---------------
+Problem: "Python is not installed"
+Solution: Install Python (Step 1) and restart computer
+
+Problem: "Cannot connect to cloud API"
+Solution: Check internet connection
+
+Problem: "No data source found"
+Solution: Export attendance from AAS to CSV, or contact developer
+
+
+CONTACT
+-------
+For help, contact the developer.
+
+=============================================
