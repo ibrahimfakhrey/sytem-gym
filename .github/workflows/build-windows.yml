@@ -1,0 +1,79 @@
+name: Build Windows Installer
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'gym_system/desktop_software/**'
+  workflow_dispatch:  # Allow manual trigger from GitHub
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        cd gym_system/desktop_software
+        pip install -r requirements.txt
+        pip install pyinstaller
+
+    - name: Create assets folder
+      run: |
+        cd gym_system/desktop_software
+        if (!(Test-Path "assets")) { New-Item -ItemType Directory -Path "assets" }
+      shell: pwsh
+
+    - name: Download gym icon
+      run: |
+        cd gym_system/desktop_software/assets
+        # Download a free gym/fitness icon
+        Invoke-WebRequest -Uri "https://raw.githubusercontent.com/AlfredoSequeworthy/free-icons/main/icons/fitness.ico" -OutFile "icon.ico" -ErrorAction SilentlyContinue
+        if (!(Test-Path "icon.ico")) {
+          # Fallback: create empty file
+          echo "" > icon.ico
+        }
+      shell: pwsh
+      continue-on-error: true
+
+    - name: Build executable
+      run: |
+        cd gym_system/desktop_software
+        pyinstaller GymSystem.spec --noconfirm
+
+    - name: Install Inno Setup
+      run: choco install innosetup -y
+
+    - name: Create installer directory
+      run: |
+        cd gym_system/desktop_software
+        New-Item -ItemType Directory -Path "dist/installer" -Force
+      shell: pwsh
+
+    - name: Build installer
+      run: |
+        cd gym_system/desktop_software
+        & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer/setup.iss
+      shell: pwsh
+
+    - name: Upload EXE
+      uses: actions/upload-artifact@v4
+      with:
+        name: GymSystem-EXE
+        path: gym_system/desktop_software/dist/GymSystem.exe
+        if-no-files-found: warn
+
+    - name: Upload Installer
+      uses: actions/upload-artifact@v4
+      with:
+        name: GymSystem-Installer
+        path: gym_system/desktop_software/dist/installer/*.exe
+        if-no-files-found: warn
