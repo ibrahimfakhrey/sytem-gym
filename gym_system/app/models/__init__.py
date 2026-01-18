@@ -5,4 +5,4 @@ from .member import Member
 from .subscription import Plan, Subscription, SubscriptionFreeze, SubscriptionPayment
 from .attendance import MemberAttendance, EmployeeAttendance
 from .finance import Income, Expense, Salary, Refund, ExpenseCategory
-from .fingerprint import FingerprintSyncLog
+from .fingerprint import FingerprintSyncLog, BridgeStatus, DeviceCommand

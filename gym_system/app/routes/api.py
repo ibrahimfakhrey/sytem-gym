@@ -1,13 +1,15 @@
 from flask import Blueprint, request, jsonify, current_app
 from functools import wraps
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
+import json
 
 from app import db
 from app.models.company import Brand
 from app.models.member import Member
+from app.models.user import User, Role
 from app.models.subscription import Subscription
-from app.models.attendance import MemberAttendance
-from app.models.fingerprint import FingerprintSyncLog, BridgeStatus
+from app.models.attendance import MemberAttendance, EmployeeAttendance
+from app.models.fingerprint import FingerprintSyncLog, BridgeStatus, DeviceCommand
 
 api_bp = Blueprint('api', __name__)
 
@@ -356,4 +358,245 @@ def get_bridge_status():
             }
             for b in bridges
         ]
+    })
+
+
+# =============================================================================
+# DEVICE COMMANDS API (for software to execute on .mdb)
+# =============================================================================
+
+@api_bp.route('/device/commands', methods=['GET'])
+@require_api_key
+def get_pending_commands():
+    """Get pending commands for the desktop software to execute"""
+    brand_id = request.args.get('brand_id', type=int)
+
+    if not brand_id:
+        return jsonify({'error': 'brand_id is required'}), 400
+
+    commands = DeviceCommand.get_pending_commands(brand_id)
+
+    return jsonify({
+        'success': True,
+        'commands': [
+            {
+                'id': cmd.id,
+                'command_type': cmd.command_type,
+                'target_emp_id': cmd.target_emp_id,
+                'member_id': cmd.member_id,
+                'command_data': json.loads(cmd.command_data) if cmd.command_data else {},
+                'created_at': cmd.created_at.isoformat()
+            }
+            for cmd in commands
+        ]
+    })
+
+
+@api_bp.route('/device/commands/<int:command_id>/complete', methods=['POST'])
+@require_api_key
+def complete_command(command_id):
+    """Mark a command as completed"""
+    command = DeviceCommand.query.get(command_id)
+
+    if not command:
+        return jsonify({'error': 'Command not found'}), 404
+
+    data = request.get_json() or {}
+
+    if data.get('success', True):
+        command.status = 'completed'
+    else:
+        command.status = 'failed'
+        command.error_message = data.get('error_message', 'Unknown error')
+
+    command.executed_at = datetime.utcnow()
+    db.session.commit()
+
+    return jsonify({'success': True, 'message': 'Command status updated'})
+
+
+@api_bp.route('/device/commands/block-member', methods=['POST'])
+@require_api_key
+def block_member_command():
+    """Create command to block a member (set end_date to past)"""
+    data = request.get_json()
+
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+
+    brand_id = data.get('brand_id')
+    member_id = data.get('member_id')
+    emp_id = data.get('emp_id')
+
+    if not all([brand_id, emp_id]):
+        return jsonify({'error': 'brand_id and emp_id are required'}), 400
+
+    command = DeviceCommand(
+        brand_id=brand_id,
+        command_type='block_member',
+        target_emp_id=emp_id,
+        member_id=member_id,
+        command_data=json.dumps({'end_date': '2020-01-01'}),
+        status='pending'
+    )
+    db.session.add(command)
+    db.session.commit()
+
+    return jsonify({'success': True, 'command_id': command.id}), 201
+
+
+@api_bp.route('/device/commands/unblock-member', methods=['POST'])
+@require_api_key
+def unblock_member_command():
+    """Create command to unblock a member (set end_date to future)"""
+    data = request.get_json()
+
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+
+    brand_id = data.get('brand_id')
+    member_id = data.get('member_id')
+    emp_id = data.get('emp_id')
+    end_date = data.get('end_date')
+
+    if not all([brand_id, emp_id, end_date]):
+        return jsonify({'error': 'brand_id, emp_id, and end_date are required'}), 400
+
+    command = DeviceCommand(
+        brand_id=brand_id,
+        command_type='unblock_member',
+        target_emp_id=emp_id,
+        member_id=member_id,
+        command_data=json.dumps({'end_date': end_date}),
+        status='pending'
+    )
+    db.session.add(command)
+    db.session.commit()
+
+    return jsonify({'success': True, 'command_id': command.id}), 201
+
+
+@api_bp.route('/device/commands/update-member', methods=['POST'])
+@require_api_key
+def update_member_command():
+    """Create command to update member data in .mdb"""
+    data = request.get_json()
+
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+
+    brand_id = data.get('brand_id')
+    member_id = data.get('member_id')
+    emp_id = data.get('emp_id')
+    updates = data.get('updates', {})
+
+    if not all([brand_id, emp_id]):
+        return jsonify({'error': 'brand_id and emp_id are required'}), 400
+
+    command = DeviceCommand(
+        brand_id=brand_id,
+        command_type='update_member',
+        target_emp_id=emp_id,
+        member_id=member_id,
+        command_data=json.dumps(updates),
+        status='pending'
+    )
+    db.session.add(command)
+    db.session.commit()
+
+    return jsonify({'success': True, 'command_id': command.id}), 201
+
+
+@api_bp.route('/device/commands/add-member', methods=['POST'])
+@require_api_key
+def add_member_command():
+    """Create command to add new member to .mdb"""
+    data = request.get_json()
+
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+
+    brand_id = data.get('brand_id')
+    member_id = data.get('member_id')
+    member_data = data.get('member_data', {})
+
+    if not brand_id:
+        return jsonify({'error': 'brand_id is required'}), 400
+
+    if 'emp_id' not in member_data:
+        return jsonify({'error': 'emp_id is required in member_data'}), 400
+
+    command = DeviceCommand(
+        brand_id=brand_id,
+        command_type='add_member',
+        target_emp_id=member_data.get('emp_id'),
+        member_id=member_id,
+        command_data=json.dumps(member_data),
+        status='pending'
+    )
+    db.session.add(command)
+    db.session.commit()
+
+    return jsonify({'success': True, 'command_id': command.id}), 201
+
+
+# =============================================================================
+# SYNC API
+# =============================================================================
+
+@api_bp.route('/sync/status', methods=['GET'])
+@require_api_key
+def get_sync_status():
+    """Get overall sync status for desktop software dashboard"""
+    brand_id = request.args.get('brand_id', type=int)
+
+    if not brand_id:
+        return jsonify({'error': 'brand_id is required'}), 400
+
+    pending_commands = DeviceCommand.query.filter_by(
+        brand_id=brand_id,
+        status='pending'
+    ).count()
+
+    last_sync = FingerprintSyncLog.get_last_sync(brand_id)
+    members_count = Member.query.filter_by(brand_id=brand_id, is_active=True).count()
+    pending_enrollment = Member.query.filter_by(
+        brand_id=brand_id,
+        fingerprint_enrolled=False,
+        is_active=True
+    ).count()
+    today_attendance = MemberAttendance.get_today_count(brand_id)
+
+    return jsonify({
+        'success': True,
+        'status': {
+            'connected': True,
+            'pending_commands': pending_commands,
+            'last_sync': last_sync.synced_at.isoformat() if last_sync else None,
+            'members_count': members_count,
+            'pending_enrollment': pending_enrollment,
+            'today_attendance': today_attendance
+        }
+    })
+
+
+@api_bp.route('/sync/heartbeat', methods=['POST'])
+@require_api_key
+def sync_heartbeat():
+    """Heartbeat from desktop software (called every 30 seconds)"""
+    data = request.get_json() or {}
+    brand_id = data.get('brand_id')
+
+    if not brand_id:
+        return jsonify({'error': 'brand_id is required'}), 400
+
+    pending_commands = DeviceCommand.query.filter_by(
+        brand_id=brand_id,
+        status='pending'
+    ).count()
+
+    return jsonify({
+        'success': True,
+        'pending_commands': pending_commands,
+        'server_time': datetime.utcnow().isoformat()
     })

@@ -71,6 +71,88 @@ class BridgeStatus(db.Model):
         return status
 
 
+class DeviceCommand(db.Model):
+    """
+    Commands queue for desktop software to execute on local .mdb database.
+    Web app creates commands, software fetches and executes them.
+    """
+    __tablename__ = 'device_commands'
+
+    id = db.Column(db.Integer, primary_key=True)
+    brand_id = db.Column(db.Integer, db.ForeignKey('brands.id'), nullable=False)
+
+    # Command type: 'block_member', 'unblock_member', 'update_member', 'add_member', 'delete_member'
+    command_type = db.Column(db.String(50), nullable=False)
+
+    # Target: emp_id in .mdb database
+    target_emp_id = db.Column(db.String(20))
+
+    # Member ID in web app (for reference)
+    member_id = db.Column(db.Integer, db.ForeignKey('members.id'), nullable=True)
+
+    # Command data as JSON
+    command_data = db.Column(db.Text)  # JSON string
+
+    # Status: 'pending', 'processing', 'completed', 'failed'
+    status = db.Column(db.String(20), default='pending')
+
+    # Error message if failed
+    error_message = db.Column(db.Text)
+
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    executed_at = db.Column(db.DateTime)
+
+    # Who created the command
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
+
+    def __repr__(self):
+        return f'<DeviceCommand {self.command_type} - {self.status}>'
+
+    @property
+    def status_text(self):
+        """Status in Arabic"""
+        status_map = {
+            'pending': 'قيد الانتظار',
+            'processing': 'جاري التنفيذ',
+            'completed': 'تم التنفيذ',
+            'failed': 'فشل'
+        }
+        return status_map.get(self.status, self.status)
+
+    @property
+    def status_class(self):
+        """CSS class for status"""
+        class_map = {
+            'pending': 'warning',
+            'processing': 'info',
+            'completed': 'success',
+            'failed': 'danger'
+        }
+        return class_map.get(self.status, 'secondary')
+
+    @property
+    def command_type_text(self):
+        """Command type in Arabic"""
+        type_map = {
+            'block_member': 'حظر عضو',
+            'unblock_member': 'إلغاء حظر عضو',
+            'update_member': 'تحديث بيانات عضو',
+            'add_member': 'إضافة عضو جديد',
+            'delete_member': 'حذف عضو',
+            'update_end_date': 'تحديث تاريخ انتهاء الاشتراك'
+        }
+        return type_map.get(self.command_type, self.command_type)
+
+    @classmethod
+    def get_pending_commands(cls, brand_id):
+        """Get all pending commands for a brand"""
+        return cls.query.filter_by(
+            brand_id=brand_id,
+            status='pending'
+        ).order_by(cls.created_at.asc()).all()
+
+
 class FingerprintSyncLog(db.Model):
     """Fingerprint sync log records"""
     __tablename__ = 'fingerprint_sync_logs'
