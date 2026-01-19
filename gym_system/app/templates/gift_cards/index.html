@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}كروت الإهداء{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-gift"></i> كروت الإهداء</h1>
+    <a href="{{ url_for('gift_cards.create', brand_id=brand.id) }}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> إنشاء كرت</a>
+</div>
+<div class="card">
+    <div class="card-body">
+        {% if gift_cards %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead><tr><th>الكود</th><th>القيمة</th><th>المتبقي</th><th>الصلاحية</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
+                <tbody>
+                    {% for gc in gift_cards %}
+                    <tr>
+                        <td><code>{{ gc.code }}</code></td>
+                        <td>{{ "{:,.0f}".format(gc.original_amount) }} ر.س</td>
+                        <td>{{ "{:,.0f}".format(gc.remaining_amount) }} ر.س</td>
+                        <td>{% if gc.expires_at %}{{ gc.expires_at.strftime('%Y-%m-%d') }}{% else %}بدون انتهاء{% endif %}</td>
+                        <td><span class="badge bg-{{ 'success' if gc.status == 'active' else 'secondary' }}">{{ gc.status }}</span></td>
+                        <td><a href="{{ url_for('gift_cards.view', gift_card_id=gc.id) }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5"><i class="bi bi-gift display-1 text-muted"></i><h4 class="mt-3">لا توجد كروت</h4></div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

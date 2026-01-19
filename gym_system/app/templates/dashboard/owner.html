@@ -7,6 +7,25 @@
     <h1><i class="bi bi-speedometer2"></i> لوحة التحكم</h1>
 </div>
 
+<!-- Smart Alerts -->
+{% if alerts %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="alert-stack">
+            {% for alert in alerts %}
+            <div class="alert alert-{{ alert.type }} d-flex align-items-center justify-content-between mb-2" role="alert">
+                <div>
+                    <i class="bi bi-{{ alert.icon }} me-2"></i>
+                    {{ alert.title }}
+                </div>
+                <a href="{{ alert.link }}" class="btn btn-sm btn-outline-{{ alert.type }}">عرض</a>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <!-- Stats Cards -->
 <div class="row g-4 mb-4">
     <div class="col-md-6 col-lg-3">
@@ -125,7 +144,7 @@
 </div>
 
 <!-- Recent Activity -->
-<div class="row g-4">
+<div class="row g-4 mb-4">
     <div class="col-lg-6">
         <div class="card">
             <div class="card-header">
@@ -164,6 +183,56 @@
                     <div class="display-3 text-primary fw-bold">{{ stats.today_attendance }}</div>
                     <p class="text-muted mb-0">حضور اليوم (جميع البراندات)</p>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Complaints -->
+<div class="row g-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-exclamation-triangle"></i> آخر الشكاوى</span>
+                <a href="{{ url_for('complaints.index') }}" class="btn btn-sm btn-outline-primary">عرض الكل</a>
+            </div>
+            <div class="card-body">
+                {% if recent_complaints %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>الشكوى</th>
+                                <th>البراند</th>
+                                <th>التصنيف</th>
+                                <th>الحالة</th>
+                                <th>التاريخ</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for complaint in recent_complaints %}
+                            <tr>
+                                <td>
+                                    <a href="{{ url_for('complaints.view', complaint_id=complaint.id) }}">
+                                        {{ complaint.subject[:30] }}{% if complaint.subject|length > 30 %}...{% endif %}
+                                    </a>
+                                </td>
+                                <td>{{ complaint.brand.name }}</td>
+                                <td>{{ complaint.category.name if complaint.category else '-' }}</td>
+                                <td>
+                                    <span class="badge bg-{{ 'warning' if complaint.status == 'pending' else ('info' if complaint.status == 'in_progress' else 'success') }}">
+                                        {{ 'قيد الانتظار' if complaint.status == 'pending' else ('قيد المعالجة' if complaint.status == 'in_progress' else 'تم الحل') }}
+                                    </span>
+                                </td>
+                                <td>{{ complaint.created_at.strftime('%m/%d %H:%M') }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted text-center mb-0">لا توجد شكاوى حديثة</p>
+                {% endif %}
             </div>
         </div>
     </div>

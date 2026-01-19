@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}رفض المصروف{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-x-circle"></i> رفض المصروف</h1>
+</div>
+
+<div class="row">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-receipt"></i> تفاصيل المصروف
+            </div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr>
+                        <th>الفئة:</th>
+                        <td>{{ expense.category_name }}</td>
+                    </tr>
+                    <tr>
+                        <th>المبلغ:</th>
+                        <td class="text-danger fw-bold">{{ "{:,.0f}".format(expense.amount) }} ر.س</td>
+                    </tr>
+                    <tr>
+                        <th>التاريخ:</th>
+                        <td>{{ expense.date.strftime('%Y-%m-%d') }}</td>
+                    </tr>
+                    <tr>
+                        <th>البراند:</th>
+                        <td>{{ expense.brand.name }}</td>
+                    </tr>
+                    {% if expense.description %}
+                    <tr>
+                        <th>الوصف:</th>
+                        <td>{{ expense.description }}</td>
+                    </tr>
+                    {% endif %}
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card border-danger">
+            <div class="card-header bg-danger text-white">
+                <i class="bi bi-exclamation-triangle"></i> تأكيد الرفض
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <label class="form-label">سبب الرفض *</label>
+                        <textarea name="rejection_reason" class="form-control" rows="3" required placeholder="اشرح سبب رفض هذا المصروف..."></textarea>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-danger" onclick="return confirm('هل أنت متأكد من رفض هذا المصروف؟');">
+                            <i class="bi bi-x-lg"></i> تأكيد الرفض
+                        </button>
+                        <a href="{{ url_for('finance.expense_view', expense_id=expense.id) }}" class="btn btn-secondary">إلغاء</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

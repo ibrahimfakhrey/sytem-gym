@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+
+{% block title %}الشكوى #{{ complaint.id }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-exclamation-triangle"></i>
+        الشكوى #{{ complaint.id }}
+        <span class="badge bg-{{ complaint.status_class }}">{{ complaint.status_arabic }}</span>
+    </h1>
+    <a href="{{ url_for('complaints.index') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-right"></i>
+        العودة للقائمة
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <!-- Complaint Details -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>
+                    <i class="bi bi-chat-text"></i>
+                    تفاصيل الشكوى
+                </span>
+                <span class="badge bg-{{ complaint.priority_class }}">{{ complaint.priority_arabic }}</span>
+            </div>
+            <div class="card-body">
+                <h4>{{ complaint.subject }}</h4>
+                <hr>
+                <p style="white-space: pre-wrap;">{{ complaint.description }}</p>
+            </div>
+            <div class="card-footer text-muted small">
+                <i class="bi bi-clock"></i>
+                {{ complaint.created_at.strftime('%Y-%m-%d %H:%M') }}
+                {% if complaint.submitted_by == 'customer' %}
+                <span class="badge bg-info ms-2">عبر رابط العميل</span>
+                {% else %}
+                <span class="badge bg-secondary ms-2">عبر الاستقبال</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Resolution -->
+        {% if complaint.status == 'resolved' or complaint.status == 'closed' %}
+        <div class="card mb-4 border-success">
+            <div class="card-header bg-success text-white">
+                <i class="bi bi-check-circle"></i>
+                الحل
+            </div>
+            <div class="card-body">
+                <p style="white-space: pre-wrap;">{{ complaint.resolution }}</p>
+            </div>
+            <div class="card-footer text-muted small">
+                <i class="bi bi-clock"></i>
+                تم الحل في {{ complaint.resolved_at.strftime('%Y-%m-%d %H:%M') if complaint.resolved_at else '-' }}
+                {% if complaint.resolver %}
+                بواسطة {{ complaint.resolver.name }}
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Actions -->
+        {% if complaint.status not in ['resolved', 'closed'] %}
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-tools"></i>
+                إجراءات
+            </div>
+            <div class="card-body">
+                {% if current_user.role and current_user.role.can_manage_complaints %}
+                <form method="POST" action="{{ url_for('complaints.resolve', complaint_id=complaint.id) }}">
+                    {{ resolve_form.hidden_tag() }}
+                    <div class="mb-3">
+                        <label class="form-label">الحل</label>
+                        {{ resolve_form.resolution(class="form-control", rows="4", placeholder="اكتب الحل أو الإجراء المتخذ...") }}
+                    </div>
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-check-lg"></i>
+                        تم الحل
+                    </button>
+                </form>
+                {% else %}
+                <p class="text-muted mb-0">ليس لديك صلاحية لحل الشكاوى</p>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if complaint.status == 'resolved' %}
+        <form method="POST" action="{{ url_for('complaints.close', complaint_id=complaint.id) }}" class="mt-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-secondary">
+                <i class="bi bi-lock"></i>
+                إغلاق الشكوى نهائياً
+            </button>
+        </form>
+        {% endif %}
+    </div>
+
+    <div class="col-lg-4">
+        <!-- Customer Info -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-person"></i>
+                معلومات العميل
+            </div>
+            <div class="card-body">
+                <p><strong>الاسم:</strong> {{ complaint.customer_display_name }}</p>
+                {% if complaint.customer_phone %}
+                <p><strong>الهاتف:</strong> {{ complaint.customer_phone }}</p>
+                {% endif %}
+                {% if complaint.customer_email %}
+                <p><strong>البريد:</strong> {{ complaint.customer_email }}</p>
+                {% endif %}
+                {% if complaint.member %}
+                <a href="{{ url_for('members.view', member_id=complaint.member.id) }}" class="btn btn-outline-primary btn-sm w-100">
+                    <i class="bi bi-person"></i>
+                    عرض ملف العضو
+                </a>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Category -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-tag"></i>
+                التصنيف
+            </div>
+            <div class="card-body text-center">
+                {% if complaint.category %}
+                <i class="{{ complaint.category.icon }} fs-1 text-primary"></i>
+                <h5 class="mt-2">{{ complaint.category.name }}</h5>
+                {% else %}
+                <span class="text-muted">غير مصنف</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Timeline -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-clock-history"></i>
+                التسلسل الزمني
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled small mb-0">
+                    <li class="mb-2">
+                        <i class="bi bi-plus-circle text-primary"></i>
+                        <strong>تم الإنشاء</strong>
+                        <br><span class="text-muted me-3">{{ complaint.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                        {% if complaint.creator %}بواسطة {{ complaint.creator.name }}{% endif %}
+                    </li>
+                    {% if complaint.assignee %}
+                    <li class="mb-2">
+                        <i class="bi bi-person-check text-info"></i>
+                        <strong>تم التعيين</strong>
+                        <br><span class="text-muted">إلى {{ complaint.assignee.name }}</span>
+                    </li>
+                    {% endif %}
+                    {% if complaint.resolved_at %}
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle text-success"></i>
+                        <strong>تم الحل</strong>
+                        <br><span class="text-muted">{{ complaint.resolved_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                        {% if complaint.resolver %}بواسطة {{ complaint.resolver.name }}{% endif %}
+                    </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+
+        <!-- Tracking Token -->
+        {% if complaint.tracking_token %}
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-link-45deg"></i>
+                رمز التتبع
+            </div>
+            <div class="card-body">
+                <code class="d-block text-center p-2 bg-light">{{ complaint.tracking_token }}</code>
+                <small class="text-muted d-block mt-2 text-center">يمكن للعميل استخدام هذا الرمز لتتبع الشكوى</small>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -88,11 +88,23 @@ class EmployeeAttendance(db.Model):
     check_in = db.Column(db.Time)
     check_out = db.Column(db.Time)
 
+    # Fingerprint sync fields
+    fingerprint_log_id = db.Column(db.Integer)  # ID from TimeRecords table in .mdb
+    source = db.Column(db.String(20), default='manual')  # manual, fingerprint
+
+    # Lateness tracking
+    expected_check_in = db.Column(db.Time)  # Expected check-in time for shift
+    late_minutes = db.Column(db.Integer, default=0)
+
     # Status: 'present', 'absent', 'late', 'leave'
     status = db.Column(db.String(20), default='present')
 
     notes = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Relationships - using overlaps to resolve duplicate relationship warnings
+    employee = db.relationship('User', backref=db.backref('attendance_records', overlaps='employee_attendance,user'), overlaps='employee_attendance,user')
+    brand = db.relationship('Brand', backref=db.backref('employee_attendance_records', overlaps='employee_attendance'), overlaps='employee_attendance')
 
     __table_args__ = (
         db.UniqueConstraint('user_id', 'date', name='unique_employee_attendance'),
@@ -122,6 +134,15 @@ class EmployeeAttendance(db.Model):
             'leave': 'info'
         }
         return class_map.get(self.status, 'secondary')
+
+    @property
+    def source_text(self):
+        """Source in Arabic"""
+        source_map = {
+            'manual': 'يدوي',
+            'fingerprint': 'بصمة'
+        }
+        return source_map.get(self.source, self.source)
 
     @property
     def working_hours(self):

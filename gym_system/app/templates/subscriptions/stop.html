@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}إيقاف الاشتراك{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-stop-circle"></i> إيقاف الاشتراك</h1>
+</div>
+
+<div class="row">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-person"></i> معلومات الاشتراك
+            </div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr>
+                        <th>العضو:</th>
+                        <td>{{ subscription.member.name }}</td>
+                    </tr>
+                    <tr>
+                        <th>الهاتف:</th>
+                        <td>{{ subscription.member.phone }}</td>
+                    </tr>
+                    <tr>
+                        <th>الباقة:</th>
+                        <td>{{ subscription.plan.name }}</td>
+                    </tr>
+                    <tr>
+                        <th>تاريخ الانتهاء:</th>
+                        <td>{{ subscription.end_date.strftime('%Y-%m-%d') }}</td>
+                    </tr>
+                    <tr>
+                        <th>الأيام المتبقية:</th>
+                        <td><span class="badge bg-warning">{{ subscription.days_remaining }} يوم</span></td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card border-danger">
+            <div class="card-header bg-danger text-white">
+                <i class="bi bi-exclamation-triangle"></i> تأكيد الإيقاف
+            </div>
+            <div class="card-body">
+                <p class="text-danger mb-3">
+                    <strong>تحذير:</strong> إيقاف الاشتراك سيمنع العضو من الدخول حتى لو كان لديه أيام متبقية.
+                </p>
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+                    <div class="mb-3">
+                        <label class="form-label">سبب الإيقاف *</label>
+                        {{ form.reason(class="form-select") }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">تفاصيل إضافية</label>
+                        {{ form.details(class="form-control", rows="3", placeholder="اشرح سبب الإيقاف بالتفصيل...") }}
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-danger" onclick="return confirm('هل أنت متأكد من إيقاف هذا الاشتراك؟');">
+                            <i class="bi bi-stop-circle"></i> تأكيد الإيقاف
+                        </button>
+                        <a href="{{ url_for('subscriptions.view', subscription_id=subscription.id) }}" class="btn btn-secondary">إلغاء</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

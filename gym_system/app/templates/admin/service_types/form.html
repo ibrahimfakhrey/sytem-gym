@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+
+{% block title %}{% if service_type %}تعديل{% else %}إضافة{% endif %} نوع خدمة{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-grid-3x3-gap"></i>
+        {% if service_type %}تعديل: {{ service_type.name }}{% else %}إضافة نوع خدمة جديد{% endif %}
+    </h1>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-body">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+
+                    {% if brand %}
+                    <div class="mb-3">
+                        <label class="form-label">البراند</label>
+                        <input type="text" class="form-control" value="{{ brand.name }}" disabled>
+                    </div>
+                    {% endif %}
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">اسم الخدمة (عربي) *</label>
+                            {{ form.name(class="form-control", placeholder="مثال: جيم") }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">اسم الخدمة (إنجليزي)</label>
+                            {{ form.name_en(class="form-control", placeholder="مثال: gym") }}
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">التصنيف *</label>
+                        {{ form.category(class="form-select") }}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">الوصف</label>
+                        {{ form.description(class="form-control", rows="2", placeholder="وصف مختصر للخدمة...") }}
+                    </div>
+
+                    <hr class="my-4">
+                    <h5 class="mb-3"><i class="bi bi-gear"></i> الإعدادات</h5>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">السعة (اختياري)</label>
+                            {{ form.capacity(class="form-control", type="number", min="1", placeholder="عدد الأشخاص") }}
+                            <small class="text-muted">الحد الأقصى لعدد المتواجدين في نفس الوقت</small>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="form-check">
+                            {{ form.requires_class_booking(class="form-check-input", id="requires_class_booking") }}
+                            <label class="form-check-label" for="requires_class_booking">
+                                يتطلب حجز كلاس
+                            </label>
+                            <br>
+                            <small class="text-muted">
+                                إذا كانت الخدمة تتطلب حجز موعد مسبق (مثل: سباحة تعليم، كاراتيه)
+                            </small>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="form-check">
+                            {{ form.is_active(class="form-check-input", id="is_active") }}
+                            <label class="form-check-label" for="is_active">
+                                الخدمة نشطة
+                            </label>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg"></i>
+                            {% if service_type %}حفظ التعديلات{% else %}إنشاء نوع الخدمة{% endif %}
+                        </button>
+                        <a href="{{ url_for('admin.service_types_list') }}" class="btn btn-secondary">
+                            <i class="bi bi-x-lg"></i>
+                            إلغاء
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-lightbulb"></i>
+                أمثلة على أنواع الخدمات
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled small">
+                    <li class="mb-3 p-2 bg-light rounded">
+                        <i class="bi bi-person-arms-up text-primary"></i>
+                        <strong>جيم</strong>
+                        <br><span class="text-muted">لا يتطلب حجز</span>
+                    </li>
+                    <li class="mb-3 p-2 bg-light rounded">
+                        <i class="bi bi-water text-info"></i>
+                        <strong>سباحة تعليم</strong>
+                        <br><span class="text-muted">يتطلب حجز كلاس</span>
+                    </li>
+                    <li class="mb-3 p-2 bg-light rounded">
+                        <i class="bi bi-water text-info"></i>
+                        <strong>سباحة ترفيه</strong>
+                        <br><span class="text-muted">لا يتطلب حجز</span>
+                    </li>
+                    <li class="mb-3 p-2 bg-light rounded">
+                        <i class="bi bi-lightning text-danger"></i>
+                        <strong>كاراتيه</strong>
+                        <br><span class="text-muted">يتطلب حجز كلاس</span>
+                    </li>
+                    <li class="mb-3 p-2 bg-light rounded">
+                        <i class="bi bi-scissors text-warning"></i>
+                        <strong>صالون</strong>
+                        <br><span class="text-muted">يتطلب حجز موعد</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        {% if service_type and service_type.plans.count() > 0 %}
+        <div class="card mt-4 border-info">
+            <div class="card-header bg-info text-white">
+                <i class="bi bi-info-circle"></i>
+                الباقات المرتبطة
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-2">
+                    يوجد {{ service_type.plans.count() }} باقة مرتبطة بنوع الخدمة هذا:
+                </p>
+                <ul class="list-unstyled small mb-0">
+                    {% for plan in service_type.plans[:5] %}
+                    <li class="mb-1">
+                        <i class="bi bi-tag"></i>
+                        {{ plan.name }}
+                    </li>
+                    {% endfor %}
+                    {% if service_type.plans.count() > 5 %}
+                    <li class="text-muted">و {{ service_type.plans.count() - 5 }} باقات أخرى...</li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

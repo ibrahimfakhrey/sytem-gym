@@ -5,6 +5,12 @@
 {% block content %}
 <div class="page-header">
     <h1><i class="bi bi-wallet2"></i> الرواتب</h1>
+    {% if current_user.is_owner %}
+    <a href="{{ url_for('employees.report') }}" class="btn btn-outline-primary">
+        <i class="bi bi-people"></i>
+        تقرير الموظفين
+    </a>
+    {% endif %}
 </div>
 
 <!-- Filter -->
@@ -51,50 +57,133 @@
     </div>
 </div>
 
-<!-- Total -->
-<div class="alert alert-primary d-flex justify-content-between align-items-center mb-4">
-    <span><i class="bi bi-calculator"></i> إجمالي الرواتب:</span>
-    <strong class="fs-5">{{ "{:,.0f}".format(total) }} ر.س</strong>
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-light">
+            <div class="card-body text-center">
+                <h6 class="text-muted">الراتب الأساسي</h6>
+                <h4>{{ "{:,.0f}".format(total_base) }} ر.س</h4>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body text-center">
+                <h6>المكافآت</h6>
+                <h4>+{{ "{:,.0f}".format(total_rewards) }} ر.س</h4>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-danger text-white">
+            <div class="card-body text-center">
+                <h6>الخصومات</h6>
+                <h4>-{{ "{:,.0f}".format(total_deductions) }} ر.س</h4>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body text-center">
+                <h6>صافي الرواتب</h6>
+                <h4>{{ "{:,.0f}".format(total_net) }} ر.س</h4>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- Salaries List -->
 <div class="card">
     <div class="card-body">
-        {% if salaries %}
+        {% if salary_data %}
         <div class="table-responsive">
             <table class="table table-hover">
                 <thead>
                     <tr>
                         <th>الموظف</th>
-                        <th>الشهر</th>
-                        <th>الراتب الأساسي</th>
-                        <th>البدلات</th>
-                        <th>الخصومات</th>
-                        <th>الصافي</th>
+                        <th>الوظيفة</th>
+                        <th class="text-center">الراتب الأساسي</th>
+                        <th class="text-center">المكافآت</th>
+                        <th class="text-center">الخصومات</th>
+                        <th class="text-center">الصافي</th>
                         {% if current_user.is_owner %}
                         <th>البراند</th>
+                        <th>الإجراءات</th>
                         {% endif %}
                     </tr>
                 </thead>
                 <tbody>
-                    {% for salary in salaries %}
+                    {% for item in salary_data %}
                     <tr>
                         <td>
-                            <strong>{{ salary.user.name if salary.user else '-' }}</strong>
+                            <strong>{{ item.salary.user.name if item.salary.user else '-' }}</strong>
                         </td>
-                        <td>{{ salary.month }}/{{ salary.year }}</td>
-                        <td>{{ "{:,.0f}".format(salary.base_salary) }} ر.س</td>
-                        <td class="text-success">+{{ "{:,.0f}".format(salary.bonuses or 0) }} ر.س</td>
-                        <td class="text-danger">-{{ "{:,.0f}".format(salary.deductions or 0) }} ر.س</td>
-                        <td><strong>{{ "{:,.0f}".format(salary.net_salary) }} ر.س</strong></td>
+                        <td>
+                            <span class="badge bg-secondary">{{ item.salary.user.role.name if item.salary.user and item.salary.user.role else '-' }}</span>
+                        </td>
+                        <td class="text-center">{{ "{:,.0f}".format(item.salary.base_salary) }} ر.س</td>
+                        <td class="text-center">
+                            {% if item.total_rewards > 0 %}
+                            <span class="text-success" data-bs-toggle="tooltip" title="{% for r in item.rewards %}{{ r.title }}: {{ r.amount|int }} ر.س&#10;{% endfor %}">
+                                +{{ "{:,.0f}".format(item.total_rewards) }} ر.س
+                                <i class="bi bi-info-circle small"></i>
+                            </span>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            {% if item.total_deductions > 0 %}
+                            <span class="text-danger" data-bs-toggle="tooltip" title="{% for d in item.deductions %}{{ d.title }}: {{ d.amount|int }} ر.س&#10;{% endfor %}">
+                                -{{ "{:,.0f}".format(item.total_deductions) }} ر.س
+                                <i class="bi bi-info-circle small"></i>
+                            </span>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            <strong class="{% if item.net_salary > item.salary.base_salary|float %}text-success{% elif item.net_salary < item.salary.base_salary|float %}text-danger{% endif %}">
+                                {{ "{:,.0f}".format(item.net_salary) }} ر.س
+                            </strong>
+                        </td>
                         {% if current_user.is_owner %}
                         <td>
-                            <span class="badge bg-secondary">{{ salary.brand.name if salary.brand else '-' }}</span>
+                            <span class="badge bg-secondary">{{ item.salary.brand.name if item.salary.brand else '-' }}</span>
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <a href="{{ url_for('employees.details', user_id=item.salary.user_id) }}"
+                                   class="btn btn-outline-primary" title="تفاصيل">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                <a href="{{ url_for('employees.give_reward', user_id=item.salary.user_id) }}"
+                                   class="btn btn-outline-success" title="مكافأة">
+                                    <i class="bi bi-gift"></i>
+                                </a>
+                                <a href="{{ url_for('employees.give_deduction', user_id=item.salary.user_id) }}"
+                                   class="btn btn-outline-danger" title="خصم">
+                                    <i class="bi bi-dash-circle"></i>
+                                </a>
+                            </div>
                         </td>
                         {% endif %}
                     </tr>
                     {% endfor %}
                 </tbody>
+                <tfoot class="table-light">
+                    <tr>
+                        <td colspan="2"><strong>الإجمالي</strong></td>
+                        <td class="text-center"><strong>{{ "{:,.0f}".format(total_base) }} ر.س</strong></td>
+                        <td class="text-center"><strong class="text-success">+{{ "{:,.0f}".format(total_rewards) }} ر.س</strong></td>
+                        <td class="text-center"><strong class="text-danger">-{{ "{:,.0f}".format(total_deductions) }} ر.س</strong></td>
+                        <td class="text-center"><strong class="text-primary">{{ "{:,.0f}".format(total_net) }} ر.س</strong></td>
+                        {% if current_user.is_owner %}
+                        <td colspan="2"></td>
+                        {% endif %}
+                    </tr>
+                </tfoot>
             </table>
         </div>
 
@@ -107,4 +196,14 @@
         {% endif %}
     </div>
 </div>
+
+<script>
+// Initialize tooltips
+document.addEventListener('DOMContentLoaded', function() {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl, {html: true});
+    });
+});
+</script>
 {% endblock %}

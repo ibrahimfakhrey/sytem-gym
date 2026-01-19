@@ -29,7 +29,7 @@
 
 <!-- Stats -->
 <div class="row g-4 mb-4">
-    <div class="col-md-6">
+    <div class="col-md-3">
         <div class="card stat-card bg-primary text-white">
             <div class="stat-icon">
                 <i class="bi bi-check2-all"></i>
@@ -38,7 +38,7 @@
             <div class="stat-label">حضور اليوم</div>
         </div>
     </div>
-    <div class="col-md-6">
+    <div class="col-md-3">
         <div class="card stat-card bg-success text-white">
             <div class="stat-icon">
                 <i class="bi bi-people"></i>
@@ -47,7 +47,35 @@
             <div class="stat-label">الأعضاء النشطين</div>
         </div>
     </div>
+    <div class="col-md-3">
+        <div class="card stat-card bg-info text-white">
+            <div class="stat-icon">
+                <i class="bi bi-person-plus"></i>
+            </div>
+            <div class="stat-value">{{ today_new_subs }}</div>
+            <div class="stat-label">اشتراكات جديدة اليوم</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card bg-warning text-dark">
+            <div class="stat-icon">
+                <i class="bi bi-arrow-repeat"></i>
+            </div>
+            <div class="stat-value">{{ today_renewals }}</div>
+            <div class="stat-label">تجديدات اليوم</div>
+        </div>
+    </div>
 </div>
+
+<!-- 48 Hour Urgent Alerts -->
+{% if expiring_48h %}
+<div class="alert alert-danger d-flex align-items-center mb-4" role="alert">
+    <i class="bi bi-exclamation-octagon me-2 fs-4"></i>
+    <div>
+        <strong>تنبيه عاجل:</strong> {{ expiring_48h|length }} اشتراك(ات) تنتهي خلال 48 ساعة - يرجى التواصل مع العملاء للتجديد
+    </div>
+</div>
+{% endif %}
 
 <div class="row g-4">
     <!-- Expiring Today -->
@@ -142,6 +170,38 @@
             <i class="bi bi-info-circle"></i>
             يرجى تسجيل بصمة هؤلاء الأعضاء في برنامج AAS باستخدام رقم البصمة المذكور
         </small>
+    </div>
+</div>
+{% endif %}
+
+<!-- Suspended Subscriptions -->
+{% if suspended_subs %}
+<div class="card border-secondary mt-4">
+    <div class="card-header bg-secondary text-white">
+        <i class="bi bi-pause-circle"></i>
+        اشتراكات متوقفة (تحتاج متابعة)
+    </div>
+    <div class="card-body">
+        <ul class="list-group list-group-flush">
+            {% for sub in suspended_subs %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                <div>
+                    <strong>{{ sub.member.name }}</strong>
+                    <br>
+                    <small class="text-muted">{{ sub.member.phone }}</small>
+                    {% if sub.stop_reason %}
+                    <br>
+                    <small class="text-danger">السبب: {{ sub.stop_reason[:30] }}{% if sub.stop_reason|length > 30 %}...{% endif %}</small>
+                    {% endif %}
+                </div>
+                <div class="text-end">
+                    <small class="text-muted">{{ sub.stopped_at.strftime('%m/%d') if sub.stopped_at else '-' }}</small>
+                    <br>
+                    <a href="{{ url_for('members.view', member_id=sub.member_id) }}" class="btn btn-sm btn-outline-primary mt-1">عرض</a>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
     </div>
 </div>
 {% endif %}

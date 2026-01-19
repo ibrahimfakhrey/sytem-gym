@@ -41,7 +41,16 @@
 
                     <div class="mb-3">
                         <label class="form-label">خطة الاشتراك الجديدة *</label>
-                        {{ form.plan_id(class="form-select", id="plan-select") }}
+                        <select name="plan_id" class="form-select" id="plan-select" required>
+                            {% for plan in plans %}
+                            <option value="{{ plan.id }}"
+                                    data-duration="{{ plan.duration_days }}"
+                                    data-price="{{ plan.price }}"
+                                    {% if form.plan_id.data == plan.id %}selected{% endif %}>
+                                {{ plan.name }} - {{ plan.price }} ر.س ({{ plan.duration_days }} يوم)
+                            </option>
+                            {% endfor %}
+                        </select>
                     </div>
 
                     <div class="row">
@@ -110,7 +119,7 @@
             <div class="card-body">
                 {% if subscription.member.subscriptions.count() > 0 %}
                 <ul class="list-group list-group-flush">
-                    {% for sub in subscription.member.subscriptions.order_by(db.desc('created_at')).limit(5) %}
+                    {% for sub in subscription.member.subscriptions.limit(5).all() %}
                     <li class="list-group-item px-0">
                         <div class="d-flex justify-content-between">
                             <span>{{ sub.plan.name }}</span>

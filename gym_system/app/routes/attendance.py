@@ -21,29 +21,47 @@ def index():
 
     brand = current_user.brand if current_user.brand_id else None
 
-    # Get today's attendance count
-    today_count = 0
-    if brand:
-        today_count = MemberAttendance.get_today_count(brand.id)
+    # Get today's attendance
+    today = date.today()
+    if current_user.can_view_all_brands:
+        today_attendance = MemberAttendance.query.filter(
+            db.func.date(MemberAttendance.check_in) == today
+        ).order_by(MemberAttendance.check_in.desc()).all()
+    elif current_user.brand_id:
+        today_attendance = MemberAttendance.query.filter(
+            MemberAttendance.brand_id == current_user.brand_id,
+            db.func.date(MemberAttendance.check_in) == today
+        ).order_by(MemberAttendance.check_in.desc()).all()
+    else:
+        today_attendance = []
 
     return render_template('attendance/index.html',
                           brand=brand,
-                          today_count=today_count)
+                          today_attendance=today_attendance)
 
 
 @attendance_bp.route('/check-in', methods=['POST'])
 @login_required
 def check_in():
     """Process check-in"""
-    member_id = request.form.get('member_id', type=int)
+    # Handle JSON request
+    if request.is_json:
+        data = request.get_json()
+        member_id = data.get('member_id')
+    else:
+        member_id = request.form.get('member_id', type=int)
 
     if not member_id:
+        if request.is_json:
+            return jsonify({'success': False, 'message': 'يرجى اختيار العضو'})
         flash('يرجى اختيار العضو', 'danger')
         return redirect(url_for('attendance.index'))
 
     member = Member.query.get_or_404(member_id)
 
     if not current_user.can_access_brand(member.brand_id):
+        if request.is_json:
+            return jsonify({'success': False, 'message': 'ليس لديك صلاحية'})
         flash('ليس لديك صلاحية', 'danger')
         return redirect(url_for('attendance.index'))
 
@@ -64,6 +82,8 @@ def check_in():
         db.session.add(attendance)
         db.session.commit()
 
+        if request.is_json:
+            return jsonify({'success': True, 'member_name': member.name, 'warning': message})
         flash(f'تحذير: {message}', 'warning')
         return redirect(url_for('attendance.index'))
 
@@ -78,6 +98,8 @@ def check_in():
     db.session.add(attendance)
     db.session.commit()
 
+    if request.is_json:
+        return jsonify({'success': True, 'member_name': member.name})
     flash(f'تم تسجيل حضور {member.name}', 'success')
     return redirect(url_for('attendance.index'))
 
@@ -178,17 +200,21 @@ def search_member():
     if len(q) < 2:
         return jsonify({'results': []})
 
-    brand_id = current_user.brand_id
-
-    members = Member.query.filter(
-        Member.brand_id == brand_id,
+    # Build base query
+    query = Member.query.filter(
         Member.is_active == True,
         db.or_(
             Member.name.ilike(f'%{q}%'),
             Member.phone.ilike(f'%{q}%'),
             Member.fingerprint_id == q if q.isdigit() else False
         )
-    ).limit(10).all()
+    )
+
+    # Filter by brand if user is not owner
+    if not current_user.can_view_all_brands:
+        query = query.filter(Member.brand_id == current_user.brand_id)
+
+    members = query.limit(10).all()
 
     results = []
     for m in members:

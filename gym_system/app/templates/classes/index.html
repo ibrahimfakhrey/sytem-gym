@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block title %}الكلاسات{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-calendar-event"></i>
+        الكلاسات
+    </h1>
+    <a href="{{ url_for('classes.create', brand_id=brand.id) }}" class="btn btn-primary">
+        <i class="bi bi-plus-lg"></i>
+        إضافة كلاس
+    </a>
+</div>
+
+<!-- Filters -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            {% if brands %}
+            <input type="hidden" name="brand_id" value="{{ brand.id }}">
+            {% endif %}
+            <div class="col-md-4">
+                <label class="form-label">اليوم</label>
+                <select name="day" class="form-select">
+                    <option value="">كل الأيام</option>
+                    <option value="0" {% if day_filter == 0 %}selected{% endif %}>السبت</option>
+                    <option value="1" {% if day_filter == 1 %}selected{% endif %}>الأحد</option>
+                    <option value="2" {% if day_filter == 2 %}selected{% endif %}>الاثنين</option>
+                    <option value="3" {% if day_filter == 3 %}selected{% endif %}>الثلاثاء</option>
+                    <option value="4" {% if day_filter == 4 %}selected{% endif %}>الأربعاء</option>
+                    <option value="5" {% if day_filter == 5 %}selected{% endif %}>الخميس</option>
+                    <option value="6" {% if day_filter == 6 %}selected{% endif %}>الجمعة</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">نوع الخدمة</label>
+                <select name="service" class="form-select">
+                    <option value="">الكل</option>
+                    {% for st in service_types %}
+                    <option value="{{ st.id }}" {% if service_filter == st.id %}selected{% endif %}>{{ st.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <button type="submit" class="btn btn-outline-primary">
+                    <i class="bi bi-funnel"></i>
+                    تصفية
+                </button>
+                <a href="{{ url_for('classes.index', brand_id=brand.id) }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-x-lg"></i>
+                    مسح
+                </a>
+                <a href="{{ url_for('classes.calendar', brand_id=brand.id) }}" class="btn btn-outline-info">
+                    <i class="bi bi-calendar3"></i>
+                    جدول الأسبوع
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Schedule by Day -->
+{% for day_num in range(7) %}
+{% if schedule[day_num] %}
+<div class="card mb-3">
+    <div class="card-header">
+        <strong>
+            {% if day_num == 0 %}السبت
+            {% elif day_num == 1 %}الأحد
+            {% elif day_num == 2 %}الاثنين
+            {% elif day_num == 3 %}الثلاثاء
+            {% elif day_num == 4 %}الأربعاء
+            {% elif day_num == 5 %}الخميس
+            {% else %}الجمعة{% endif %}
+        </strong>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>الكلاس</th>
+                        <th>نوع الخدمة</th>
+                        <th>الوقت</th>
+                        <th>المدرب</th>
+                        <th>السعة</th>
+                        <th>الحالة</th>
+                        <th>الإجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for cls in schedule[day_num] %}
+                    <tr>
+                        <td>
+                            <strong>{{ cls.name }}</strong>
+                            {% if cls.description %}
+                            <br><small class="text-muted">{{ cls.description[:50] }}...</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if cls.service_type %}
+                            <span class="badge bg-primary">{{ cls.service_type.name }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ cls.time_range }}</td>
+                        <td>
+                            {% if cls.trainer %}
+                            {{ cls.trainer.name }}
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ cls.capacity }} شخص</td>
+                        <td>
+                            {% if cls.is_active %}
+                            <span class="badge bg-success">نشط</span>
+                            {% else %}
+                            <span class="badge bg-secondary">متوقف</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group">
+                                <a href="{{ url_for('classes.bookings', class_id=cls.id) }}"
+                                   class="btn btn-sm btn-outline-info" title="الحجوزات">
+                                    <i class="bi bi-people"></i>
+                                </a>
+                                <a href="{{ url_for('classes.edit', class_id=cls.id) }}"
+                                   class="btn btn-sm btn-outline-primary" title="تعديل">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endfor %}
+
+{% if not classes %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-calendar-x display-1 text-muted"></i>
+        <h4 class="mt-3">لا توجد كلاسات</h4>
+        <p class="text-muted">قم بإضافة كلاسات لتظهر في الجدول</p>
+        <a href="{{ url_for('classes.create', brand_id=brand.id) }}" class="btn btn-primary">
+            <i class="bi bi-plus-lg"></i>
+            إضافة كلاس
+        </a>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

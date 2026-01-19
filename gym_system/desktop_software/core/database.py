@@ -7,11 +7,82 @@ from typing import List, Dict, Optional
 from datetime import datetime
 
 
+def recover_mdb_password(file_path: str) -> str:
+    """
+    Recover password from .mdb file (Access 97-2003).
+    The password in old .mdb files is XOR-encoded in the header.
+    """
+    try:
+        with open(file_path, 'rb') as f:
+            # Read the header
+            header = f.read(256)
+
+        # Access 97/2000/2003 password location and XOR mask
+        # Password starts at offset 0x42 (66) and is XOR'd with a known mask
+
+        # XOR mask for Access 2000/2003 (.mdb)
+        xor_mask_2000 = [
+            0xC7, 0x89, 0x6F, 0x32, 0xBC, 0x19, 0x9E, 0xEC,
+            0x17, 0xFB, 0x33, 0x8E, 0x5D, 0x70, 0xBA, 0xD7,
+            0x6E, 0xBB, 0x92, 0x47
+        ]
+
+        # XOR mask for Access 97
+        xor_mask_97 = [
+            0x86, 0xFB, 0xEC, 0x37, 0x5D, 0x44, 0x9C, 0xFA,
+            0xC6, 0x5E, 0x28, 0xE6, 0x13
+        ]
+
+        # Try to detect version and extract password
+        password = ""
+
+        # Check Jet version at offset 0x14
+        jet_version = header[0x14] if len(header) > 0x14 else 0
+
+        if jet_version == 0:  # Access 97
+            xor_mask = xor_mask_97
+            pwd_offset = 0x42
+            pwd_len = 13
+        else:  # Access 2000/2003
+            xor_mask = xor_mask_2000
+            pwd_offset = 0x42
+            pwd_len = 20
+
+        # Extract password bytes
+        pwd_bytes = header[pwd_offset:pwd_offset + pwd_len]
+
+        # XOR decode
+        decoded = []
+        for i, byte in enumerate(pwd_bytes):
+            if i < len(xor_mask):
+                decoded_byte = byte ^ xor_mask[i]
+                if decoded_byte == 0:
+                    break
+                decoded.append(decoded_byte)
+
+        if decoded:
+            # Try to decode as string
+            try:
+                # Access uses Unicode (UTF-16LE) for passwords in 2000+
+                password = bytes(decoded).decode('utf-16-le', errors='ignore').rstrip('\x00')
+                if not password:
+                    password = bytes(decoded).decode('latin-1', errors='ignore').rstrip('\x00')
+            except:
+                password = ''.join(chr(b) for b in decoded if 32 <= b < 127)
+
+        return password.strip() if password else ""
+
+    except Exception as e:
+        print(f"Password recovery error: {e}")
+        return ""
+
+
 class DatabaseManager:
     """Manage .mdb database operations using pyodbc"""
 
-    def __init__(self, database_path: str = None):
+    def __init__(self, database_path: str = None, password: str = None):
         self.database_path = database_path
+        self.password = password  # User-provided password
         self.connection = None
         self._pyodbc = None
 
@@ -53,9 +124,97 @@ class DatabaseManager:
         """Connect to the database"""
         try:
             pyodbc = self._get_pyodbc()
-            conn_str = self._get_connection_string()
-            self.connection = pyodbc.connect(conn_str)
-            return True
+
+            # Build password list with priority order:
+            # 1. User-provided password
+            # 2. Recovered password from file
+            # 3. Common passwords
+            passwords_to_try = []
+
+            # 1. User-provided password first
+            if self.password:
+                passwords_to_try.append(self.password)
+                print(f"Will try user-provided password first")
+
+            # 2. Try to recover password from file
+            if self.database_path:
+                recovered_pwd = recover_mdb_password(self.database_path)
+                if recovered_pwd and recovered_pwd not in passwords_to_try:
+                    passwords_to_try.append(recovered_pwd)
+                    print(f"Recovered password from file: {recovered_pwd}")
+
+            # 3. Common passwords for AAS/ZK attendance systems
+            common_passwords = [
+                "",           # No password
+                "123",        # Common default
+                "1234",
+                "12345",
+                "123456",
+                "1234567",
+                "12345678",
+                "aas",        # AAS software
+                "AAS",
+                "admin",
+                "Admin",
+                "ADMIN",
+                "password",
+                "Password",
+                "attendance",
+                "Attendance",
+                "manager",
+                "Manager",
+                "computer",   # ZKTeco common
+                "zzk",        # ZKTeco
+                "ZK",
+                "zk",
+                "zkteco",
+                "ZKTeco",
+                "soyal",      # Soyal systems
+                "168168",     # Chinese systems
+                "888888",
+                "666666",
+                "111111",
+                "000000",
+                "abc123",
+                "root",
+                "user",
+                "pass",
+                "db",
+                "database",
+                "access",
+                "mdb",
+            ]
+
+            # Add common passwords that aren't already in the list
+            for pwd in common_passwords:
+                if pwd not in passwords_to_try:
+                    passwords_to_try.append(pwd)
+
+            driver = "Microsoft Access Driver (*.mdb, *.accdb)"
+
+            for pwd in passwords_to_try:
+                try:
+                    if pwd:
+                        conn_str = f"DRIVER={{{driver}}};DBQ={self.database_path};PWD={pwd};"
+                    else:
+                        conn_str = f"DRIVER={{{driver}}};DBQ={self.database_path};"
+
+                    self.connection = pyodbc.connect(conn_str)
+                    print(f"Connected successfully! Password: {'(empty)' if not pwd else pwd}")
+                    # Save the working password for future reference
+                    self.password = pwd
+                    return True
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "password" not in error_str and "not a valid password" not in error_str:
+                        # Different error, not password related
+                        print(f"Error: {e}")
+                    continue
+
+            print("Could not connect - password not found")
+            print("Please set the database password in Settings")
+            return False
+
         except Exception as e:
             print(f"Connection error: {e}")
             return False

@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+
+{% block title %}أنواع الخدمات{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-grid-3x3-gap"></i>
+        أنواع الخدمات
+    </h1>
+    {% if current_user.is_owner and brands %}
+    <div class="dropdown">
+        <button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+            <i class="bi bi-plus-lg"></i>
+            إضافة نوع خدمة
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+            <li><h6 class="dropdown-header">اختر البراند</h6></li>
+            {% for brand in brands %}
+            <li>
+                <a class="dropdown-item" href="{{ url_for('admin.service_types_create', brand_id=brand.id) }}">
+                    <i class="bi bi-building"></i>
+                    {{ brand.name }}
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% elif not current_user.is_owner %}
+    <a href="{{ url_for('admin.service_types_create') }}" class="btn btn-primary">
+        <i class="bi bi-plus-lg"></i>
+        إضافة نوع خدمة
+    </a>
+    {% endif %}
+</div>
+
+{% if current_user.is_owner and not brands %}
+<div class="alert alert-warning">
+    <i class="bi bi-exclamation-triangle"></i>
+    لا توجد براندات. يرجى <a href="{{ url_for('admin.brands_create') }}">إنشاء براند</a> أولاً.
+</div>
+{% endif %}
+
+<!-- Quick seed buttons for brands without service types -->
+{% if brands %}
+{% set brands_without_services = brands | selectattr('service_types') | rejectattr('service_types.count') | list %}
+{% if current_user.is_owner %}
+<div class="card mb-4">
+    <div class="card-header">
+        <i class="bi bi-magic"></i>
+        إضافة سريعة للخدمات الافتراضية
+    </div>
+    <div class="card-body">
+        <div class="d-flex flex-wrap gap-2">
+            {% for brand in brands %}
+            <form action="{{ url_for('admin.service_types_seed', brand_id=brand.id) }}" method="post" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-outline-primary btn-sm">
+                    <i class="bi bi-lightning"></i>
+                    {{ brand.name }}
+                </button>
+            </form>
+            {% endfor %}
+        </div>
+        <small class="text-muted d-block mt-2">
+            يضيف: جيم، سباحة تعليم، سباحة ترفيه، كاراتيه، صالون
+        </small>
+    </div>
+</div>
+{% endif %}
+{% endif %}
+
+<div class="card">
+    <div class="card-body">
+        {% if service_types %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>اسم الخدمة</th>
+                        <th>التصنيف</th>
+                        <th>يتطلب حجز</th>
+                        <th>السعة</th>
+                        {% if current_user.is_owner %}
+                        <th>البراند</th>
+                        {% endif %}
+                        <th>الحالة</th>
+                        <th>الإجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for service in service_types %}
+                    <tr>
+                        <td>{{ service.id }}</td>
+                        <td>
+                            <strong>{{ service.name }}</strong>
+                            {% if service.name_en %}
+                            <br><small class="text-muted">{{ service.name_en }}</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if service.category == 'gym' %}
+                            <span class="badge bg-primary"><i class="bi bi-person-arms-up"></i> جيم</span>
+                            {% elif service.category == 'swimming' %}
+                            <span class="badge bg-info"><i class="bi bi-water"></i> سباحة</span>
+                            {% elif service.category == 'karate' %}
+                            <span class="badge bg-danger"><i class="bi bi-lightning"></i> كاراتيه</span>
+                            {% elif service.category == 'salon' %}
+                            <span class="badge bg-warning"><i class="bi bi-scissors"></i> صالون</span>
+                            {% elif service.category == 'package' %}
+                            <span class="badge bg-success"><i class="bi bi-box"></i> باقة</span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ service.category }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if service.requires_class_booking %}
+                            <span class="badge bg-warning"><i class="bi bi-calendar-check"></i> نعم</span>
+                            {% else %}
+                            <span class="badge bg-secondary">لا</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if service.capacity %}
+                            {{ service.capacity }} شخص
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        {% if current_user.is_owner %}
+                        <td>
+                            <span class="badge bg-secondary">{{ service.brand.name }}</span>
+                        </td>
+                        {% endif %}
+                        <td>
+                            {% if service.is_active %}
+                            <span class="badge-status active">نشط</span>
+                            {% else %}
+                            <span class="badge-status danger">متوقف</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group">
+                                <a href="{{ url_for('admin.service_types_edit', service_type_id=service.id) }}"
+                                   class="btn btn-sm btn-outline-primary" title="تعديل">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                {% if service.plans.count() == 0 %}
+                                <form action="{{ url_for('admin.service_types_delete', service_type_id=service.id) }}"
+                                      method="post" class="d-inline"
+                                      onsubmit="return confirm('هل أنت متأكد من حذف نوع الخدمة هذا؟');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="حذف">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i class="bi bi-grid-3x3-gap"></i>
+            <h5>لا توجد أنواع خدمات</h5>
+            <p class="text-muted">قم بإضافة أنواع الخدمات المتاحة في النادي (جيم، سباحة، كاراتيه...)</p>
+            {% if current_user.is_owner and brands %}
+            <div class="dropdown">
+                <button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    <i class="bi bi-plus-lg"></i>
+                    إضافة نوع خدمة
+                </button>
+                <ul class="dropdown-menu">
+                    <li><h6 class="dropdown-header">اختر البراند</h6></li>
+                    {% for brand in brands %}
+                    <li>
+                        <a class="dropdown-item" href="{{ url_for('admin.service_types_create', brand_id=brand.id) }}">
+                            <i class="bi bi-building"></i>
+                            {{ brand.name }}
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% elif not current_user.is_owner %}
+            <a href="{{ url_for('admin.service_types_create') }}" class="btn btn-primary">
+                <i class="bi bi-plus-lg"></i>
+                إضافة نوع خدمة
+            </a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if service_types %}
+<div class="card mt-4">
+    <div class="card-header">
+        <i class="bi bi-lightbulb"></i>
+        ملاحظات
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <h6><i class="bi bi-calendar-check text-warning"></i> يتطلب حجز كلاس</h6>
+                <p class="text-muted small">
+                    الخدمات التي تتطلب حجز كلاس يجب على العضو حجز موعد قبل الحضور
+                    (مثل: سباحة تعليم، كاراتيه)
+                </p>
+            </div>
+            <div class="col-md-6">
+                <h6><i class="bi bi-people text-info"></i> السعة</h6>
+                <p class="text-muted small">
+                    السعة تحدد الحد الأقصى لعدد الأشخاص المسموح بهم في نفس الوقت
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

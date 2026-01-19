@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+
+{% block title %}التقرير الصحي - {{ member.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-heart-pulse"></i>
+        التقرير الصحي - {{ member.name }}
+    </h1>
+    <div class="btn-group">
+        <a href="{{ url_for('health.create_report', member_id=member.id) }}" class="btn btn-primary">
+            <i class="bi bi-plus-lg"></i>
+            تقرير جديد
+        </a>
+        {% if report %}
+        <a href="{{ url_for('health.print_report', report_id=report.id) }}" class="btn btn-outline-secondary" target="_blank">
+            <i class="bi bi-printer"></i>
+            طباعة
+        </a>
+        <button type="button" class="btn btn-outline-success" onclick="shareViaWhatsApp({{ report.id }})">
+            <i class="bi bi-whatsapp"></i>
+            مشاركة
+        </button>
+        {% endif %}
+    </div>
+</div>
+
+{% if report %}
+<div class="row">
+    <div class="col-lg-8">
+        <!-- Status Card -->
+        <div class="card mb-4 border-{{ report.status_class }}">
+            <div class="card-body text-center py-4">
+                <h2 class="text-{{ report.status_class }}">
+                    {% if report.status == 'excellent' %}
+                    <i class="bi bi-emoji-smile"></i>
+                    {% elif report.status == 'needs_weight_loss' %}
+                    <i class="bi bi-arrow-down-circle"></i>
+                    {% else %}
+                    <i class="bi bi-arrow-up-circle"></i>
+                    {% endif %}
+                    {{ report.status_arabic }}
+                </h2>
+                <p class="lead mb-0">{{ report.status_message }}</p>
+            </div>
+        </div>
+
+        <!-- Measurements -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-rulers"></i>
+                القياسات
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-3">
+                        <div class="p-3 bg-light rounded">
+                            <h4 class="text-primary">{{ report.height_cm }}</h4>
+                            <small class="text-muted">الطول (سم)</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="p-3 bg-light rounded">
+                            <h4 class="text-primary">{{ report.weight_kg }}</h4>
+                            <small class="text-muted">الوزن (كجم)</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="p-3 bg-light rounded">
+                            <h4 class="text-primary">{{ report.age }}</h4>
+                            <small class="text-muted">العمر</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="p-3 bg-light rounded">
+                            <h4 class="text-primary">{{ 'ذكر' if report.gender == 'male' else 'أنثى' }}</h4>
+                            <small class="text-muted">الجنس</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-graph-up"></i>
+                النتائج
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-4">
+                            <h6 class="text-muted">مؤشر كتلة الجسم (BMI)</h6>
+                            <div class="d-flex align-items-baseline">
+                                <h2 class="mb-0 me-2">{{ report.bmi }}</h2>
+                                <span class="badge bg-{{ report.status_class }}">{{ report.bmi_category }}</span>
+                            </div>
+                            <div class="progress mt-2" style="height: 10px;">
+                                {% set bmi_percent = ((report.bmi - 15) / 25 * 100) | int %}
+                                {% if bmi_percent < 0 %}{% set bmi_percent = 5 %}{% endif %}
+                                {% if bmi_percent > 100 %}{% set bmi_percent = 100 %}{% endif %}
+                                <div class="progress-bar bg-{{ report.status_class }}" style="width: {{ bmi_percent }}%"></div>
+                            </div>
+                            <div class="d-flex justify-content-between small text-muted mt-1">
+                                <span>نقص</span>
+                                <span>طبيعي</span>
+                                <span>زيادة</span>
+                                <span>سمنة</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-4">
+                            <h6 class="text-muted">الوزن المثالي</h6>
+                            <div class="d-flex align-items-baseline">
+                                <h2 class="mb-0 me-2">{{ report.ideal_weight }}</h2>
+                                <span>كجم</span>
+                            </div>
+                            {% if report.weight_difference %}
+                            <p class="mb-0 mt-2">
+                                {% if report.weight_difference > 0 %}
+                                <span class="text-warning">
+                                    <i class="bi bi-arrow-down"></i>
+                                    تحتاج لإنقاص {{ report.weight_difference }} كجم
+                                </span>
+                                {% elif report.weight_difference < 0 %}
+                                <span class="text-info">
+                                    <i class="bi bi-arrow-up"></i>
+                                    تحتاج لزيادة {{ report.weight_difference|abs }} كجم
+                                </span>
+                                {% else %}
+                                <span class="text-success">
+                                    <i class="bi bi-check-circle"></i>
+                                    وزنك مثالي!
+                                </span>
+                                {% endif %}
+                            </p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Calories -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-fire"></i>
+                معدل الحرق والسعرات
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-6">
+                        <div class="p-3 border rounded">
+                            <h6 class="text-muted">معدل الأيض الأساسي (BMR)</h6>
+                            <h3 class="text-danger">{{ report.metabolic_rate|int }}</h3>
+                            <small class="text-muted">سعرة حرارية/يوم</small>
+                            <p class="small mt-2 mb-0">السعرات التي يحرقها جسمك في الراحة</p>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="p-3 border rounded">
+                            <h6 class="text-muted">السعرات اليومية المطلوبة</h6>
+                            <h3 class="text-success">{{ report.daily_calories|int }}</h3>
+                            <small class="text-muted">سعرة حرارية/يوم</small>
+                            <p class="small mt-2 mb-0">للحفاظ على وزنك الحالي (نشاط متوسط)</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <!-- Member Info -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-person"></i>
+                معلومات العضو
+            </div>
+            <div class="card-body">
+                <p><strong>الاسم:</strong> {{ member.name }}</p>
+                <p><strong>الهاتف:</strong> {{ member.phone }}</p>
+                <p><strong>تاريخ التقرير:</strong> {{ report.created_at.strftime('%Y-%m-%d') }}</p>
+            </div>
+            <div class="card-footer">
+                <a href="{{ url_for('members.view', member_id=member.id) }}" class="btn btn-outline-primary btn-sm w-100">
+                    <i class="bi bi-eye"></i>
+                    عرض الملف الشخصي
+                </a>
+            </div>
+        </div>
+
+        <!-- Tips -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-lightbulb"></i>
+                نصائح
+            </div>
+            <div class="card-body">
+                {% if report.status == 'needs_weight_loss' %}
+                <ul class="small mb-0">
+                    <li>قلل السعرات الحرارية بـ 500 سعرة يومياً</li>
+                    <li>مارس الرياضة 150 دقيقة أسبوعياً</li>
+                    <li>اشرب 8 أكواب ماء يومياً</li>
+                    <li>تناول الخضروات والفواكه</li>
+                </ul>
+                {% elif report.status == 'needs_weight_gain' %}
+                <ul class="small mb-0">
+                    <li>زد السعرات الحرارية بـ 500 سعرة يومياً</li>
+                    <li>تناول البروتين في كل وجبة</li>
+                    <li>مارس تمارين المقاومة</li>
+                    <li>تناول وجبات خفيفة صحية</li>
+                </ul>
+                {% else %}
+                <ul class="small mb-0">
+                    <li>حافظ على نظامك الغذائي الحالي</li>
+                    <li>استمر في ممارسة الرياضة</li>
+                    <li>أجرِ فحص دوري كل 3 أشهر</li>
+                    <li>اشرب الماء بانتظام</li>
+                </ul>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- History -->
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-clock-history"></i>
+                التقارير السابقة
+            </div>
+            <div class="card-body p-0">
+                <ul class="list-group list-group-flush">
+                    {% for old_report in member.health_reports[:5] %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>{{ old_report.created_at.strftime('%Y-%m-%d') }}</span>
+                        <span class="badge bg-{{ old_report.status_class }}">{{ old_report.bmi }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% if member.health_reports.count() > 5 %}
+            <div class="card-footer">
+                <a href="{{ url_for('health.report_history', member_id=member.id) }}" class="btn btn-sm btn-outline-primary w-100">
+                    عرض الكل
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% else %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-heart-pulse display-1 text-muted"></i>
+        <h4 class="mt-3">لا يوجد تقرير صحي</h4>
+        <p class="text-muted">لم يتم إنشاء تقرير صحي لهذا العضو بعد</p>
+        <a href="{{ url_for('health.create_report', member_id=member.id) }}" class="btn btn-primary">
+            <i class="bi bi-plus-lg"></i>
+            إنشاء تقرير جديد
+        </a>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function shareViaWhatsApp(reportId) {
+    fetch(`/health/report/${reportId}/share`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.whatsapp_url) {
+                window.open(data.whatsapp_url, '_blank');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('حدث خطأ في المشاركة');
+        });
+}
+</script>
+{% endblock %}

@@ -33,12 +33,23 @@ class FileFinder:
 
         # Common paths to search first (faster)
         common_paths = [
+            # AAS paths
             "C:\\AAS",
             "C:\\Program Files\\AAS",
             "C:\\Program Files (x86)\\AAS",
             "D:\\AAS",
+            # Attendance paths
+            "C:\\Attendance",
+            "D:\\Attendance",
+            "C:\\Program Files\\Attendance",
+            "C:\\Program Files (x86)\\Attendance",
+            # User folders
             os.path.expanduser("~\\Documents"),
             os.path.expanduser("~\\Desktop"),
+            os.path.expanduser("~\\Downloads"),
+            # Root of drives
+            "C:\\",
+            "D:\\",
         ]
 
         total_paths = len(common_paths) + len(drives)
@@ -52,7 +63,7 @@ class FileFinder:
                 callback(progress, f"جاري البحث في: {path}")
 
             if os.path.exists(path):
-                self._search_directory(path, max_depth=5)
+                self._search_directory(path, max_depth=6)
 
         # If not found in common paths, search all drives
         if not self.found_databases:
@@ -62,7 +73,7 @@ class FileFinder:
                     progress = 50 + int((current / len(drives)) * 50)
                     callback(progress, f"جاري البحث في: {drive}")
 
-                self._search_directory(drive, max_depth=4)
+                self._search_directory(drive, max_depth=6)
 
         if callback:
             callback(100, "اكتمل البحث")
@@ -81,14 +92,14 @@ class FileFinder:
                 try:
                     if os.path.isfile(item_path):
                         if item.lower().endswith('.mdb'):
-                            # Check if it's the AAS database (tmkq.mdb)
-                            if 'tmkq' in item.lower() or 'aas' in item_path.lower():
-                                self._add_database(item_path)
+                            # Add any .mdb file found
+                            self._add_database(item_path)
 
                     elif os.path.isdir(item_path):
                         # Skip system directories
-                        skip_dirs = ['windows', 'program files', '$recycle.bin',
-                                    'system volume information', 'programdata']
+                        skip_dirs = ['windows', '$recycle.bin', 'system volume information',
+                                    'programdata', 'appdata', 'node_modules', '.git',
+                                    'winsxs', 'assembly', 'microsoft.net']
                         if item.lower() not in skip_dirs:
                             self._search_directory(item_path, max_depth, current_depth + 1)
 

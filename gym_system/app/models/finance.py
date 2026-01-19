@@ -41,16 +41,23 @@ class Income(db.Model):
     branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'), nullable=True)
     subscription_id = db.Column(db.Integer, db.ForeignKey('subscriptions.id'), nullable=True)
     payment_id = db.Column(db.Integer, db.ForeignKey('subscription_payments.id'), nullable=True)
+    service_type_id = db.Column(db.Integer, db.ForeignKey('service_types.id'), nullable=True)
 
     amount = db.Column(db.Numeric(10, 2), nullable=False)
 
-    # Type: 'subscription', 'renewal', 'other'
+    # Type: 'subscription', 'renewal', 'freeze_fee', 'gift_card', 'other'
     type = db.Column(db.String(30), nullable=False)
+
+    # Payment method: 'cash', 'card', 'transfer'
+    payment_method = db.Column(db.String(20), default='cash')
 
     description = db.Column(db.Text)
     date = db.Column(db.Date, nullable=False, default=date.today)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
+
+    # Relationships
+    service_type = db.relationship('ServiceType', backref='income_records')
 
     def __repr__(self):
         return f'<Income {self.amount} - {self.type}>'
@@ -61,9 +68,34 @@ class Income(db.Model):
         type_map = {
             'subscription': 'اشتراك',
             'renewal': 'تجديد',
+            'freeze_fee': 'رسوم تجميد',
+            'gift_card': 'كرت إهداء',
             'other': 'أخرى'
         }
         return type_map.get(self.type, self.type)
+
+    @property
+    def payment_method_text(self):
+        """Payment method in Arabic"""
+        method_map = {
+            'cash': 'نقدي',
+            'card': 'شبكة',
+            'transfer': 'حوالة'
+        }
+        return method_map.get(self.payment_method, self.payment_method)
+
+    @classmethod
+    def get_by_payment_method(cls, brand_id, start_date, end_date):
+        """Get income grouped by payment method"""
+        from sqlalchemy import func
+        return db.session.query(
+            cls.payment_method,
+            func.sum(cls.amount).label('total')
+        ).filter(
+            cls.brand_id == brand_id,
+            cls.date >= start_date,
+            cls.date <= end_date
+        ).group_by(cls.payment_method).all()
 
     @classmethod
     def get_total_for_period(cls, brand_id, start_date, end_date):
@@ -92,11 +124,64 @@ class Expense(db.Model):
     date = db.Column(db.Date, nullable=False, default=date.today)
     receipt_image = db.Column(db.String(255))
 
+    # Approval workflow
+    status = db.Column(db.String(20), default='pending')  # pending, approved, rejected
+    approved_by = db.Column(db.Integer, db.ForeignKey('users.id'))
+    approved_at = db.Column(db.DateTime)
+    rejection_reason = db.Column(db.Text)
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
 
+    # Relationships
+    approver = db.relationship('User', foreign_keys=[approved_by], backref='approved_expenses')
+    creator = db.relationship('User', foreign_keys=[created_by], backref='created_expenses')
+
     def __repr__(self):
         return f'<Expense {self.amount} - {self.category_name}>'
+
+    @property
+    def status_text(self):
+        """Status in Arabic"""
+        status_map = {
+            'pending': 'قيد الانتظار',
+            'approved': 'معتمد',
+            'rejected': 'مرفوض'
+        }
+        return status_map.get(self.status, self.status)
+
+    @property
+    def status_class(self):
+        """CSS class for status"""
+        class_map = {
+            'pending': 'warning',
+            'approved': 'success',
+            'rejected': 'danger'
+        }
+        return class_map.get(self.status, 'secondary')
+
+    def approve(self, user_id):
+        """Approve the expense"""
+        self.status = 'approved'
+        self.approved_by = user_id
+        self.approved_at = datetime.utcnow()
+        db.session.commit()
+
+    def reject(self, user_id, reason):
+        """Reject the expense"""
+        self.status = 'rejected'
+        self.approved_by = user_id
+        self.approved_at = datetime.utcnow()
+        self.rejection_reason = reason
+        db.session.commit()
+
+    @classmethod
+    def get_pending_approvals(cls, brand_id=None):
+        """Get all expenses pending approval"""
+        query = cls.query.filter_by(status='pending')
+        if brand_id:
+            query = query.filter_by(brand_id=brand_id)
+        return query.order_by(cls.date.desc()).all()
 
     @classmethod
     def get_total_for_period(cls, brand_id, start_date, end_date):

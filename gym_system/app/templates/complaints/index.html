@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+
+{% block title %}الشكاوى{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-exclamation-triangle"></i>
+        الشكاوى
+        {% if pending_count > 0 %}
+        <span class="badge bg-warning">{{ pending_count }} قيد الانتظار</span>
+        {% endif %}
+    </h1>
+    <div class="btn-group">
+        {% if current_user.is_owner %}
+        <div class="dropdown">
+            <button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                <i class="bi bi-plus-lg"></i>
+                تسجيل شكوى
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+                {% for brand in brands %}
+                <li>
+                    <a class="dropdown-item" href="{{ url_for('complaints.create', brand_id=brand.id) }}">
+                        {{ brand.name }}
+                    </a>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% else %}
+        <a href="{{ url_for('complaints.create') }}" class="btn btn-primary">
+            <i class="bi bi-plus-lg"></i>
+            تسجيل شكوى
+        </a>
+        {% endif %}
+        {% if current_user.is_owner %}
+        <form action="{{ url_for('complaints.seed_categories') }}" method="post" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-outline-secondary" title="إضافة التصنيفات الافتراضية">
+                <i class="bi bi-magic"></i>
+            </button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label">الحالة</label>
+                <select name="status" class="form-select">
+                    <option value="">الكل</option>
+                    <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>قيد الانتظار</option>
+                    <option value="in_progress" {% if status_filter == 'in_progress' %}selected{% endif %}>قيد المعالجة</option>
+                    <option value="resolved" {% if status_filter == 'resolved' %}selected{% endif %}>تم الحل</option>
+                    <option value="closed" {% if status_filter == 'closed' %}selected{% endif %}>مغلق</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">التصنيف</label>
+                <select name="category" class="form-select">
+                    <option value="">الكل</option>
+                    {% for cat in categories %}
+                    <option value="{{ cat.id }}" {% if category_filter == cat.id %}selected{% endif %}>{{ cat.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <button type="submit" class="btn btn-outline-primary">
+                    <i class="bi bi-funnel"></i>
+                    تصفية
+                </button>
+                <a href="{{ url_for('complaints.index') }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-x-lg"></i>
+                    مسح
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Complaints List -->
+<div class="card">
+    <div class="card-body">
+        {% if complaints %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>العميل</th>
+                        <th>التصنيف</th>
+                        <th>الموضوع</th>
+                        <th>الأولوية</th>
+                        <th>الحالة</th>
+                        <th>التاريخ</th>
+                        <th>الإجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for complaint in complaints %}
+                    <tr>
+                        <td>{{ complaint.id }}</td>
+                        <td>
+                            <strong>{{ complaint.customer_display_name }}</strong>
+                            {% if complaint.customer_phone %}
+                            <br><small class="text-muted">{{ complaint.customer_phone }}</small>
+                            {% endif %}
+                            {% if complaint.submitted_by == 'customer' %}
+                            <br><span class="badge bg-info">عبر الرابط</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if complaint.category %}
+                            <span class="badge bg-secondary">
+                                <i class="{{ complaint.category.icon }}"></i>
+                                {{ complaint.category.name }}
+                            </span>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('complaints.view', complaint_id=complaint.id) }}">
+                                {{ complaint.subject[:40] }}{% if complaint.subject|length > 40 %}...{% endif %}
+                            </a>
+                        </td>
+                        <td>
+                            <span class="badge bg-{{ complaint.priority_class }}">
+                                {{ complaint.priority_arabic }}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge bg-{{ complaint.status_class }}">
+                                {{ complaint.status_arabic }}
+                            </span>
+                        </td>
+                        <td>
+                            <small>{{ complaint.created_at.strftime('%Y-%m-%d') }}</small>
+                            <br><small class="text-muted">{{ complaint.created_at.strftime('%H:%M') }}</small>
+                        </td>
+                        <td>
+                            <a href="{{ url_for('complaints.view', complaint_id=complaint.id) }}"
+                               class="btn btn-sm btn-outline-primary" title="عرض">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state text-center py-5">
+            <i class="bi bi-check-circle display-1 text-success"></i>
+            <h4 class="mt-3">لا توجد شكاوى</h4>
+            <p class="text-muted">لم يتم تسجيل أي شكاوى حتى الآن</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if categories %}
+<!-- Stats by Category -->
+<div class="card mt-4">
+    <div class="card-header">
+        <i class="bi bi-bar-chart"></i>
+        إحصائيات حسب التصنيف
+    </div>
+    <div class="card-body">
+        <div class="row">
+            {% for cat in categories %}
+            <div class="col-md-3 mb-3">
+                <div class="p-3 border rounded text-center">
+                    <i class="{{ cat.icon }} fs-3 text-primary"></i>
+                    <h5 class="mt-2">{{ cat.complaints.count() }}</h5>
+                    <small class="text-muted">{{ cat.name }}</small>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

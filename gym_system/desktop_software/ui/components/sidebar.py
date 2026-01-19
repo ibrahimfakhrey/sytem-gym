@@ -74,5 +74,11 @@ class Sidebar(ctk.CTkFrame):
             self.on_navigate(page_id)
 
     def set_active(self, page_id: str):
-        """Set active page"""
-        self._on_click(page_id)
+        """Set active page (visual only, no callback)"""
+        # Update button styles without triggering navigation
+        for pid, btn in self.buttons.items():
+            if pid == page_id:
+                btn.configure(fg_color=COLORS['primary'])
+            else:
+                btn.configure(fg_color="transparent")
+        self.current_page = page_id

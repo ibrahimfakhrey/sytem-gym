@@ -30,6 +30,12 @@
                     {% endif %}
 
                     <div class="mb-3">
+                        <label class="form-label">نوع الخدمة</label>
+                        {{ form.service_type_id(class="form-select") }}
+                        <small class="text-muted">ربط الباقة بنوع خدمة محدد (جيم، سباحة، كاراتيه...)</small>
+                    </div>
+
+                    <div class="mb-3">
                         <label class="form-label">الوصف</label>
                         {{ form.description(class="form-control", rows="2", placeholder="وصف مختصر للخطة...") }}
                     </div>
@@ -59,6 +65,40 @@
                             <label class="form-label">أقصى أيام تجميد</label>
                             {{ form.max_freeze_days(class="form-control", type="number", min="0") }}
                             <small class="text-muted">مجموع أيام التجميد المسموحة</small>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check">
+                                {{ form.freeze_is_paid(class="form-check-input", id="freeze_is_paid") }}
+                                <label class="form-check-label" for="freeze_is_paid">
+                                    التجميد مدفوع
+                                </label>
+                                <br>
+                                <small class="text-muted">تفعيل الرسوم على أيام التجميد</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">سعر اليوم (ر.س)</label>
+                            {{ form.freeze_daily_rate(class="form-control", type="number", min="0", step="0.01") }}
+                            <small class="text-muted">الرسوم اليومية للتجميد (إذا كان مدفوع)</small>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+                    <h5 class="mb-3"><i class="bi bi-calendar-check"></i> إعدادات الحجز</h5>
+
+                    <div class="mb-3">
+                        <div class="form-check">
+                            {{ form.requires_class_booking(class="form-check-input", id="requires_class_booking") }}
+                            <label class="form-check-label" for="requires_class_booking">
+                                يتطلب حجز كلاس
+                            </label>
+                            <br>
+                            <small class="text-muted">
+                                إذا كانت الباقة تتطلب حجز موعد مسبق للدخول (مثل: كاراتيه، سباحة تعليم)
+                            </small>
                         </div>
                     </div>
 

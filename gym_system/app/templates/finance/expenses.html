@@ -116,7 +116,7 @@
             <ul class="pagination justify-content-center">
                 {% if expenses.has_prev %}
                 <li class="page-item">
-                    <a class="page-link" href="{{ url_for('finance.expenses_list', page=expenses.prev_num, **request.args) }}">
+                    <a class="page-link" href="{{ url_for('finance.expenses', page=expenses.prev_num, **request.args) }}">
                         <i class="bi bi-chevron-right"></i>
                     </a>
                 </li>
@@ -125,7 +125,7 @@
                 {% for page_num in expenses.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                 {% if page_num %}
                 <li class="page-item {{ 'active' if page_num == expenses.page else '' }}">
-                    <a class="page-link" href="{{ url_for('finance.expenses_list', page=page_num, **request.args) }}">
+                    <a class="page-link" href="{{ url_for('finance.expenses', page=page_num, **request.args) }}">
                         {{ page_num }}
                     </a>
                 </li>
@@ -136,7 +136,7 @@
 
                 {% if expenses.has_next %}
                 <li class="page-item">
-                    <a class="page-link" href="{{ url_for('finance.expenses_list', page=expenses.next_num, **request.args) }}">
+                    <a class="page-link" href="{{ url_for('finance.expenses', page=expenses.next_num, **request.args) }}">
                         <i class="bi bi-chevron-left"></i>
                     </a>
                 </li>

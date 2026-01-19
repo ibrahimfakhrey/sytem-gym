@@ -3,12 +3,12 @@ from flask_login import login_required, current_user
 from flask_wtf import FlaskForm
 from wtforms import StringField, DecimalField, TextAreaField, DateField, SelectField
 from wtforms.validators import DataRequired, Optional
-from datetime import date
+from datetime import date, datetime
 
 from app import db
 from app.models.company import Brand
 from app.models.finance import Income, Expense, Salary, Refund, ExpenseCategory
-from app.utils.decorators import finance_required
+from app.utils.decorators import finance_required, brand_manager_required
 from app.utils.helpers import pagination_args, save_uploaded_file
 
 finance_bp = Blueprint('finance', __name__)
@@ -38,6 +38,7 @@ def income_list():
     page, per_page = pagination_args(request)
     date_from = request.args.get('date_from', date.today().replace(day=1).isoformat())
     date_to = request.args.get('date_to', date.today().isoformat())
+    payment_method = request.args.get('payment_method', '')
 
     # Parse dates
     try:
@@ -60,14 +61,27 @@ def income_list():
     # Date filter
     query = query.filter(Income.date >= from_date, Income.date <= to_date)
 
-    # Calculate total
-    total = db.session.query(db.func.sum(Income.amount)).filter(
-        Income.date >= from_date,
-        Income.date <= to_date
-    )
+    # Payment method filter
+    if payment_method:
+        query = query.filter(Income.payment_method == payment_method)
+
+    # Calculate totals by payment method
+    base_filter = [Income.date >= from_date, Income.date <= to_date]
     if current_user.brand_id:
-        total = total.filter(Income.brand_id == current_user.brand_id)
-    total = total.scalar() or 0
+        base_filter.append(Income.brand_id == current_user.brand_id)
+
+    total = db.session.query(db.func.sum(Income.amount)).filter(*base_filter).scalar() or 0
+
+    # Payment breakdown
+    payment_breakdown = db.session.query(
+        Income.payment_method,
+        db.func.sum(Income.amount)
+    ).filter(*base_filter).group_by(Income.payment_method).all()
+
+    payment_stats = {'cash': 0, 'card': 0, 'transfer': 0}
+    for method, amount in payment_breakdown:
+        if method in payment_stats:
+            payment_stats[method] = float(amount or 0)
 
     # Pagination
     income = query.order_by(Income.date.desc()).paginate(
@@ -83,6 +97,8 @@ def income_list():
                           income=income,
                           brands=brands,
                           total=total,
+                          payment_stats=payment_stats,
+                          payment_method=payment_method,
                           date_from=date_from,
                           date_to=date_to)
 
@@ -90,11 +106,12 @@ def income_list():
 @finance_bp.route('/expenses')
 @login_required
 @finance_required
-def expenses_list():
+def expenses():
     """List expense records"""
     page, per_page = pagination_args(request)
     date_from = request.args.get('date_from', date.today().replace(day=1).isoformat())
     date_to = request.args.get('date_to', date.today().isoformat())
+    status = request.args.get('status', '')
 
     try:
         from_date = date.fromisoformat(date_from)
@@ -115,14 +132,20 @@ def expenses_list():
 
     query = query.filter(Expense.date >= from_date, Expense.date <= to_date)
 
-    # Calculate total
-    total = db.session.query(db.func.sum(Expense.amount)).filter(
-        Expense.date >= from_date,
-        Expense.date <= to_date
-    )
+    # Status filter
+    if status:
+        query = query.filter(Expense.status == status)
+
+    # Calculate totals
+    base_filter = [Expense.date >= from_date, Expense.date <= to_date]
     if current_user.brand_id:
-        total = total.filter(Expense.brand_id == current_user.brand_id)
-    total = total.scalar() or 0
+        base_filter.append(Expense.brand_id == current_user.brand_id)
+
+    total = db.session.query(db.func.sum(Expense.amount)).filter(*base_filter).scalar() or 0
+    approved_total = db.session.query(db.func.sum(Expense.amount)).filter(
+        *base_filter, Expense.status == 'approved'
+    ).scalar() or 0
+    pending_count = Expense.query.filter(*base_filter, Expense.status == 'pending').count()
 
     # Pagination
     expenses = query.order_by(Expense.date.desc()).paginate(
@@ -138,6 +161,9 @@ def expenses_list():
                           expenses=expenses,
                           brands=brands,
                           total=total,
+                          approved_total=approved_total,
+                          pending_count=pending_count,
+                          status=status,
                           date_from=date_from,
                           date_to=date_to)
 
@@ -196,7 +222,7 @@ def expenses_create():
         db.session.commit()
 
         flash('تم تسجيل المصروف بنجاح', 'success')
-        return redirect(url_for('finance.expenses_list'))
+        return redirect(url_for('finance.expenses'))
 
     return render_template('finance/expense_form.html', form=form, brand=brand)
 
@@ -205,9 +231,16 @@ def expenses_create():
 @login_required
 @finance_required
 def salaries_list():
-    """List salaries"""
+    """List salaries with rewards and deductions"""
+    from app.models.employee import EmployeeReward, EmployeeDeduction
+
     month = request.args.get('month', date.today().month, type=int)
     year = request.args.get('year', date.today().year, type=int)
+
+    # Calculate period dates
+    from calendar import monthrange
+    period_start = date(year, month, 1)
+    period_end = date(year, month, monthrange(year, month)[1])
 
     # Base query
     if current_user.can_view_all_brands:
@@ -217,13 +250,56 @@ def salaries_list():
         else:
             query = Salary.query
     else:
+        brand_id = current_user.brand_id
         query = Salary.query.filter_by(brand_id=current_user.brand_id)
 
     query = query.filter_by(month=month, year=year)
     salaries = query.all()
 
-    # Calculate total
-    total = sum(float(s.net_salary) for s in salaries)
+    # Build salary data with rewards/deductions
+    salary_data = []
+    for salary in salaries:
+        # Get rewards for this employee in this period
+        rewards = EmployeeReward.query.filter(
+            EmployeeReward.user_id == salary.user_id,
+            EmployeeReward.is_active == True,
+            db.or_(
+                # One-time rewards in period
+                db.and_(
+                    EmployeeReward.is_recurring == False,
+                    EmployeeReward.effective_date >= period_start,
+                    EmployeeReward.effective_date <= period_end
+                ),
+                # Recurring rewards
+                EmployeeReward.is_recurring == True
+            )
+        ).all()
+        total_rewards = sum(float(r.amount) for r in rewards)
+
+        # Get deductions for this employee in this period
+        deductions = EmployeeDeduction.query.filter(
+            EmployeeDeduction.user_id == salary.user_id,
+            EmployeeDeduction.deduction_date >= period_start,
+            EmployeeDeduction.deduction_date <= period_end
+        ).all()
+        total_deductions = sum(float(d.amount) for d in deductions)
+
+        net_salary = float(salary.base_salary) + total_rewards - total_deductions
+
+        salary_data.append({
+            'salary': salary,
+            'rewards': rewards,
+            'deductions': deductions,
+            'total_rewards': total_rewards,
+            'total_deductions': total_deductions,
+            'net_salary': net_salary
+        })
+
+    # Calculate totals
+    total_base = sum(float(s['salary'].base_salary) for s in salary_data)
+    total_rewards = sum(s['total_rewards'] for s in salary_data)
+    total_deductions = sum(s['total_deductions'] for s in salary_data)
+    total_net = total_base + total_rewards - total_deductions
 
     # Brands for filter
     brands = None
@@ -231,9 +307,12 @@ def salaries_list():
         brands = Brand.query.filter_by(is_active=True).all()
 
     return render_template('finance/salaries.html',
-                          salaries=salaries,
+                          salary_data=salary_data,
                           brands=brands,
-                          total=total,
+                          total_base=total_base,
+                          total_rewards=total_rewards,
+                          total_deductions=total_deductions,
+                          total_net=total_net,
                           month=month,
                           year=year)
 
@@ -261,3 +340,72 @@ def refunds_list():
     )
 
     return render_template('finance/refunds.html', refunds=refunds)
+
+
+@finance_bp.route('/expenses/<int:expense_id>')
+@login_required
+@finance_required
+def expense_view(expense_id):
+    """View expense details"""
+    expense = Expense.query.get_or_404(expense_id)
+
+    if not current_user.can_access_brand(expense.brand_id):
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('finance.expenses'))
+
+    return render_template('finance/expense_view.html', expense=expense)
+
+
+@finance_bp.route('/expenses/<int:expense_id>/approve', methods=['POST'])
+@login_required
+@brand_manager_required
+def expense_approve(expense_id):
+    """Approve expense"""
+    expense = Expense.query.get_or_404(expense_id)
+
+    if not current_user.can_access_brand(expense.brand_id):
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('finance.expenses'))
+
+    if expense.status != 'pending':
+        flash('هذا المصروف تم معالجته مسبقاً', 'warning')
+        return redirect(url_for('finance.expense_view', expense_id=expense_id))
+
+    expense.status = 'approved'
+    expense.approved_by = current_user.id
+    expense.approved_at = datetime.utcnow()
+
+    db.session.commit()
+    flash('تم اعتماد المصروف', 'success')
+
+    return redirect(url_for('finance.expenses', status='pending'))
+
+
+@finance_bp.route('/expenses/<int:expense_id>/reject', methods=['GET', 'POST'])
+@login_required
+@brand_manager_required
+def expense_reject(expense_id):
+    """Reject expense"""
+    expense = Expense.query.get_or_404(expense_id)
+
+    if not current_user.can_access_brand(expense.brand_id):
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('finance.expenses'))
+
+    if expense.status != 'pending':
+        flash('هذا المصروف تم معالجته مسبقاً', 'warning')
+        return redirect(url_for('finance.expense_view', expense_id=expense_id))
+
+    if request.method == 'POST':
+        reason = request.form.get('rejection_reason', '')
+        expense.status = 'rejected'
+        expense.approved_by = current_user.id
+        expense.approved_at = datetime.utcnow()
+        expense.rejection_reason = reason
+
+        db.session.commit()
+        flash('تم رفض المصروف', 'info')
+
+        return redirect(url_for('finance.expenses', status='pending'))
+
+    return render_template('finance/expense_reject.html', expense=expense)

@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>التقرير الصحي - {{ member.name }}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding: 20px;
+            direction: rtl;
+            color: #333;
+        }
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #333;
+            padding-bottom: 20px;
+            margin-bottom: 20px;
+        }
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+        .header p {
+            color: #666;
+        }
+        .member-info {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .member-info h3 {
+            margin-bottom: 10px;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+        .section {
+            margin-bottom: 20px;
+        }
+        .section-title {
+            background: #333;
+            color: white;
+            padding: 8px 15px;
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            text-align: center;
+        }
+        .metric-box {
+            border: 1px solid #ddd;
+            padding: 15px 10px;
+            border-radius: 5px;
+        }
+        .metric-value {
+            font-size: 28px;
+            font-weight: bold;
+            color: #2196F3;
+        }
+        .metric-label {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        .status-box {
+            text-align: center;
+            padding: 20px;
+            border: 2px solid;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .status-excellent {
+            border-color: #4CAF50;
+            background: #E8F5E9;
+        }
+        .status-warning {
+            border-color: #FF9800;
+            background: #FFF3E0;
+        }
+        .status-info {
+            border-color: #2196F3;
+            background: #E3F2FD;
+        }
+        .status-box h2 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+        }
+        .result-item {
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .result-item h4 {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+        .result-item .value {
+            font-size: 24px;
+            font-weight: bold;
+        }
+        .tips {
+            background: #FFF9C4;
+            padding: 15px;
+            border-radius: 5px;
+            border-right: 4px solid #FFC107;
+        }
+        .tips h4 {
+            margin-bottom: 10px;
+        }
+        .tips ul {
+            padding-right: 20px;
+        }
+        .tips li {
+            margin-bottom: 5px;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+            color: #666;
+            font-size: 12px;
+        }
+        @media print {
+            body {
+                padding: 0;
+            }
+            .no-print {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>التقرير الصحي</h1>
+        <p>{{ report.created_at.strftime('%Y-%m-%d') }}</p>
+    </div>
+
+    <div class="member-info">
+        <h3>معلومات العضو</h3>
+        <div class="info-grid">
+            <div><strong>الاسم:</strong> {{ member.name }}</div>
+            <div><strong>الهاتف:</strong> {{ member.phone }}</div>
+            <div><strong>العمر:</strong> {{ report.age }} سنة</div>
+            <div><strong>الجنس:</strong> {{ 'ذكر' if report.gender == 'male' else 'أنثى' }}</div>
+        </div>
+    </div>
+
+    <div class="status-box status-{% if report.status == 'excellent' %}excellent{% elif report.status == 'needs_weight_loss' %}warning{% else %}info{% endif %}">
+        <h2>{{ report.status_arabic }}</h2>
+        <p>{{ report.status_message }}</p>
+    </div>
+
+    <div class="section">
+        <div class="section-title">القياسات</div>
+        <div class="metrics-grid">
+            <div class="metric-box">
+                <div class="metric-value">{{ report.height_cm }}</div>
+                <div class="metric-label">الطول (سم)</div>
+            </div>
+            <div class="metric-box">
+                <div class="metric-value">{{ report.weight_kg }}</div>
+                <div class="metric-label">الوزن (كجم)</div>
+            </div>
+            <div class="metric-box">
+                <div class="metric-value">{{ report.bmi }}</div>
+                <div class="metric-label">مؤشر كتلة الجسم</div>
+            </div>
+            <div class="metric-box">
+                <div class="metric-value">{{ report.bmi_category }}</div>
+                <div class="metric-label">التصنيف</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">النتائج</div>
+        <div class="results-grid">
+            <div class="result-item">
+                <h4>الوزن المثالي</h4>
+                <div class="value">{{ report.ideal_weight }} كجم</div>
+                {% if report.weight_difference %}
+                <p style="margin-top: 5px; font-size: 14px;">
+                    {% if report.weight_difference > 0 %}
+                    تحتاج لإنقاص {{ report.weight_difference }} كجم
+                    {% elif report.weight_difference < 0 %}
+                    تحتاج لزيادة {{ report.weight_difference|abs }} كجم
+                    {% else %}
+                    وزنك مثالي!
+                    {% endif %}
+                </p>
+                {% endif %}
+            </div>
+            <div class="result-item">
+                <h4>معدل الأيض الأساسي (BMR)</h4>
+                <div class="value">{{ report.metabolic_rate|int }} سعرة</div>
+                <p style="margin-top: 5px; font-size: 14px;">السعرات التي يحرقها جسمك في الراحة</p>
+            </div>
+            <div class="result-item">
+                <h4>السعرات اليومية المطلوبة</h4>
+                <div class="value">{{ report.daily_calories|int }} سعرة</div>
+                <p style="margin-top: 5px; font-size: 14px;">للحفاظ على وزنك الحالي (نشاط متوسط)</p>
+            </div>
+            <div class="result-item">
+                <h4>الفرق عن الوزن المثالي</h4>
+                <div class="value">{{ report.weight_difference|abs if report.weight_difference else 0 }} كجم</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="tips">
+            <h4>نصائح</h4>
+            {% if report.status == 'needs_weight_loss' %}
+            <ul>
+                <li>قلل السعرات الحرارية بـ 500 سعرة يومياً لخسارة 0.5 كجم أسبوعياً</li>
+                <li>مارس الرياضة 150 دقيقة على الأقل أسبوعياً</li>
+                <li>اشرب 8 أكواب ماء يومياً</li>
+                <li>تناول الخضروات والفواكه بكثرة</li>
+                <li>تجنب الأطعمة المقلية والسكريات</li>
+            </ul>
+            {% elif report.status == 'needs_weight_gain' %}
+            <ul>
+                <li>زد السعرات الحرارية بـ 500 سعرة يومياً لزيادة 0.5 كجم أسبوعياً</li>
+                <li>تناول البروتين في كل وجبة (دجاج، سمك، بيض، لحم)</li>
+                <li>مارس تمارين المقاومة لبناء العضلات</li>
+                <li>تناول وجبات خفيفة صحية بين الوجبات</li>
+                <li>اشرب العصائر الطبيعية والحليب</li>
+            </ul>
+            {% else %}
+            <ul>
+                <li>حافظ على نظامك الغذائي الحالي</li>
+                <li>استمر في ممارسة الرياضة بانتظام</li>
+                <li>أجرِ فحص دوري كل 3 أشهر</li>
+                <li>اشرب الماء بانتظام</li>
+                <li>احصل على قسط كافٍ من النوم</li>
+            </ul>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>تم إنشاء هذا التقرير بواسطة نظام إدارة الجيم</p>
+        <p>{{ report.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+    </div>
+
+    <div class="no-print" style="text-align: center; margin-top: 20px;">
+        <button onclick="window.print()" style="padding: 10px 30px; font-size: 16px; cursor: pointer;">
+            طباعة التقرير
+        </button>
+    </div>
+</body>
+</html>

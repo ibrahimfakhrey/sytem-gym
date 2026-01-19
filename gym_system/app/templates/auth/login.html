@@ -17,7 +17,7 @@
 
             <div class="mb-3">
                 <label for="email" class="form-label">البريد الإلكتروني</label>
-                {{ form.email(class="form-control", placeholder="example@email.com") }}
+                <input type="text" name="email" id="email" class="form-control" placeholder="example@email.com" value="{{ form.email.data or '' }}" required>
             </div>
 
             <div class="mb-3">

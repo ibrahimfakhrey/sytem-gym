@@ -1,13 +1,15 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_required, current_user
 from flask_wtf import FlaskForm
-from wtforms import StringField, SelectField, DateField, TextAreaField, BooleanField
-from wtforms.validators import DataRequired, Email, Optional
+from wtforms import StringField, SelectField, DateField, TextAreaField, BooleanField, FloatField
+from wtforms.validators import DataRequired, Email, Optional, NumberRange
 
 from app import db
 from app.models.company import Brand, Branch
 from app.models.member import Member
 from app.models.subscription import Subscription
+from app.models.health import HealthReport
+from app.models.complaint import Complaint
 from app.utils.decorators import members_required
 from app.utils.helpers import save_uploaded_file, pagination_args
 
@@ -25,6 +27,9 @@ class MemberForm(FlaskForm):
     address = TextAreaField('العنوان')
     emergency_contact = StringField('جهة اتصال للطوارئ')
     emergency_phone = StringField('هاتف الطوارئ')
+    # Health measurements
+    height_cm = FloatField('الطول (سم)', validators=[Optional(), NumberRange(min=50, max=250)])
+    weight_kg = FloatField('الوزن (كجم)', validators=[Optional(), NumberRange(min=20, max=300)])
     notes = TextAreaField('ملاحظات')
     is_active = BooleanField('نشط', default=True)
 
@@ -120,6 +125,8 @@ def create():
             address=form.address.data,
             emergency_contact=form.emergency_contact.data,
             emergency_phone=form.emergency_phone.data,
+            height_cm=form.height_cm.data,
+            weight_kg=form.weight_kg.data,
             notes=form.notes.data,
             is_active=form.is_active.data,
             created_by=current_user.id
@@ -169,10 +176,26 @@ def view(member_id):
     # Get attendance
     attendance = member.attendance.limit(20).all()
 
+    # Get health reports
+    health_reports = HealthReport.query.filter_by(
+        member_id=member_id
+    ).order_by(HealthReport.created_at.desc()).limit(5).all()
+
+    # Get latest health report
+    latest_health = health_reports[0] if health_reports else None
+
+    # Get complaints related to this member
+    complaints = Complaint.query.filter_by(
+        member_id=member_id
+    ).order_by(Complaint.created_at.desc()).limit(5).all()
+
     return render_template('members/view.html',
                           member=member,
                           subscriptions=subscriptions,
-                          attendance=attendance)
+                          attendance=attendance,
+                          health_reports=health_reports,
+                          latest_health=latest_health,
+                          complaints=complaints)
 
 
 @members_bp.route('/<int:member_id>/edit', methods=['GET', 'POST'])
@@ -208,6 +231,8 @@ def edit(member_id):
         member.address = form.address.data
         member.emergency_contact = form.emergency_contact.data
         member.emergency_phone = form.emergency_phone.data
+        member.height_cm = form.height_cm.data
+        member.weight_kg = form.weight_kg.data
         member.notes = form.notes.data
         member.is_active = form.is_active.data
 

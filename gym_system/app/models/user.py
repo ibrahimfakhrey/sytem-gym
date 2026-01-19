@@ -23,6 +23,16 @@ class Role(db.Model):
     can_view_reports = db.Column(db.Boolean, default=False)
     can_manage_attendance = db.Column(db.Boolean, default=False)
 
+    # New permission flags
+    can_view_complaints = db.Column(db.Boolean, default=False)
+    can_manage_complaints = db.Column(db.Boolean, default=False)
+    can_view_daily_closing = db.Column(db.Boolean, default=False)
+    can_manage_daily_closing = db.Column(db.Boolean, default=False)
+    can_manage_classes = db.Column(db.Boolean, default=False)
+    can_approve_expenses = db.Column(db.Boolean, default=False)
+    can_manage_offers = db.Column(db.Boolean, default=False)
+    can_manage_gift_cards = db.Column(db.Boolean, default=False)
+
     # Relationships
     users = db.relationship('User', backref='role', lazy='dynamic')
 
@@ -76,6 +86,13 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(100), unique=True, nullable=False)
     phone = db.Column(db.String(20))
     password_hash = db.Column(db.String(255), nullable=False)
+
+    # Fingerprint ID for staff attendance sync
+    fingerprint_id = db.Column(db.Integer)
+
+    # Staff type
+    is_trainer = db.Column(db.Boolean, default=False)
+    department = db.Column(db.String(50))  # reception, training, cleaning, management, etc.
 
     # Salary info
     salary_type = db.Column(db.String(10))  # 'fixed' or 'daily'

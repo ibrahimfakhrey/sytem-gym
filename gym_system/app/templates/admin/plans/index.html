@@ -50,6 +50,7 @@
                     <tr>
                         <th>#</th>
                         <th>اسم الباقة</th>
+                        <th>نوع الخدمة</th>
                         <th>المدة</th>
                         <th>السعر</th>
                         <th>التجميد</th>
@@ -68,6 +69,16 @@
                             <strong>{{ plan.name }}</strong>
                             {% if plan.description %}
                             <br><small class="text-muted">{{ plan.description[:50] }}{% if plan.description|length > 50 %}...{% endif %}</small>
+                            {% endif %}
+                            {% if plan.requires_class_booking %}
+                            <br><span class="badge bg-warning text-dark"><i class="bi bi-calendar-check"></i> حجز</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if plan.service_type %}
+                            <span class="badge bg-primary">{{ plan.service_type.name }}</span>
+                            {% else %}
+                            <span class="text-muted">-</span>
                             {% endif %}
                         </td>
                         <td>
@@ -91,6 +102,9 @@
                                 {{ plan.max_freezes }} مرة
                                 <br>
                                 <span class="text-muted">حتى {{ plan.max_freeze_days }} يوم</span>
+                                {% if plan.freeze_is_paid %}
+                                <br><span class="badge bg-success">مدفوع {{ plan.freeze_daily_rate }} ر.س/يوم</span>
+                                {% endif %}
                             </small>
                         </td>
                         {% if current_user.is_owner %}

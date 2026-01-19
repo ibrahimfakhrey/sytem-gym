@@ -12,7 +12,7 @@ from wtforms.validators import DataRequired, Email, Optional, Length, NumberRang
 
 class LoginForm(FlaskForm):
     """Login form"""
-    email = StringField('البريد الإلكتروني', validators=[DataRequired(), Email()])
+    email = StringField('البريد الإلكتروني', validators=[DataRequired()])
     password = PasswordField('كلمة المرور', validators=[DataRequired()])
     remember_me = BooleanField('تذكرني')
 

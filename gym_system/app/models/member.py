@@ -23,6 +23,14 @@ class Member(db.Model):
     emergency_contact = db.Column(db.String(100))
     emergency_phone = db.Column(db.String(20))
 
+    # Health data (for BMI calculation)
+    height_cm = db.Column(db.Float)  # Height in centimeters
+    weight_kg = db.Column(db.Float)  # Weight in kilograms
+
+    # Staff linkage (for employee attendance from fingerprint)
+    is_staff = db.Column(db.Boolean, default=False)  # Is this a staff member?
+    staff_user_id = db.Column(db.Integer, db.ForeignKey('users.id'))  # Link to User if staff
+
     # Photo
     photo = db.Column(db.String(255))
 

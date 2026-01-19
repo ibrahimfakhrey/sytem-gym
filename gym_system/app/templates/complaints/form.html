@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block title %}تسجيل شكوى{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-exclamation-triangle"></i>
+        تسجيل شكوى جديدة
+    </h1>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-body">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+
+                    {% if brand %}
+                    <div class="mb-3">
+                        <label class="form-label">البراند</label>
+                        <input type="text" class="form-control" value="{{ brand.name }}" disabled>
+                    </div>
+                    {% endif %}
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">التصنيف *</label>
+                            {{ form.category_id(class="form-select") }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">الأولوية *</label>
+                            {{ form.priority(class="form-select") }}
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+                    <h5 class="mb-3"><i class="bi bi-person"></i> معلومات العميل</h5>
+
+                    <div class="mb-3">
+                        <label class="form-label">العضو (اختياري)</label>
+                        {{ form.member_id(class="form-control", placeholder="رقم العضو - اتركه فارغ إذا كان العميل غير مسجل") }}
+                        <small class="text-muted">إذا كان العميل عضو مسجل، أدخل رقم العضوية</small>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">اسم العميل</label>
+                            {{ form.customer_name(class="form-control", placeholder="الاسم الكامل") }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">رقم الهاتف</label>
+                            {{ form.customer_phone(class="form-control", placeholder="05xxxxxxxx") }}
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+                    <h5 class="mb-3"><i class="bi bi-chat-text"></i> تفاصيل الشكوى</h5>
+
+                    <div class="mb-3">
+                        <label class="form-label">الموضوع *</label>
+                        {{ form.subject(class="form-control", placeholder="عنوان مختصر للشكوى") }}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">التفاصيل *</label>
+                        {{ form.description(class="form-control", rows="5", placeholder="اشرح الشكوى بالتفصيل...") }}
+                    </div>
+
+                    <hr class="my-4">
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg"></i>
+                            تسجيل الشكوى
+                        </button>
+                        <a href="{{ url_for('complaints.index') }}" class="btn btn-secondary">
+                            <i class="bi bi-x-lg"></i>
+                            إلغاء
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-lightbulb"></i>
+                نصائح
+            </div>
+            <div class="card-body small">
+                <ul class="mb-0">
+                    <li class="mb-2">اختر التصنيف المناسب للشكوى</li>
+                    <li class="mb-2">حدد الأولوية بناءً على خطورة المشكلة</li>
+                    <li class="mb-2">إذا كان العميل عضو مسجل، أدخل رقم العضوية للربط</li>
+                    <li class="mb-2">اكتب تفاصيل واضحة ودقيقة عن الشكوى</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header">
+                <i class="bi bi-flag"></i>
+                مستويات الأولوية
+            </div>
+            <div class="card-body small">
+                <div class="mb-2">
+                    <span class="badge bg-info">منخفضة</span>
+                    - اقتراحات وملاحظات عامة
+                </div>
+                <div class="mb-2">
+                    <span class="badge bg-secondary">عادية</span>
+                    - مشاكل يمكن حلها لاحقاً
+                </div>
+                <div class="mb-2">
+                    <span class="badge bg-warning">عالية</span>
+                    - مشاكل تؤثر على تجربة العميل
+                </div>
+                <div class="mb-2">
+                    <span class="badge bg-danger">عاجلة</span>
+                    - مشاكل تتطلب تدخل فوري
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

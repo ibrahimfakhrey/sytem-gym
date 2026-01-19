@@ -88,8 +88,8 @@
                     {% for freeze in subscription.freezes %}
                     <li class="list-group-item px-0">
                         <div class="d-flex justify-content-between">
-                            <span>{{ freeze.start_date.strftime('%Y-%m-%d') }}</span>
-                            <span>{{ freeze.days }} يوم</span>
+                            <span>{{ freeze.freeze_start.strftime('%Y-%m-%d') }}</span>
+                            <span>{{ freeze.freeze_days }} يوم</span>
                         </div>
                         {% if freeze.reason %}
                         <small class="text-muted">{{ freeze.reason }}</small>

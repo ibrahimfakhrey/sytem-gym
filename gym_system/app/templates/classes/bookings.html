@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+
+{% block title %}حجوزات: {{ gym_class.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-people"></i>
+        حجوزات: {{ gym_class.name }}
+    </h1>
+    <a href="{{ url_for('classes.index') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-right"></i>
+        العودة
+    </a>
+</div>
+
+<!-- Class Info -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-3">
+                <strong>اليوم:</strong> {{ gym_class.day_name_arabic }}
+            </div>
+            <div class="col-md-3">
+                <strong>الوقت:</strong> {{ gym_class.time_range }}
+            </div>
+            <div class="col-md-3">
+                <strong>السعة:</strong> {{ gym_class.capacity }} شخص
+            </div>
+            <div class="col-md-3">
+                <strong>المتاح:</strong>
+                <span class="badge bg-{{ 'success' if available_spots > 0 else 'danger' }}">
+                    {{ available_spots }} مقعد
+                </span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Date Selector -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label">تاريخ الحجز</label>
+                <input type="date" name="date" class="form-control" value="{{ booking_date.strftime('%Y-%m-%d') }}">
+            </div>
+            <div class="col-md-4">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-calendar"></i>
+                    عرض
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Bookings List -->
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-list-check"></i>
+                الحجوزات - {{ booking_date.strftime('%Y-%m-%d') }}
+            </div>
+            <div class="card-body">
+                {% if bookings %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>العضو</th>
+                                <th>الهاتف</th>
+                                <th>الحالة</th>
+                                <th>الإجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for booking in bookings %}
+                            <tr>
+                                <td>{{ loop.index }}</td>
+                                <td>
+                                    <strong>{{ booking.member.name }}</strong>
+                                    <br><small class="text-muted">{{ booking.member.member_id }}</small>
+                                </td>
+                                <td>{{ booking.member.phone }}</td>
+                                <td>
+                                    <span class="badge bg-{{ booking.status_class }}">
+                                        {{ booking.status_arabic }}
+                                    </span>
+                                    {% if booking.check_in_time %}
+                                    <br><small class="text-muted">{{ booking.check_in_time.strftime('%H:%M') }}</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if booking.status == 'booked' %}
+                                    <form action="{{ url_for('classes.checkin', booking_id=booking.id) }}" method="post" class="d-inline">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-sm btn-success" title="تسجيل حضور">
+                                            <i class="bi bi-check-lg"></i>
+                                        </button>
+                                    </form>
+                                    <form action="{{ url_for('classes.cancel_booking', booking_id=booking.id) }}" method="post" class="d-inline">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="إلغاء"
+                                                onclick="return confirm('هل تريد إلغاء هذا الحجز؟');">
+                                            <i class="bi bi-x-lg"></i>
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="bi bi-calendar-x display-4 text-muted"></i>
+                    <p class="mt-2 text-muted">لا توجد حجوزات لهذا التاريخ</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Booking -->
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-plus-circle"></i>
+                إضافة حجز
+            </div>
+            <div class="card-body">
+                {% if available_spots > 0 %}
+                <form action="{{ url_for('classes.book', class_id=gym_class.id) }}" method="post">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="booking_date" value="{{ booking_date.strftime('%Y-%m-%d') }}">
+
+                    <div class="mb-3">
+                        <label class="form-label">البحث عن عضو</label>
+                        <input type="text" class="form-control" id="memberSearch" placeholder="اسم أو رقم الهاتف...">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">العضو</label>
+                        <select name="member_id" id="memberSelect" class="form-select" required>
+                            <option value="">اختر العضو...</option>
+                        </select>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-plus-lg"></i>
+                        حجز
+                    </button>
+                </form>
+                {% else %}
+                <div class="alert alert-warning mb-0">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    الكلاس ممتلئ لهذا التاريخ
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <i class="bi bi-bar-chart"></i>
+                إحصائيات اليوم
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-6">
+                        <h3>{{ bookings|selectattr('status', 'equalto', 'attended')|list|length }}</h3>
+                        <small class="text-muted">حضروا</small>
+                    </div>
+                    <div class="col-6">
+                        <h3>{{ bookings|selectattr('status', 'equalto', 'booked')|list|length }}</h3>
+                        <small class="text-muted">في الانتظار</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let searchTimeout;
+const searchInput = document.getElementById('memberSearch');
+const memberSelect = document.getElementById('memberSelect');
+
+if (searchInput) {
+    searchInput.addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        const query = this.value;
+
+        if (query.length < 2) {
+            memberSelect.innerHTML = '<option value="">اختر العضو...</option>';
+            return;
+        }
+
+        searchTimeout = setTimeout(() => {
+            fetch(`/classes/api/search-members?q=${encodeURIComponent(query)}`)
+                .then(response => response.json())
+                .then(data => {
+                    memberSelect.innerHTML = '<option value="">اختر العضو...</option>';
+                    data.forEach(member => {
+                        const option = document.createElement('option');
+                        option.value = member.id;
+                        option.textContent = `${member.name} - ${member.phone}`;
+                        memberSelect.appendChild(option);
+                    });
+                });
+        }, 300);
+    });
+}
+</script>
+{% endblock %}

@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_user, logout_user, login_required, current_user
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, BooleanField, SubmitField
-from wtforms.validators import DataRequired, Email
+from wtforms.validators import DataRequired
 
 from app import db
 from app.models.user import User
@@ -12,7 +12,7 @@ auth_bp = Blueprint('auth', __name__)
 
 class LoginForm(FlaskForm):
     """Login form"""
-    email = StringField('البريد الإلكتروني', validators=[DataRequired(), Email()])
+    email = StringField('البريد الإلكتروني', validators=[DataRequired()])
     password = PasswordField('كلمة المرور', validators=[DataRequired()])
     remember_me = BooleanField('تذكرني')
     submit = SubmitField('تسجيل الدخول')
@@ -34,27 +34,33 @@ def login():
 
     form = LoginForm()
 
-    if form.validate_on_submit():
-        user = User.query.filter_by(email=form.email.data.lower()).first()
+    if request.method == 'POST':
+        if form.validate_on_submit():
+            user = User.query.filter_by(email=form.email.data.lower()).first()
 
-        if user is None or not user.check_password(form.password.data):
-            flash('البريد الإلكتروني أو كلمة المرور غير صحيحة', 'danger')
-            return redirect(url_for('auth.login'))
+            if user is None or not user.check_password(form.password.data):
+                flash('البريد الإلكتروني أو كلمة المرور غير صحيحة', 'danger')
+                return redirect(url_for('auth.login'))
 
-        if not user.is_active:
-            flash('هذا الحساب معطل، يرجى التواصل مع الإدارة', 'warning')
-            return redirect(url_for('auth.login'))
+            if not user.is_active:
+                flash('هذا الحساب معطل، يرجى التواصل مع الإدارة', 'warning')
+                return redirect(url_for('auth.login'))
 
-        login_user(user, remember=form.remember_me.data)
-        user.update_last_login()
+            login_user(user, remember=form.remember_me.data)
+            user.update_last_login()
 
-        flash(f'مرحباً {user.name}', 'success')
+            flash(f'مرحباً {user.name}', 'success')
 
-        next_page = request.args.get('next')
-        if next_page:
-            return redirect(next_page)
+            next_page = request.args.get('next')
+            if next_page:
+                return redirect(next_page)
 
-        return redirect(url_for('dashboard.index'))
+            return redirect(url_for('dashboard.index'))
+        else:
+            # Show form validation errors
+            for field, errors in form.errors.items():
+                for error in errors:
+                    flash(f'{error}', 'danger')
 
     return render_template('auth/login.html', form=form)
 

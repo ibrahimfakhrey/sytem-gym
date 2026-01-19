@@ -53,6 +53,7 @@ def load_config():
         'api_key': '',
         'brand_id': DEFAULT_BRAND_ID,
         'database_path': '',
+        'database_password': '',  # Password for .mdb file
         'backup_database_path': '',
         'sync_interval': SYNC_INTERVAL,
         'auto_start': False,

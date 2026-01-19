@@ -66,6 +66,26 @@
                         </div>
                     </div>
 
+                    <!-- Health Measurements -->
+                    <hr class="my-4">
+                    <h5 class="mb-3"><i class="bi bi-heart-pulse"></i> القياسات الصحية</h5>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">الطول (سم)</label>
+                            {{ form.height_cm(class="form-control", type="number", step="0.1", placeholder="مثال: 175") }}
+                            <small class="text-muted">الطول بالسنتيمتر</small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">الوزن (كجم)</label>
+                            {{ form.weight_kg(class="form-control", type="number", step="0.1", placeholder="مثال: 70") }}
+                            <small class="text-muted">الوزن بالكيلوجرام</small>
+                        </div>
+                    </div>
+                    <div class="alert alert-info small">
+                        <i class="bi bi-info-circle"></i>
+                        إدخال الطول والوزن سيمكنك من إنشاء تقارير صحية للعضو تشمل مؤشر كتلة الجسم ومعدل الأيض والسعرات اليومية.
+                    </div>
+
                     <div class="mb-3">
                         <label class="form-label">ملاحظات</label>
                         {{ form.notes(class="form-control", rows="2", placeholder="أي ملاحظات...") }}
@@ -168,7 +188,7 @@
             <div class="card-body">
                 <div class="row text-center">
                     <div class="col-6">
-                        <div class="h4 text-primary">{{ member.attendances.count() }}</div>
+                        <div class="h4 text-primary">{{ member.attendance.count() }}</div>
                         <small class="text-muted">إجمالي الحضور</small>
                     </div>
                     <div class="col-6">

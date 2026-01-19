@@ -160,6 +160,38 @@ class SettingsPage(ctk.CTkFrame):
         )
         browse_btn.pack(side="right")
 
+        # Database password
+        db_pwd_frame = ctk.CTkFrame(db_card, fg_color="transparent")
+        db_pwd_frame.pack(fill="x", padx=15, pady=5)
+
+        db_pwd_label = ctk.CTkLabel(
+            db_pwd_frame,
+            text="كلمة مرور قاعدة البيانات (اختياري):",
+            font=FONTS['body'],
+            text_color=COLORS['text_primary']
+        )
+        db_pwd_label.pack(anchor="e")
+
+        db_pwd_hint = ctk.CTkLabel(
+            db_pwd_frame,
+            text="اتركه فارغاً للبحث التلقائي عن كلمة المرور",
+            font=FONTS['small'],
+            text_color=COLORS['text_secondary']
+        )
+        db_pwd_hint.pack(anchor="e")
+
+        self.db_password_entry = ctk.CTkEntry(
+            db_pwd_frame,
+            font=FONTS['body'],
+            fg_color=COLORS['input_bg'],
+            text_color=COLORS['text_primary'],
+            border_color=COLORS['border'],
+            height=40,
+            show="*",
+            placeholder_text="كلمة مرور ملف .mdb"
+        )
+        self.db_password_entry.pack(fill="x", pady=5)
+
         # Auto-detect button
         detect_btn = ctk.CTkButton(
             db_card,
@@ -290,6 +322,7 @@ class SettingsPage(ctk.CTkFrame):
             'api_key': self.api_key_entry.get().strip(),
             'brand_id': self.brand_entry.get().strip(),
             'db_path': self.db_path_entry.get().strip(),
+            'db_password': self.db_password_entry.get().strip(),
             'sync_interval': int(self.interval_entry.get() or 30),
             'auto_start_sync': self.auto_start_var.get()
         }
@@ -324,6 +357,10 @@ class SettingsPage(ctk.CTkFrame):
         if settings.get('db_path'):
             self.db_path_entry.delete(0, 'end')
             self.db_path_entry.insert(0, settings['db_path'])
+
+        if settings.get('db_password'):
+            self.db_password_entry.delete(0, 'end')
+            self.db_password_entry.insert(0, settings['db_password'])
 
         if settings.get('sync_interval'):
             self.interval_entry.delete(0, 'end')

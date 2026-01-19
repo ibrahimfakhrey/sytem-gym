@@ -121,6 +121,26 @@
                         </li>
                         {% endif %}
 
+                        {% if current_user.role and current_user.role.can_manage_classes %}
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint and 'classes' in request.endpoint %}active{% endif %}"
+                               href="{{ url_for('classes.index') }}">
+                                <i class="bi bi-calendar-event"></i>
+                                الكلاسات
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        {% if current_user.role and current_user.role.can_view_complaints %}
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint and 'complaints' in request.endpoint %}active{% endif %}"
+                               href="{{ url_for('complaints.index') }}">
+                                <i class="bi bi-exclamation-triangle"></i>
+                                الشكاوى
+                            </a>
+                        </li>
+                        {% endif %}
+
                         {% if current_user.can_manage_finance %}
                         <li class="nav-item">
                             <a class="nav-link" data-bs-toggle="collapse" href="#financeMenu">
@@ -137,7 +157,7 @@
                                         </a>
                                     </li>
                                     <li class="nav-item">
-                                        <a class="nav-link" href="{{ url_for('finance.expenses_list') }}">
+                                        <a class="nav-link" href="{{ url_for('finance.expenses') }}">
                                             <i class="bi bi-arrow-up-circle text-danger"></i>
                                             المصروفات
                                         </a>
@@ -148,6 +168,14 @@
                                             الرواتب
                                         </a>
                                     </li>
+                                    {% if current_user.role and current_user.role.can_view_daily_closing %}
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="{{ url_for('daily_closing.index') }}">
+                                            <i class="bi bi-cash-coin"></i>
+                                            الإقفال اليومي
+                                        </a>
+                                    </li>
+                                    {% endif %}
                                 </ul>
                             </div>
                         </li>
@@ -159,6 +187,33 @@
                                href="{{ url_for('reports.index') }}">
                                 <i class="bi bi-bar-chart"></i>
                                 التقارير
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        {% if current_user.is_owner %}
+                        <li class="nav-item mt-3">
+                            <span class="nav-link text-muted small">إدارة الموظفين</span>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint and 'employees.report' in request.endpoint %}active{% endif %}"
+                               href="{{ url_for('employees.report') }}">
+                                <i class="bi bi-people"></i>
+                                تقرير الموظفين
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint and 'employees.attendance' in request.endpoint %}active{% endif %}"
+                               href="{{ url_for('employees.attendance') }}">
+                                <i class="bi bi-calendar-check"></i>
+                                حضور الموظفين
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint and 'employees.settings' in request.endpoint %}active{% endif %}"
+                               href="{{ url_for('employees.settings') }}">
+                                <i class="bi bi-sliders"></i>
+                                إعدادات الموظفين
                             </a>
                         </li>
                         {% endif %}
@@ -193,6 +248,34 @@
                                 الباقات
                             </a>
                         </li>
+
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint and 'service_types' in request.endpoint %}active{% endif %}"
+                               href="{{ url_for('admin.service_types_list') }}">
+                                <i class="bi bi-grid-3x3-gap"></i>
+                                أنواع الخدمات
+                            </a>
+                        </li>
+
+                        {% if current_user.role and current_user.role.can_manage_offers %}
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint and 'offers' in request.endpoint %}active{% endif %}"
+                               href="{{ url_for('offers.index') }}">
+                                <i class="bi bi-percent"></i>
+                                العروض
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        {% if current_user.role and current_user.role.can_manage_gift_cards %}
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint and 'gift_cards' in request.endpoint %}active{% endif %}"
+                               href="{{ url_for('gift_cards.index') }}">
+                                <i class="bi bi-gift"></i>
+                                كروت الإهداء
+                            </a>
+                        </li>
+                        {% endif %}
                         {% endif %}
                     </ul>
                 </div>

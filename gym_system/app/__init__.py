@@ -50,6 +50,13 @@ def create_app(config_name=None):
     from .routes.reports import reports_bp
     from .routes.api import api_bp
     from .routes.bridge import bridge_bp
+    from .routes.health import health_bp
+    from .routes.complaints import complaints_bp
+    from .routes.classes import classes_bp
+    from .routes.daily_closing import daily_closing_bp
+    from .routes.gift_cards import gift_cards_bp
+    from .routes.offers import offers_bp
+    from .routes.employees import employees_bp
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(dashboard_bp)
@@ -61,6 +68,13 @@ def create_app(config_name=None):
     app.register_blueprint(reports_bp, url_prefix='/reports')
     app.register_blueprint(api_bp, url_prefix='/api')
     app.register_blueprint(bridge_bp, url_prefix='/bridge')
+    app.register_blueprint(health_bp)
+    app.register_blueprint(complaints_bp)
+    app.register_blueprint(classes_bp)
+    app.register_blueprint(daily_closing_bp)
+    app.register_blueprint(gift_cards_bp)
+    app.register_blueprint(offers_bp)
+    app.register_blueprint(employees_bp)
     csrf.exempt(api_bp)  # API uses API key auth, not CSRF
 
     # Register error handlers
@@ -184,3 +198,51 @@ def register_cli_commands(app):
 
         db.session.commit()
         click.echo('Database initialized successfully!')
+
+    @app.cli.command('seed-data')
+    @click.option('--brand-id', type=int, help='Brand ID to seed data for')
+    def seed_data(brand_id):
+        """Seed default service types and complaint categories"""
+        from .models.service import ServiceType
+        from .models.complaint import ComplaintCategory
+        from .models.company import Brand
+
+        # Seed complaint categories (global)
+        click.echo('Seeding complaint categories...')
+        ComplaintCategory.seed_defaults()
+        click.echo('Done!')
+
+        # Seed service types for a brand
+        if brand_id:
+            brand = Brand.query.get(brand_id)
+            if not brand:
+                click.echo(f'Brand {brand_id} not found!')
+                return
+
+            click.echo(f'Seeding service types for {brand.name}...')
+            default_services = [
+                {'name': 'جيم', 'name_en': 'gym', 'category': 'gym'},
+                {'name': 'سباحة تعليم', 'name_en': 'swimming_teaching', 'category': 'swimming', 'requires_class_booking': True},
+                {'name': 'سباحة ترفيه', 'name_en': 'swimming_recreation', 'category': 'swimming'},
+                {'name': 'كاراتيه', 'name_en': 'karate', 'category': 'karate', 'requires_class_booking': True},
+                {'name': 'صالون', 'name_en': 'salon', 'category': 'salon', 'requires_class_booking': True},
+            ]
+
+            for service_data in default_services:
+                existing = ServiceType.query.filter_by(
+                    brand_id=brand_id,
+                    name_en=service_data.get('name_en')
+                ).first()
+                if not existing:
+                    service = ServiceType(
+                        brand_id=brand_id,
+                        name=service_data['name'],
+                        name_en=service_data.get('name_en'),
+                        category=service_data['category'],
+                        requires_class_booking=service_data.get('requires_class_booking', False)
+                    )
+                    db.session.add(service)
+                    click.echo(f'  Created: {service_data["name"]}')
+
+            db.session.commit()
+            click.echo('Done!')

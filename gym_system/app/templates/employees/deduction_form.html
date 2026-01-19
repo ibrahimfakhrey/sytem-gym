@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}إضافة خصم - {{ employee.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-dash-circle text-danger"></i>
+        إضافة خصم
+    </h1>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-person"></i>
+                {{ employee.name }}
+                <span class="badge bg-secondary">{{ employee.role.name if employee.role else '' }}</span>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+
+                    <div class="mb-3">
+                        <label class="form-label">عنوان الخصم *</label>
+                        {{ form.title(class="form-control", placeholder="مثال: خصم غياب، خصم مخالفة") }}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">المبلغ (ر.س) *</label>
+                        {{ form.amount(class="form-control", type="number", step="0.01", min="1") }}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">السبب *</label>
+                        {{ form.reason(class="form-control", rows="3", placeholder="سبب الخصم...") }}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">تاريخ الخصم</label>
+                        {{ form.deduction_date(class="form-control", type="date") }}
+                    </div>
+
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        سيتم خصم هذا المبلغ من راتب الموظف
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-danger">
+                            <i class="bi bi-check-lg"></i>
+                            تأكيد الخصم
+                        </button>
+                        <a href="{{ url_for('employees.details', user_id=employee.id) }}" class="btn btn-secondary">
+                            <i class="bi bi-x-lg"></i>
+                            إلغاء
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

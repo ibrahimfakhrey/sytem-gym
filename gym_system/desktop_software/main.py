@@ -75,15 +75,19 @@ class AppController:
         # Load initial data
         self._load_initial_data()
 
-    def _connect_database(self, db_path: str) -> bool:
+    def _connect_database(self, db_path: str, password: str = None) -> bool:
         """Connect to database"""
         try:
-            self.db_manager = DatabaseManager(db_path)
+            # Get password from config if not provided
+            if password is None:
+                password = self.config.get('database_password') or self.config.get('db_password', '')
+
+            self.db_manager = DatabaseManager(db_path, password=password)
             if self.db_manager.connect():
                 self.window.add_activity(f"تم الاتصال بقاعدة البيانات", "success")
                 return True
             else:
-                self.window.add_activity("فشل الاتصال بقاعدة البيانات", "error")
+                self.window.add_activity("فشل الاتصال بقاعدة البيانات - تحقق من كلمة المرور", "error")
                 return False
         except Exception as e:
             self.window.add_activity(f"خطأ: {str(e)}", "error")
@@ -388,7 +392,20 @@ class AppController:
     def save_settings(self, settings: dict) -> bool:
         """Save application settings"""
         try:
-            self.config.update(settings)
+            # Map UI settings to config keys
+            config_update = {
+                'api_url': settings.get('api_url'),
+                'api_key': settings.get('api_key'),
+                'brand_id': settings.get('brand_id'),
+                'database_path': settings.get('db_path'),
+                'database_password': settings.get('db_password', ''),
+                'sync_interval': settings.get('sync_interval'),
+                'auto_start': settings.get('auto_start_sync')
+            }
+            # Remove None values
+            config_update = {k: v for k, v in config_update.items() if v is not None}
+
+            self.config.update(config_update)
             save_config(self.config)
 
             # Update API client
@@ -397,10 +414,16 @@ class AppController:
                 self.api_client.api_key = settings.get('api_key', self.api_client.api_key)
                 self.api_client.brand_id = int(settings.get('brand_id', self.api_client.brand_id))
 
-            # Reconnect database if path changed
+            # Reconnect database if path or password changed
             new_db_path = settings.get('db_path')
-            if new_db_path and new_db_path != self.config.get('db_path'):
-                self._connect_database(new_db_path)
+            new_db_password = settings.get('db_password', '')
+            old_db_path = self.config.get('database_path')
+            old_db_password = self.config.get('database_password', '')
+
+            if new_db_path and (new_db_path != old_db_path or new_db_password != old_db_password):
+                self._connect_database(new_db_path, new_db_password)
+                self._update_connection_status()
+                self._load_initial_data()
 
             self.window.add_activity("تم حفظ الإعدادات", "success")
             return True
