@@ -249,6 +249,12 @@ def users_create():
 
     form.branch_id.choices = [(0, '-- بدون فرع --')]
 
+    # Pre-select brand from query parameter (when coming from dashboard)
+    if request.method == 'GET':
+        preselect_brand_id = request.args.get('brand_id', type=int)
+        if preselect_brand_id and current_user.is_owner:
+            form.brand_id.data = preselect_brand_id
+
     if form.validate_on_submit():
         # Validate role
         if not form.role_id.data or form.role_id.data == 0:

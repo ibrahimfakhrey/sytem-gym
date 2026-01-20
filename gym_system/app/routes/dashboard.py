@@ -12,6 +12,7 @@ from app.models.finance import Income, Expense
 from app.models.fingerprint import FingerprintSyncLog
 from app.models.complaint import Complaint
 from app.models.daily_closing import DailyClosing
+from app.models.user import User
 
 dashboard_bp = Blueprint('dashboard', __name__)
 
@@ -459,11 +460,15 @@ def get_brand_stats(brand_id, start_date, end_date):
 
     today_attendance = MemberAttendance.get_today_count(brand_id)
 
+    # Count employees for this brand
+    employee_count = User.query.filter_by(brand_id=brand_id, is_active=True).count()
+
     return {
         'members': members,
         'active_subscriptions': active_subscriptions,
         'income': income,
         'expenses': expenses,
         'profit': income - expenses,
-        'today_attendance': today_attendance
+        'today_attendance': today_attendance,
+        'employee_count': employee_count
     }
