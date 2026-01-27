@@ -200,17 +200,13 @@ def search_member():
     if len(q) < 2:
         return jsonify({'results': []})
 
-    # Build base query
-    conditions = [
-        Member.name.ilike(f'%{q}%'),
-        Member.phone.ilike(f'%{q}%')
-    ]
-    if q.isdigit():
-        conditions.append(Member.fingerprint_id == int(q))
-
+    # Build base query - search by name or phone
     query = Member.query.filter(
         Member.is_active == True,
-        db.or_(*conditions)
+        db.or_(
+            Member.name.ilike(f'%{q}%'),
+            Member.phone.ilike(f'%{q}%')
+        )
     )
 
     # Filter by brand if user is not owner
