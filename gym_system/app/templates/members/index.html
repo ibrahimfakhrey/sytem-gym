@@ -122,12 +122,25 @@
                         {% endif %}
                         <td>
                             {% if member.active_subscription %}
-                            {{ member.active_subscription.plan.name }}
+                            <strong>{{ member.active_subscription.plan.name }}</strong>
                             <br><small class="text-muted">
-                                ينتهي: {{ member.active_subscription.end_date.strftime('%Y-%m-%d') }}
+                                <i class="bi bi-calendar-check"></i> من: {{ member.active_subscription.start_date.strftime('%Y-%m-%d') }}
                             </small>
+                            <br><small class="text-muted">
+                                <i class="bi bi-calendar-x"></i> إلى: {{ member.active_subscription.end_date.strftime('%Y-%m-%d') }}
+                            </small>
+                            {% if member.days_remaining is not none %}
+                            <br><small class="{% if member.days_remaining <= 7 %}text-danger{% elif member.days_remaining <= 14 %}text-warning{% else %}text-success{% endif %}">
+                                <i class="bi bi-clock"></i> متبقي: {{ member.days_remaining }} يوم
+                            </small>
+                            {% endif %}
+                            {% if member.active_subscription.remaining_amount > 0 %}
+                            <br><small class="text-danger">
+                                <i class="bi bi-cash"></i> متبقي: {{ member.active_subscription.remaining_amount }} ر.س
+                            </small>
+                            {% endif %}
                             {% else %}
-                            <span class="text-muted">لا يوجد</span>
+                            <span class="text-muted">بدون اشتراك</span>
                             {% endif %}
                         </td>
                         <td>
