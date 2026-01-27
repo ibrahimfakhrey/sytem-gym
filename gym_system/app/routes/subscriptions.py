@@ -212,6 +212,10 @@ def create():
         start_date = date.today()
         end_date = start_date + timedelta(days=plan.duration_days)
 
+        # Activate member when creating subscription
+        if not member.is_active:
+            member.is_active = True
+
         # Create subscription
         subscription = Subscription(
             member_id=member.id,
