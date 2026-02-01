@@ -4,6 +4,7 @@ from flask_wtf import FlaskForm
 from wtforms import SelectField, DecimalField, TextAreaField, DateField, StringField, BooleanField, IntegerField
 from wtforms.validators import DataRequired, Optional
 from datetime import date, timedelta, datetime
+import json
 
 from app import db
 from app.models.company import Brand
@@ -13,6 +14,7 @@ from app.models.finance import Income
 from app.models.service import ServiceType
 from app.models.offer import PromotionalOffer
 from app.models.giftcard import GiftCard
+from app.models.fingerprint import DeviceCommand
 from app.utils.decorators import members_required
 from app.utils.helpers import pagination_args
 
@@ -41,10 +43,11 @@ class RenewalForm(FlaskForm):
     start_date = DateField('تاريخ البدء', default=date.today, validators=[DataRequired()])
     discount = DecimalField('الخصم', default=0, validators=[Optional()])
     payment_method = SelectField('طريقة الدفع', choices=[
+        ('', '-- اختر طريقة الدفع --'),
         ('cash', 'نقدي'),
         ('card', 'بطاقة'),
         ('transfer', 'تحويل')
-    ], default='cash')
+    ], validators=[DataRequired(message='يرجى اختيار طريقة الدفع')])
     amount_paid = DecimalField('المبلغ المدفوع', validators=[DataRequired()])
     notes = TextAreaField('ملاحظات')
 
@@ -253,7 +256,9 @@ def create():
             # Create income record
             income = Income(
                 brand_id=member.brand_id,
+                branch_id=member.branch_id,
                 subscription_id=subscription.id,
+                service_type_id=subscription.service_type_id,
                 amount=paid_amount,
                 type='subscription',
                 payment_method=form.payment_method.data,
@@ -263,6 +268,19 @@ def create():
             db.session.add(income)
 
         db.session.commit()
+
+        # Send command to fingerprint device to unblock member
+        if member.fingerprint_id and member.brand.uses_fingerprint:
+            unblock_cmd = DeviceCommand(
+                brand_id=member.brand_id,
+                command_type='unblock_member',
+                target_emp_id=member.fingerprint_id,
+                member_id=member.id,
+                command_data=json.dumps({'end_date': subscription.end_date.isoformat()}),
+                status='pending'
+            )
+            db.session.add(unblock_cmd)
+            db.session.commit()
 
         flash('تم إنشاء الاشتراك بنجاح', 'success')
         if offer:
@@ -355,7 +373,9 @@ def renew(subscription_id):
             # Create income record
             income = Income(
                 brand_id=subscription.brand_id,
+                branch_id=subscription.member.branch_id,
                 subscription_id=subscription.id,
+                service_type_id=subscription.service_type_id,
                 amount=paid_amount,
                 payment_method=form.payment_method.data,
                 type='renewal',
@@ -365,6 +385,20 @@ def renew(subscription_id):
             db.session.add(income)
 
         db.session.commit()
+
+        # Send command to fingerprint device to unblock member with new end date
+        member = subscription.member
+        if member.fingerprint_id and member.brand.uses_fingerprint:
+            unblock_cmd = DeviceCommand(
+                brand_id=subscription.brand_id,
+                command_type='unblock_member',
+                target_emp_id=member.fingerprint_id,
+                member_id=member.id,
+                command_data=json.dumps({'end_date': subscription.end_date.isoformat()}),
+                status='pending'
+            )
+            db.session.add(unblock_cmd)
+            db.session.commit()
 
         flash('تم تجديد الاشتراك بنجاح', 'success')
         return redirect(url_for('subscriptions.view', subscription_id=subscription_id))
@@ -417,6 +451,20 @@ def freeze(subscription_id):
 
         db.session.commit()
 
+        # Send command to fingerprint device to block member during freeze
+        member = subscription.member
+        if member.fingerprint_id and member.brand.uses_fingerprint:
+            block_cmd = DeviceCommand(
+                brand_id=subscription.brand_id,
+                command_type='block_member',
+                target_emp_id=member.fingerprint_id,
+                member_id=member.id,
+                command_data=json.dumps({'end_date': '2020-01-01'}),
+                status='pending'
+            )
+            db.session.add(block_cmd)
+            db.session.commit()
+
         flash('تم تجميد الاشتراك بنجاح', 'success')
         return redirect(url_for('subscriptions.view', subscription_id=subscription_id))
 
@@ -440,6 +488,20 @@ def unfreeze(subscription_id):
 
     subscription.status = 'active'
     db.session.commit()
+
+    # Send command to fingerprint device to unblock member after unfreeze
+    member = subscription.member
+    if member.fingerprint_id and member.brand.uses_fingerprint:
+        unblock_cmd = DeviceCommand(
+            brand_id=subscription.brand_id,
+            command_type='unblock_member',
+            target_emp_id=member.fingerprint_id,
+            member_id=member.id,
+            command_data=json.dumps({'end_date': subscription.end_date.isoformat()}),
+            status='pending'
+        )
+        db.session.add(unblock_cmd)
+        db.session.commit()
 
     flash('تم إلغاء تجميد الاشتراك', 'success')
     return redirect(url_for('subscriptions.view', subscription_id=subscription_id))
@@ -466,7 +528,7 @@ def add_payment(subscription_id):
             subscription_id=subscription.id,
             brand_id=subscription.brand_id,
             amount=amount,
-            payment_method='cash',
+            payment_method=form.payment_method.data,
             notes=form.notes.data,
             created_by=current_user.id
         )
@@ -479,9 +541,12 @@ def add_payment(subscription_id):
         # Create income
         income = Income(
             brand_id=subscription.brand_id,
+            branch_id=subscription.member.branch_id,
             subscription_id=subscription.id,
+            service_type_id=subscription.service_type_id,
             amount=amount,
             type='subscription',
+            payment_method=form.payment_method.data,
             description='سداد دفعة',
             date=date.today(),
             created_by=current_user.id
@@ -595,3 +660,26 @@ def reject_renewal(subscription_id):
         return redirect(url_for('members.view', member_id=subscription.member_id))
 
     return render_template('subscriptions/reject_renewal.html', form=form, subscription=subscription)
+
+
+@subscriptions_bp.route('/<int:subscription_id>/invoice')
+@login_required
+@members_required
+def invoice(subscription_id):
+    """Generate invoice/receipt for subscription"""
+    subscription = Subscription.query.get_or_404(subscription_id)
+
+    if not current_user.can_access_brand(subscription.brand_id):
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('subscriptions.index'))
+
+    # Get all payments for this subscription
+    payments = SubscriptionPayment.query.filter_by(subscription_id=subscription.id).all()
+
+    # Get income records
+    income_records = Income.query.filter_by(subscription_id=subscription.id).all()
+
+    return render_template('subscriptions/invoice.html',
+                          subscription=subscription,
+                          payments=payments,
+                          income_records=income_records)

@@ -32,6 +32,37 @@
                         {{ form.phone(class="form-control") }}
                     </div>
 
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">سعة الجيم</label>
+                            {{ form.gym_capacity(class="form-control", type="number") }}
+                            <small class="text-muted">الحد الأقصى للحضور في الجيم (افتراضي: 100)</small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">سعة المسبح</label>
+                            {{ form.pool_capacity(class="form-control", type="number") }}
+                            <small class="text-muted">الحد الأقصى للحضور في المسبح (افتراضي: 50)</small>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+                    <h5 class="mb-3"><i class="bi bi-file-earmark-text"></i> المستندات القانونية (اختياري)</h5>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">تاريخ انتهاء عقد الإيجار</label>
+                            {{ form.lease_expiry_date(class="form-control", type="date") }}
+                            <small class="text-muted">سيتم تنبيهك قبل 30 يوم من الانتهاء</small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">تاريخ انتهاء السجل التجاري</label>
+                            {{ form.commercial_registration_expiry(class="form-control", type="date") }}
+                            <small class="text-muted">سيتم تنبيهك قبل 30 يوم من الانتهاء</small>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
                     <div class="mb-3 form-check">
                         {{ form.is_active(class="form-check-input") }}
                         <label class="form-check-label">مفعل</label>

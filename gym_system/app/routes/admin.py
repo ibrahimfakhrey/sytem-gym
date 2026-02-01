@@ -10,6 +10,7 @@ from app.models.company import Company, Brand, Branch
 from app.models.user import User, Role
 from app.models.subscription import Plan
 from app.models.service import ServiceType
+from app.forms import BranchForm
 from app.utils.decorators import owner_required, brand_manager_required
 from app.utils.helpers import save_uploaded_file, delete_uploaded_file
 
@@ -26,14 +27,6 @@ class BrandForm(FlaskForm):
     uses_fingerprint = BooleanField('يستخدم نظام البصمة')
     fingerprint_ip = StringField('IP جهاز البصمة')
     fingerprint_port = IntegerField('Port', default=5005)
-    is_active = BooleanField('مفعل', default=True)
-
-
-class BranchForm(FlaskForm):
-    """Branch form"""
-    name = StringField('اسم الفرع', validators=[DataRequired()])
-    address = StringField('العنوان')
-    phone = StringField('الهاتف')
     is_active = BooleanField('مفعل', default=True)
 
 
@@ -203,6 +196,10 @@ def branches_create(brand_id):
             name=form.name.data,
             address=form.address.data,
             phone=form.phone.data,
+            gym_capacity=form.gym_capacity.data,
+            pool_capacity=form.pool_capacity.data,
+            lease_expiry_date=form.lease_expiry_date.data,
+            commercial_registration_expiry=form.commercial_registration_expiry.data,
             is_active=form.is_active.data
         )
         db.session.add(branch)
@@ -212,6 +209,38 @@ def branches_create(brand_id):
         return redirect(url_for('admin.branches_list', brand_id=brand_id))
 
     return render_template('admin/branches/create.html', form=form, brand=brand)
+
+
+@admin_bp.route('/branches/<int:branch_id>/edit', methods=['GET', 'POST'])
+@login_required
+@brand_manager_required
+def branches_edit(branch_id):
+    """Edit branch"""
+    branch = Branch.query.get_or_404(branch_id)
+    brand = branch.brand
+
+    if not current_user.can_access_brand(brand.id):
+        flash('ليس لديك صلاحية للوصول لهذا البراند', 'danger')
+        return redirect(url_for('dashboard.index'))
+
+    form = BranchForm(obj=branch)
+
+    if form.validate_on_submit():
+        branch.name = form.name.data
+        branch.address = form.address.data
+        branch.phone = form.phone.data
+        branch.gym_capacity = form.gym_capacity.data
+        branch.pool_capacity = form.pool_capacity.data
+        branch.lease_expiry_date = form.lease_expiry_date.data
+        branch.commercial_registration_expiry = form.commercial_registration_expiry.data
+        branch.is_active = form.is_active.data
+
+        db.session.commit()
+
+        flash('تم تحديث الفرع بنجاح', 'success')
+        return redirect(url_for('admin.branches_list', brand_id=brand.id))
+
+    return render_template('admin/branches/edit.html', form=form, branch=branch, brand=brand)
 
 
 # ============== Users ==============
@@ -291,6 +320,74 @@ def users_create():
         return redirect(url_for('admin.users_list'))
 
     return render_template('admin/users/form.html', form=form)
+
+
+@admin_bp.route('/users/<int:user_id>/edit', methods=['GET', 'POST'])
+@login_required
+@brand_manager_required
+def users_edit(user_id):
+    """Edit user"""
+    user = User.query.get_or_404(user_id)
+
+    # Check permissions
+    if not current_user.is_owner and user.brand_id != current_user.brand_id:
+        flash('ليس لديك صلاحية لتعديل هذا المستخدم', 'danger')
+        return redirect(url_for('admin.users_list'))
+
+    form = UserForm(obj=user)
+
+    # Populate choices
+    roles = Role.query.all()
+    form.role_id.choices = [(0, '-- اختر الدور --')] + [(r.id, r.name) for r in roles]
+
+    if current_user.is_owner:
+        form.brand_id.choices = [(0, '-- بدون براند --')] + [(b.id, b.name) for b in Brand.query.filter_by(is_active=True).all()]
+    else:
+        form.brand_id.choices = [(current_user.brand_id, current_user.brand.name)]
+
+    form.branch_id.choices = [(0, '-- بدون فرع --')]
+
+    # Load branches for selected brand
+    if user.brand_id:
+        branches = Branch.query.filter_by(brand_id=user.brand_id, is_active=True).all()
+        form.branch_id.choices += [(b.id, b.name) for b in branches]
+
+    # Make password optional for edit
+    form.password.validators = []
+
+    if form.validate_on_submit():
+        # Validate role
+        if not form.role_id.data or form.role_id.data == 0:
+            flash('يرجى اختيار الدور', 'danger')
+            return render_template('admin/users/form.html', form=form, user=user, edit=True)
+
+        # Check email uniqueness (exclude current user)
+        existing_user = User.query.filter_by(email=form.email.data.lower()).first()
+        if existing_user and existing_user.id != user.id:
+            flash('البريد الإلكتروني مستخدم مسبقاً', 'danger')
+            return render_template('admin/users/form.html', form=form, user=user, edit=True)
+
+        # Update user
+        user.name = form.name.data
+        user.email = form.email.data.lower()
+        user.phone = form.phone.data
+        user.role_id = form.role_id.data
+        user.brand_id = form.brand_id.data if form.brand_id.data != 0 else None
+        user.branch_id = form.branch_id.data if form.branch_id.data != 0 else None
+        user.salary_type = form.salary_type.data if form.salary_type.data else None
+        user.salary_amount = form.salary_amount.data
+        user.is_active = form.is_active.data
+
+        # Update password only if provided
+        if form.password.data and len(form.password.data) >= 6:
+            user.set_password(form.password.data)
+
+        db.session.commit()
+
+        flash('تم تحديث المستخدم بنجاح', 'success')
+        return redirect(url_for('admin.users_list'))
+
+    return render_template('admin/users/form.html', form=form, user=user, edit=True)
 
 
 # ============== Plans ==============

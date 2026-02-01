@@ -164,6 +164,10 @@ class User(UserMixin, db.Model):
     def can_view_reports(self):
         return self.role.can_view_reports if self.role else False
 
+    @property
+    def can_export_reports(self):
+        return self.role.can_export_reports if self.role else False
+
     def can_access_brand(self, brand_id):
         """Check if user can access a specific brand"""
         if self.can_view_all_brands:

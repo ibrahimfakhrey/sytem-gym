@@ -105,7 +105,9 @@
                             {% for item in stats.brands %}
                             <tr>
                                 <td>
-                                    <strong>{{ item.brand.name }}</strong>
+                                    <a href="{{ url_for('admin.branches_list', brand_id=item.brand.id) }}" class="text-decoration-none">
+                                        <strong>{{ item.brand.name }}</strong>
+                                    </a>
                                     {% if item.brand.uses_fingerprint %}
                                     <span class="badge bg-info">بصمة</span>
                                     {% endif %}

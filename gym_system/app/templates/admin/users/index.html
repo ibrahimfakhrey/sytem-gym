@@ -81,9 +81,9 @@
                             {% endif %}
                         </td>
                         <td>
-                            <span class="btn btn-sm btn-outline-secondary" title="تعديل غير متاح حالياً">
+                            <a href="{{ url_for('admin.users_edit', user_id=user.id) }}" class="btn btn-sm btn-outline-primary" title="تعديل">
                                 <i class="bi bi-pencil"></i>
-                            </span>
+                            </a>
                         </td>
                     </tr>
                     {% endfor %}

@@ -35,6 +35,18 @@ class BrandForm(FlaskForm):
     is_active = BooleanField('نشط', default=True)
 
 
+class BranchForm(FlaskForm):
+    """Branch creation/edit form"""
+    name = StringField('اسم الفرع', validators=[DataRequired(), Length(max=100)])
+    address = TextAreaField('العنوان', validators=[Optional()])
+    phone = StringField('الهاتف', validators=[Optional(), Length(max=20)])
+    gym_capacity = IntegerField('سعة الجيم', validators=[Optional()], default=100)
+    pool_capacity = IntegerField('سعة المسبح', validators=[Optional()], default=50)
+    lease_expiry_date = DateField('تاريخ انتهاء عقد الإيجار', validators=[Optional()])
+    commercial_registration_expiry = DateField('تاريخ انتهاء السجل التجاري', validators=[Optional()])
+    is_active = BooleanField('نشط', default=True)
+
+
 class UserForm(FlaskForm):
     """User creation/edit form"""
     name = StringField('الاسم', validators=[DataRequired(), Length(max=100)])
@@ -76,9 +88,18 @@ class MemberForm(FlaskForm):
 class SubscriptionForm(FlaskForm):
     """Subscription creation form"""
     plan_id = SelectField('خطة الاشتراك', coerce=int, validators=[DataRequired()])
-    start_date = DateField('تاريخ البدء', validators=[DataRequired()])
+    service_type_id = SelectField('نوع الخدمة', coerce=int, validators=[Optional()])
+    start_date = DateField('تاريخ البدء', validators=[Optional()])
     discount = DecimalField('الخصم', validators=[Optional()], default=0)
-    amount_paid = DecimalField('المبلغ المدفوع', validators=[DataRequired(), NumberRange(min=0)])
+    paid_amount = DecimalField('المبلغ المدفوع', validators=[DataRequired(), NumberRange(min=0)])
+    payment_method = SelectField('طريقة الدفع',
+                                 choices=[('', '-- اختر طريقة الدفع --'),
+                                         ('cash', 'كاش'),
+                                         ('card', 'بطاقة'),
+                                         ('transfer', 'حوالة')],
+                                 validators=[DataRequired(message='يرجى اختيار طريقة الدفع')])
+    offer_id = SelectField('العرض الترويجي', coerce=int, validators=[Optional()])
+    gift_card_code = StringField('رمز كارت الإهداء', validators=[Optional()])
     notes = TextAreaField('ملاحظات', validators=[Optional()])
 
 

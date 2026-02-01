@@ -55,7 +55,11 @@ def income_list():
             query = Income.query.filter_by(brand_id=brand_id)
         else:
             query = Income.query
+    elif current_user.branch_id:
+        # Branch accountant - only see their branch
+        query = Income.query.filter_by(brand_id=current_user.brand_id, branch_id=current_user.branch_id)
     else:
+        # Central accountant - see all branches in brand
         query = Income.query.filter_by(brand_id=current_user.brand_id)
 
     # Date filter
@@ -69,6 +73,9 @@ def income_list():
     base_filter = [Income.date >= from_date, Income.date <= to_date]
     if current_user.brand_id:
         base_filter.append(Income.brand_id == current_user.brand_id)
+        # Branch accountant filter
+        if current_user.branch_id:
+            base_filter.append(Income.branch_id == current_user.branch_id)
 
     total = db.session.query(db.func.sum(Income.amount)).filter(*base_filter).scalar() or 0
 
@@ -112,6 +119,9 @@ def expenses():
     date_from = request.args.get('date_from', date.today().replace(day=1).isoformat())
     date_to = request.args.get('date_to', date.today().isoformat())
     status = request.args.get('status', '')
+    category = request.args.get('category', '')
+    user_id = request.args.get('user_id', type=int)
+    branch_id_filter = request.args.get('branch_id', type=int)
 
     try:
         from_date = date.fromisoformat(date_from)
@@ -127,19 +137,36 @@ def expenses():
             query = Expense.query.filter_by(brand_id=brand_id)
         else:
             query = Expense.query
+    elif current_user.branch_id:
+        # Branch accountant - only see their branch
+        query = Expense.query.filter_by(brand_id=current_user.brand_id, branch_id=current_user.branch_id)
     else:
+        # Central accountant - see all branches in brand
         query = Expense.query.filter_by(brand_id=current_user.brand_id)
 
     query = query.filter(Expense.date >= from_date, Expense.date <= to_date)
 
-    # Status filter
+    # Additional filters
     if status:
         query = query.filter(Expense.status == status)
+
+    if category:
+        query = query.filter(Expense.category_name == category)
+
+    if user_id:
+        query = query.filter(Expense.created_by == user_id)
+
+    # Branch filter for central accountants
+    if branch_id_filter and not current_user.branch_id:
+        query = query.filter(Expense.branch_id == branch_id_filter)
 
     # Calculate totals
     base_filter = [Expense.date >= from_date, Expense.date <= to_date]
     if current_user.brand_id:
         base_filter.append(Expense.brand_id == current_user.brand_id)
+        # Branch accountant filter
+        if current_user.branch_id:
+            base_filter.append(Expense.branch_id == current_user.branch_id)
 
     total = db.session.query(db.func.sum(Expense.amount)).filter(*base_filter).scalar() or 0
     approved_total = db.session.query(db.func.sum(Expense.amount)).filter(
@@ -157,13 +184,32 @@ def expenses():
     if current_user.can_view_all_brands:
         brands = Brand.query.filter_by(is_active=True).all()
 
+    # Branches for filter (central accountants only)
+    from app.models.company import Branch
+    branches = None
+    if current_user.brand_id and not current_user.branch_id:
+        branches = Branch.query.filter_by(brand_id=current_user.brand_id, is_active=True).all()
+
+    # Users for filter
+    from app.models.user import User
+    users = User.query.filter_by(brand_id=current_user.brand_id, is_active=True).all() if current_user.brand_id else []
+
+    # Categories for filter
+    categories = ['رواتب', 'إيجار', 'كهرباء', 'ماء', 'صيانة', 'معدات', 'تسويق', 'مستلزمات', 'أخرى']
+
     return render_template('finance/expenses.html',
                           expenses=expenses,
                           brands=brands,
+                          branches=branches,
+                          users=users,
+                          categories=categories,
                           total=total,
                           approved_total=approved_total,
                           pending_count=pending_count,
                           status=status,
+                          category=category,
+                          user_id=user_id,
+                          branch_id_filter=branch_id_filter,
                           date_from=date_from,
                           date_to=date_to)
 
@@ -203,6 +249,7 @@ def expenses_create():
     if form.validate_on_submit():
         expense = Expense(
             brand_id=brand_id,
+            branch_id=current_user.branch_id,
             category_name=form.category_name.data,
             amount=form.amount.data,
             description=form.description.data,
