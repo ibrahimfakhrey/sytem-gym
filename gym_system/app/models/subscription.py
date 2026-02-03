@@ -1,26 +1,6 @@
 from datetime import datetime, date, timedelta
 from app import db
-
-
-class ServiceType(db.Model):
-    """Service Type model - Types of services offered (gym, swimming, karate, etc.)"""
-    __tablename__ = 'service_types'
-
-    id = db.Column(db.Integer, primary_key=True)
-    brand_id = db.Column(db.Integer, db.ForeignKey('brands.id'), nullable=False)
-
-    name = db.Column(db.String(100), nullable=False)  # Arabic name
-    name_en = db.Column(db.String(100))  # English name
-    category = db.Column(db.String(50))  # gym, swimming, martial_arts, fitness, etc.
-    description = db.Column(db.Text)
-
-    requires_class_booking = db.Column(db.Boolean, default=False)
-    capacity = db.Column(db.Integer)
-    is_active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-    def __repr__(self):
-        return f'<ServiceType {self.name}>'
+from .service import ServiceType
 
 
 class Plan(db.Model):
