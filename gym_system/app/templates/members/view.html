@@ -221,7 +221,7 @@
                                 تجميد الاشتراك
                             </a>
                             {% endif %}
-                            <a href="{{ url_for('subscriptions.suspend', subscription_id=sub.id) }}"
+                            <a href="{{ url_for('subscriptions.stop', subscription_id=sub.id) }}"
                                class="btn btn-sm btn-outline-danger">
                                 <i class="bi bi-stop-circle"></i>
                                 إيقاف الاشتراك
