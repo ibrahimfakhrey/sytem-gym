@@ -3,9 +3,37 @@
 {% block title %}لوحة التحكم - المالك{% endblock %}
 
 {% block content %}
-<div class="page-header">
+<div class="page-header d-flex justify-content-between align-items-center">
     <h1><i class="bi bi-speedometer2"></i> لوحة التحكم</h1>
+    <!-- Quick Actions -->
+    <div class="quick-actions">
+        <a href="{{ url_for('admin.brands_create') }}" class="btn btn-primary me-2">
+            <i class="bi bi-building-add"></i> إنشاء براند جديد
+        </a>
+        <a href="{{ url_for('admin.users_create') }}" class="btn btn-success">
+            <i class="bi bi-person-plus"></i> إضافة موظف جديد
+        </a>
+    </div>
 </div>
+
+<!-- Smart Alerts -->
+{% if alerts %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="alert-stack">
+            {% for alert in alerts %}
+            <div class="alert alert-{{ alert.type }} d-flex align-items-center justify-content-between mb-2" role="alert">
+                <div>
+                    <i class="bi bi-{{ alert.icon }} me-2"></i>
+                    {{ alert.title }}
+                </div>
+                <a href="{{ alert.link }}" class="btn btn-sm btn-outline-{{ alert.type }}">عرض</a>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <!-- Stats Cards -->
 <div class="row g-4 mb-4">
@@ -54,9 +82,9 @@
 <div class="row g-4 mb-4">
     <div class="col-lg-8">
         <div class="card">
-            <div class="card-header">
-                <i class="bi bi-building"></i>
-                أداء البراندات
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-building"></i> أداء البراندات</span>
+                <a href="{{ url_for('admin.brands_list') }}" class="btn btn-sm btn-outline-primary">إدارة البراندات</a>
             </div>
             <div class="card-body">
                 <div class="table-responsive">
@@ -69,13 +97,17 @@
                                 <th>الدخل</th>
                                 <th>المصروفات</th>
                                 <th>الربح</th>
+                                <th>الموظفين</th>
+                                <th>إجراءات</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for item in stats.brands %}
                             <tr>
                                 <td>
-                                    <strong>{{ item.brand.name }}</strong>
+                                    <a href="{{ url_for('admin.branches_list', brand_id=item.brand.id) }}" class="text-decoration-none">
+                                        <strong>{{ item.brand.name }}</strong>
+                                    </a>
                                     {% if item.brand.uses_fingerprint %}
                                     <span class="badge bg-info">بصمة</span>
                                     {% endif %}
@@ -86,6 +118,19 @@
                                 <td class="text-danger">{{ "{:,.0f}".format(item.stats.expenses) }}</td>
                                 <td class="{% if item.stats.profit >= 0 %}text-success{% else %}text-danger{% endif %}">
                                     {{ "{:,.0f}".format(item.stats.profit) }}
+                                </td>
+                                <td>
+                                    <span class="badge bg-secondary">{{ item.stats.employee_count }}</span>
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="{{ url_for('admin.brands_edit', brand_id=item.brand.id) }}" class="btn btn-outline-secondary" title="تعديل البراند">
+                                            <i class="bi bi-pencil"></i>
+                                        </a>
+                                        <a href="{{ url_for('admin.users_create') }}?brand_id={{ item.brand.id }}" class="btn btn-outline-success" title="إضافة موظف">
+                                            <i class="bi bi-person-plus"></i>
+                                        </a>
+                                    </div>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -125,7 +170,7 @@
 </div>
 
 <!-- Recent Activity -->
-<div class="row g-4">
+<div class="row g-4 mb-4">
     <div class="col-lg-6">
         <div class="card">
             <div class="card-header">
@@ -169,54 +214,50 @@
     </div>
 </div>
 
-<!-- Open Complaints -->
-<div class="row g-4 mt-4">
-    <div class="col-lg-12">
+<!-- Recent Complaints -->
+<div class="row g-4">
+    <div class="col-12">
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <span>
-                    <i class="bi bi-exclamation-circle"></i>
-                    الشكاوى المفتوحة (جميع البراندات)
-                </span>
-                <a href="{{ url_for('complaints.index') }}" class="btn btn-sm btn-primary">
-                    عرض الكل
-                </a>
+                <span><i class="bi bi-exclamation-triangle"></i> آخر الشكاوى</span>
+                <a href="{{ url_for('complaints.index') }}" class="btn btn-sm btn-outline-primary">عرض الكل</a>
             </div>
             <div class="card-body">
-                {% if open_complaints %}
+                {% if recent_complaints %}
                 <div class="table-responsive">
-                    <table class="table">
+                    <table class="table table-sm">
                         <thead>
                             <tr>
-                                <th>رقم</th>
+                                <th>الشكوى</th>
                                 <th>البراند</th>
-                                <th>النوع</th>
-                                <th>العضو</th>
+                                <th>التصنيف</th>
+                                <th>الحالة</th>
                                 <th>التاريخ</th>
-                                <th>الإجراءات</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {% for complaint in open_complaints %}
+                            {% for complaint in recent_complaints %}
                             <tr>
-                                <td>{{ complaint.id }}</td>
-                                <td>{{ complaint.brand.name }}</td>
-                                <td><span class="badge bg-secondary">{{ complaint.type_text }}</span></td>
-                                <td>{{ complaint.member.name if complaint.member else '-' }}</td>
-                                <td>{{ complaint.created_at.strftime('%Y-%m-%d') }}</td>
                                 <td>
-                                    <a href="{{ url_for('complaints.view', complaint_id=complaint.id) }}" class="btn btn-sm btn-info">
-                                        <i class="bi bi-eye"></i>
-                                        عرض
+                                    <a href="{{ url_for('complaints.view', complaint_id=complaint.id) }}">
+                                        {{ complaint.subject[:30] }}{% if complaint.subject|length > 30 %}...{% endif %}
                                     </a>
                                 </td>
+                                <td>{{ complaint.brand.name }}</td>
+                                <td>{{ complaint.category.name if complaint.category else '-' }}</td>
+                                <td>
+                                    <span class="badge bg-{{ 'warning' if complaint.status == 'pending' else ('info' if complaint.status == 'in_progress' else 'success') }}">
+                                        {{ 'قيد الانتظار' if complaint.status == 'pending' else ('قيد المعالجة' if complaint.status == 'in_progress' else 'تم الحل') }}
+                                    </span>
+                                </td>
+                                <td>{{ complaint.created_at.strftime('%m/%d %H:%M') }}</td>
                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
                 {% else %}
-                <p class="text-muted text-center mb-0">لا توجد شكاوى مفتوحة</p>
+                <p class="text-muted text-center mb-0">لا توجد شكاوى حديثة</p>
                 {% endif %}
             </div>
         </div>

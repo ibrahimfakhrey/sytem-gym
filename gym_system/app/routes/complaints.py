@@ -1,179 +1,294 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+"""Complaints routes"""
+from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify
 from flask_login import login_required, current_user
 from flask_wtf import FlaskForm
-from wtforms import SelectField, TextAreaField, HiddenField
-from wtforms.validators import DataRequired
+from wtforms import StringField, TextAreaField, SelectField, IntegerField
+from wtforms.validators import DataRequired, Optional, Email, Length
 from datetime import datetime
 
-from app import db
-from app.models.company import Brand
-from app.models.member import Member
-from app.models.complaint import Complaint
-from app.utils.decorators import members_required
-from app.utils.helpers import pagination_args
+from app import db, csrf
+from app.models import Brand, Branch, Member, Complaint, ComplaintCategory
 
-complaints_bp = Blueprint('complaints', __name__)
+complaints_bp = Blueprint('complaints', __name__, url_prefix='/complaints')
 
 
 class ComplaintForm(FlaskForm):
-    """Complaint form"""
-    member_id = HiddenField('ID العضو')
-    subject = TextAreaField('موضوع الشكوى', validators=[DataRequired()])
+    """Form for creating complaint by staff"""
+    category_id = SelectField('التصنيف', coerce=int, validators=[DataRequired()])
+    member_id = IntegerField('العضو (اختياري)', validators=[Optional()])
+    customer_name = StringField('اسم العميل', validators=[Optional(), Length(max=100)])
+    customer_phone = StringField('رقم الهاتف', validators=[Optional(), Length(max=20)])
+    subject = StringField('الموضوع', validators=[DataRequired(), Length(max=200)])
+    description = TextAreaField('تفاصيل الشكوى', validators=[DataRequired()])
+    priority = SelectField('الأولوية', choices=[
+        ('low', 'منخفضة'),
+        ('normal', 'عادية'),
+        ('high', 'عالية'),
+        ('urgent', 'عاجلة')
+    ], default='normal')
+
+
+class PublicComplaintForm(FlaskForm):
+    """Form for public complaint submission"""
+    category_id = SelectField('التصنيف', coerce=int, validators=[DataRequired()])
+    customer_name = StringField('الاسم', validators=[DataRequired(), Length(max=100)])
+    customer_phone = StringField('رقم الهاتف', validators=[DataRequired(), Length(max=20)])
+    customer_email = StringField('البريد الإلكتروني', validators=[Optional(), Email()])
+    subject = StringField('الموضوع', validators=[DataRequired(), Length(max=200)])
     description = TextAreaField('تفاصيل الشكوى', validators=[DataRequired()])
 
 
-class ResolveComplaintForm(FlaskForm):
-    """Resolve complaint form"""
-    resolution = TextAreaField('ملاحظات الحل', validators=[DataRequired()])
+class ResolveForm(FlaskForm):
+    """Form for resolving complaint"""
+    resolution = TextAreaField('الحل', validators=[DataRequired()])
 
 
 @complaints_bp.route('/')
 @login_required
-@members_required
 def index():
     """List complaints"""
-    page, per_page = pagination_args(request)
-    status = request.args.get('status', '')
+    # Check permissions
+    if not (current_user.role and current_user.role.can_view_complaints):
+        flash('ليس لديك صلاحية لعرض الشكاوى', 'danger')
+        return redirect(url_for('dashboard.index'))
 
-    # Base query - filter by brand access
-    if current_user.can_view_all_brands:
-        brand_id = request.args.get('brand_id', type=int)
-        if brand_id:
-            query = Complaint.query.filter_by(brand_id=brand_id)
-        else:
-            query = Complaint.query
-    else:
-        # Reception and brand managers see only their brand
-        query = Complaint.query.filter_by(brand_id=current_user.brand_id)
+    # Filters
+    status_filter = request.args.get('status', '')
+    category_filter = request.args.get('category', type=int)
 
-    # Status filter
-    if status:
-        query = query.filter_by(status=status)
+    query = Complaint.query
 
-    # Pagination
-    complaints = query.order_by(Complaint.created_at.desc()).paginate(
-        page=page, per_page=per_page, error_out=False
-    )
+    if not current_user.is_owner:
+        query = query.filter_by(brand_id=current_user.brand_id)
 
-    # Get brands for filter (owner only)
-    brands = None
-    if current_user.can_view_all_brands:
-        brands = Brand.query.filter_by(is_active=True).all()
+    if status_filter:
+        query = query.filter_by(status=status_filter)
+    if category_filter:
+        query = query.filter_by(category_id=category_filter)
+
+    complaints = query.order_by(Complaint.created_at.desc()).all()
+    categories = ComplaintCategory.query.filter_by(is_active=True).all()
+
+    # Stats
+    pending_count = Complaint.query.filter_by(status='pending')
+    if not current_user.is_owner:
+        pending_count = pending_count.filter_by(brand_id=current_user.brand_id)
+    pending_count = pending_count.count()
+
+    # Get brands for owner dropdown
+    brands = Brand.query.filter_by(is_active=True).all() if current_user.is_owner else []
 
     return render_template('complaints/index.html',
-                          complaints=complaints,
-                          brands=brands,
-                          status=status)
+                         complaints=complaints,
+                         categories=categories,
+                         pending_count=pending_count,
+                         status_filter=status_filter,
+                         category_filter=category_filter,
+                         brands=brands)
 
 
 @complaints_bp.route('/create', methods=['GET', 'POST'])
 @login_required
-@members_required
 def create():
-    """Create new complaint"""
-    member_id = request.args.get('member_id', type=int)
+    """Create complaint by staff"""
+    if not (current_user.role and current_user.role.can_view_complaints):
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('dashboard.index'))
 
     form = ComplaintForm()
+    categories = ComplaintCategory.query.filter_by(is_active=True).all()
+    form.category_id.choices = [(c.id, c.name) for c in categories]
 
-    # If member_id provided, validate access
-    member = None
-    if member_id:
-        member = Member.query.get_or_404(member_id)
-        if not current_user.can_access_brand(member.brand_id):
-            flash('ليس لديك صلاحية', 'danger')
-            return redirect(url_for('complaints.index'))
-        form.member_id.data = member_id
+    # Get brand_id
+    if current_user.is_owner:
+        brand_id = request.args.get('brand_id', type=int)
+        if not brand_id:
+            flash('يرجى اختيار البراند', 'warning')
+            return redirect(url_for('admin.brands_list'))
+        brand = Brand.query.get_or_404(brand_id)
+    else:
+        brand_id = current_user.brand_id
+        brand = current_user.brand
 
     if form.validate_on_submit():
-        # Determine brand_id
-        if form.member_id.data:
-            member = Member.query.get(int(form.member_id.data))
-            brand_id = member.brand_id
-            branch_id = member.branch_id
-        else:
-            brand_id = current_user.brand_id
-            branch_id = current_user.branch_id
-
-        # Create complaint
         complaint = Complaint(
             brand_id=brand_id,
-            branch_id=branch_id,
+            category_id=form.category_id.data,
             member_id=form.member_id.data if form.member_id.data else None,
+            customer_name=form.customer_name.data,
+            customer_phone=form.customer_phone.data,
             subject=form.subject.data,
             description=form.description.data,
-            status='open',
+            priority=form.priority.data,
+            submitted_by='receptionist',
             created_by=current_user.id
         )
         db.session.add(complaint)
         db.session.commit()
 
         flash('تم تسجيل الشكوى بنجاح', 'success')
+        return redirect(url_for('complaints.view', complaint_id=complaint.id))
 
-        if member:
-            return redirect(url_for('members.view', member_id=member.id))
-        return redirect(url_for('complaints.index'))
-
-    return render_template('complaints/create.html', form=form, member=member)
+    return render_template('complaints/form.html', form=form, brand=brand)
 
 
 @complaints_bp.route('/<int:complaint_id>')
 @login_required
-@members_required
 def view(complaint_id):
     """View complaint details"""
     complaint = Complaint.query.get_or_404(complaint_id)
 
-    if not current_user.can_access_brand(complaint.brand_id):
-        flash('ليس لديك صلاحية', 'danger')
+    # Check access
+    if not current_user.is_owner and current_user.brand_id != complaint.brand_id:
+        flash('ليس لديك صلاحية للوصول', 'danger')
         return redirect(url_for('complaints.index'))
 
-    return render_template('complaints/view.html', complaint=complaint)
+    resolve_form = ResolveForm()
+
+    return render_template('complaints/view.html', complaint=complaint, resolve_form=resolve_form)
 
 
-@complaints_bp.route('/<int:complaint_id>/resolve', methods=['GET', 'POST'])
+@complaints_bp.route('/<int:complaint_id>/resolve', methods=['POST'])
 @login_required
-@members_required
 def resolve(complaint_id):
     """Resolve complaint"""
-    complaint = Complaint.query.get_or_404(complaint_id)
-
-    if not current_user.can_access_brand(complaint.brand_id):
-        flash('ليس لديك صلاحية', 'danger')
+    if not (current_user.role and current_user.role.can_manage_complaints):
+        flash('ليس لديك صلاحية لحل الشكاوى', 'danger')
         return redirect(url_for('complaints.index'))
 
-    if complaint.status in ['resolved', 'closed']:
-        flash('الشكوى تم حلها بالفعل', 'warning')
-        return redirect(url_for('complaints.view', complaint_id=complaint_id))
+    complaint = Complaint.query.get_or_404(complaint_id)
 
-    form = ResolveComplaintForm()
+    # Check access
+    if not current_user.is_owner and current_user.brand_id != complaint.brand_id:
+        flash('ليس لديك صلاحية للوصول', 'danger')
+        return redirect(url_for('complaints.index'))
 
+    form = ResolveForm()
     if form.validate_on_submit():
-        complaint.status = 'resolved'
-        complaint.resolution = form.resolution.data
-        complaint.resolved_at = datetime.utcnow()
-        complaint.resolved_by = current_user.id
-
-        db.session.commit()
-
+        complaint.resolve(form.resolution.data, current_user.id)
         flash('تم حل الشكوى بنجاح', 'success')
-        return redirect(url_for('complaints.view', complaint_id=complaint_id))
 
-    return render_template('complaints/resolve.html', form=form, complaint=complaint)
+    return redirect(url_for('complaints.view', complaint_id=complaint.id))
 
 
 @complaints_bp.route('/<int:complaint_id>/close', methods=['POST'])
 @login_required
-@members_required
 def close(complaint_id):
     """Close complaint"""
-    complaint = Complaint.query.get_or_404(complaint_id)
-
-    if not current_user.can_access_brand(complaint.brand_id):
+    if not (current_user.role and current_user.role.can_manage_complaints):
         flash('ليس لديك صلاحية', 'danger')
         return redirect(url_for('complaints.index'))
 
-    complaint.status = 'closed'
-    db.session.commit()
+    complaint = Complaint.query.get_or_404(complaint_id)
 
+    # Check access
+    if not current_user.is_owner and current_user.brand_id != complaint.brand_id:
+        flash('ليس لديك صلاحية للوصول', 'danger')
+        return redirect(url_for('complaints.index'))
+
+    complaint.close()
     flash('تم إغلاق الشكوى', 'success')
-    return redirect(url_for('complaints.view', complaint_id=complaint_id))
+
+    return redirect(url_for('complaints.view', complaint_id=complaint.id))
+
+
+@complaints_bp.route('/<int:complaint_id>/assign', methods=['POST'])
+@login_required
+def assign(complaint_id):
+    """Assign complaint to staff"""
+    if not (current_user.role and current_user.role.can_manage_complaints):
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('complaints.index'))
+
+    complaint = Complaint.query.get_or_404(complaint_id)
+
+    # Check access
+    if not current_user.is_owner and current_user.brand_id != complaint.brand_id:
+        flash('ليس لديك صلاحية للوصول', 'danger')
+        return redirect(url_for('complaints.index'))
+
+    user_id = request.form.get('user_id', type=int)
+    if user_id:
+        complaint.assigned_to = user_id
+        complaint.status = 'in_progress'
+        db.session.commit()
+        flash('تم تعيين الشكوى بنجاح', 'success')
+
+    return redirect(url_for('complaints.view', complaint_id=complaint.id))
+
+
+# ========= Public Complaint Submission =========
+
+@complaints_bp.route('/public/<token>')
+def public_form(token):
+    """Public complaint form (no auth required)"""
+    # Validate token format - we use brand tokens for this
+    brand = Brand.query.filter_by(api_key=token, is_active=True).first()
+    if not brand:
+        return render_template('complaints/invalid_link.html'), 404
+
+    form = PublicComplaintForm()
+    categories = ComplaintCategory.query.filter_by(is_active=True).all()
+    form.category_id.choices = [(c.id, c.name) for c in categories]
+
+    return render_template('complaints/public_form.html', form=form, brand=brand, token=token)
+
+
+@complaints_bp.route('/public/submit', methods=['POST'])
+@csrf.exempt  # Public form, different CSRF handling
+def public_submit():
+    """Submit public complaint"""
+    token = request.form.get('token')
+    brand = Brand.query.filter_by(api_key=token, is_active=True).first()
+    if not brand:
+        return jsonify({'error': 'رابط غير صالح'}), 404
+
+    form = PublicComplaintForm()
+    categories = ComplaintCategory.query.filter_by(is_active=True).all()
+    form.category_id.choices = [(c.id, c.name) for c in categories]
+
+    if form.validate_on_submit():
+        complaint = Complaint(
+            brand_id=brand.id,
+            category_id=form.category_id.data,
+            customer_name=form.customer_name.data,
+            customer_phone=form.customer_phone.data,
+            customer_email=form.customer_email.data,
+            subject=form.subject.data,
+            description=form.description.data,
+            submitted_by='customer'
+        )
+        db.session.add(complaint)
+        db.session.commit()
+
+        return render_template('complaints/public_success.html',
+                             tracking_token=complaint.tracking_token,
+                             brand=brand)
+
+    # If validation fails, show form again with errors
+    return render_template('complaints/public_form.html', form=form, brand=brand, token=token)
+
+
+@complaints_bp.route('/track/<tracking_token>')
+def track(tracking_token):
+    """Track complaint status by token"""
+    complaint = Complaint.query.filter_by(tracking_token=tracking_token).first()
+    if not complaint:
+        return render_template('complaints/not_found.html'), 404
+
+    return render_template('complaints/track.html', complaint=complaint)
+
+
+# ========= Admin: Seed Categories =========
+
+@complaints_bp.route('/admin/seed-categories', methods=['POST'])
+@login_required
+def seed_categories():
+    """Seed default complaint categories"""
+    if not current_user.is_owner:
+        flash('هذه العملية متاحة للمالك فقط', 'danger')
+        return redirect(url_for('complaints.index'))
+
+    ComplaintCategory.seed_defaults()
+    flash('تم إضافة تصنيفات الشكاوى الافتراضية', 'success')
+    return redirect(url_for('complaints.index'))

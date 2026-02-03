@@ -191,3 +191,54 @@ def generate_filename(prefix, extension='xlsx'):
     """Generate a filename with timestamp"""
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     return f"{prefix}_{timestamp}.{extension}"
+
+
+def export_financial_report(brand_id, start_date, end_date):
+    """Export financial report for a brand"""
+    from app.models.finance import Income, Expense
+    from app.models.company import Brand
+    from app import db
+
+    # Get brand
+    if brand_id:
+        brand = Brand.query.get(brand_id)
+        brand_name = brand.name if brand else 'All Brands'
+    else:
+        brand_name = 'All Brands'
+
+    # Get income and expenses
+    if brand_id:
+        income = Income.get_total_for_period(brand_id, start_date, end_date)
+        expenses = Expense.get_total_for_period(brand_id, start_date, end_date)
+    else:
+        income = db.session.query(db.func.sum(Income.amount)).filter(
+            Income.date >= start_date,
+            Income.date <= end_date
+        ).scalar() or 0
+        expenses = db.session.query(db.func.sum(Expense.amount)).filter(
+            Expense.date >= start_date,
+            Expense.date <= end_date
+        ).scalar() or 0
+
+    report_data = {
+        'total_income': float(income),
+        'total_expenses': float(expenses),
+        'total_salaries': 0,
+        'net_profit': float(income) - float(expenses),
+        'daily_breakdown': []
+    }
+
+    return export_financial_excel(report_data)
+
+
+def export_members_report(brand_id):
+    """Export members report for a brand"""
+    from app.models.member import Member
+
+    # Get members
+    if brand_id:
+        members = Member.query.filter_by(brand_id=brand_id).all()
+    else:
+        members = Member.query.all()
+
+    return export_members_excel(members)

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}كرت الإهداء - {{ gift_card.code }}{% endblock %}
+{% block content %}
+<div class="page-header"><h1><i class="bi bi-gift"></i> كرت الإهداء</h1></div>
+<div class="row">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-body text-center">
+                <h2><code>{{ gift_card.code }}</code></h2>
+                <hr>
+                <p><strong>القيمة الأصلية:</strong> {{ "{:,.0f}".format(gift_card.original_amount) }} ر.س</p>
+                <p><strong>المتبقي:</strong> {{ "{:,.0f}".format(gift_card.remaining_amount) }} ر.س</p>
+                <p><strong>الصلاحية:</strong> {% if gift_card.expires_at %}{{ gift_card.expires_at.strftime('%Y-%m-%d') }}{% else %}بدون انتهاء{% endif %}</p>
+                <p><strong>الحالة:</strong> <span class="badge bg-{{ 'success' if gift_card.status == 'active' else 'secondary' }}">{{ gift_card.status }}</span></p>
+                {% if gift_card.status == 'active' %}
+                <form method="post" action="{{ url_for('gift_cards.deactivate', gift_card_id=gift_card.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('هل تريد إلغاء تفعيل الكرت؟');">إلغاء التفعيل</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

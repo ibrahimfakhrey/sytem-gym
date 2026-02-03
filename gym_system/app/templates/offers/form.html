@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}{% if offer %}تعديل{% else %}إضافة{% endif %} عرض{% endblock %}
+{% block content %}
+<div class="page-header"><h1><i class="bi bi-percent"></i> {% if offer %}تعديل: {{ offer.name }}{% else %}إضافة عرض جديد{% endif %}</h1></div>
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-body">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+                    <div class="mb-3">
+                        <label class="form-label">اسم العرض *</label>
+                        {{ form.name(class="form-control", placeholder="مثال: خصم رمضان") }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">الوصف</label>
+                        {{ form.description(class="form-control", rows="2") }}
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">نوع الخصم *</label>
+                            {{ form.discount_type(class="form-select") }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">قيمة الخصم *</label>
+                            {{ form.discount_value(class="form-control", type="number", step="0.01") }}
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">تاريخ البداية *</label>
+                            {{ form.start_date(class="form-control", type="date") }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">تاريخ النهاية *</label>
+                            {{ form.end_date(class="form-control", type="date") }}
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">الحد الأقصى للاستخدام (0 = بدون حد)</label>
+                        {{ form.max_uses(class="form-control", type="number", min="0") }}
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            {{ form.is_active(class="form-check-input", id="is_active") }}
+                            <label class="form-check-label" for="is_active">العرض نشط</label>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> {% if offer %}حفظ{% else %}إنشاء{% endif %}</button>
+                    <a href="{{ url_for('offers.index') }}" class="btn btn-secondary">إلغاء</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

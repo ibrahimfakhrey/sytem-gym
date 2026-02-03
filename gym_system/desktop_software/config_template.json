@@ -1,0 +1,8 @@
+{
+    "api_url": "https://gymsystem.pythonanywhere.com",
+    "api_key": "",
+    "brand_id": 1,
+    "db_path": "",
+    "sync_interval": 30,
+    "auto_start_sync": true
+}

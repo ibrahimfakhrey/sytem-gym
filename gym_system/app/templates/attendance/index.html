@@ -112,11 +112,11 @@ document.addEventListener('DOMContentLoaded', function() {
             fetch(`{{ url_for('attendance.search_member') }}?q=${encodeURIComponent(query)}`)
                 .then(response => response.json())
                 .then(data => {
-                    if (data.members && data.members.length > 0) {
+                    if (data.results && data.results.length > 0) {
                         let html = '<div class="list-group">';
-                        data.members.forEach(member => {
+                        data.results.forEach(member => {
                             const statusClass = member.can_check_in ? 'success' : 'danger';
-                            const statusText = member.can_check_in ? 'يمكنه الحضور' : member.status_text;
+                            const statusText = member.can_check_in ? 'يمكنه الحضور' : member.message;
                             html += `
                                 <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
                                      onclick="checkIn(${member.id})" style="cursor: pointer;">

@@ -2,8 +2,7 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request,
 from flask_login import login_user, logout_user, login_required, current_user
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, BooleanField, SubmitField
-from wtforms.validators import DataRequired, Email
-import sys
+from wtforms.validators import DataRequired
 
 from app import db
 from app.models.user import User
@@ -35,55 +34,33 @@ def login():
 
     form = LoginForm()
 
-    # DEBUG: Log POST request
     if request.method == 'POST':
-        print("=" * 60, file=sys.stderr)
-        print("🔍 LOGIN ATTEMPT DEBUG", file=sys.stderr)
-        print("=" * 60, file=sys.stderr)
-        print(f"Email submitted: {form.email.data}", file=sys.stderr)
-        print(f"Password submitted: {'*' * len(form.password.data) if form.password.data else 'None'}", file=sys.stderr)
-        print(f"Form validated: {form.validate()}", file=sys.stderr)
-        print(f"Form errors: {form.errors}", file=sys.stderr)
-        print(f"CSRF token in form: {'csrf_token' in request.form}", file=sys.stderr)
-        print("=" * 60, file=sys.stderr)
-        sys.stderr.flush()
+        if form.validate_on_submit():
+            user = User.query.filter_by(email=form.email.data.lower()).first()
 
-    if form.validate_on_submit():
-        email_lower = form.email.data.lower()
-        print(f"✅ Form validated. Looking for user: {email_lower}")
+            if user is None or not user.check_password(form.password.data):
+                flash('البريد الإلكتروني أو كلمة المرور غير صحيحة', 'danger')
+                return redirect(url_for('auth.login'))
 
-        user = User.query.filter_by(email=email_lower).first()
+            if not user.is_active:
+                flash('هذا الحساب معطل، يرجى التواصل مع الإدارة', 'warning')
+                return redirect(url_for('auth.login'))
 
-        print(f"User found: {user is not None}")
-        if user:
-            print(f"  User name: {user.name}")
-            print(f"  User email: {user.email}")
-            print(f"  User active: {user.is_active}")
-            print(f"  User role: {user.role.name_en}")
-            password_valid = user.check_password(form.password.data)
-            print(f"  Password valid: {password_valid}")
+            login_user(user, remember=form.remember_me.data)
+            user.update_last_login()
 
-        if user is None or not user.check_password(form.password.data):
-            print("❌ Login failed: Invalid credentials")
-            flash('البريد الإلكتروني أو كلمة المرور غير صحيحة', 'danger')
-            return redirect(url_for('auth.login'))
+            flash(f'مرحباً {user.name}', 'success')
 
-        if not user.is_active:
-            print("❌ Login failed: User inactive")
-            flash('هذا الحساب معطل، يرجى التواصل مع الإدارة', 'warning')
-            return redirect(url_for('auth.login'))
+            next_page = request.args.get('next')
+            if next_page:
+                return redirect(next_page)
 
-        print("✅ Login successful!")
-        login_user(user, remember=form.remember_me.data)
-        user.update_last_login()
-
-        flash(f'مرحباً {user.name}', 'success')
-
-        next_page = request.args.get('next')
-        if next_page:
-            return redirect(next_page)
-
-        return redirect(url_for('dashboard.index'))
+            return redirect(url_for('dashboard.index'))
+        else:
+            # Show form validation errors
+            for field, errors in form.errors.items():
+                for error in errors:
+                    flash(f'{error}', 'danger')
 
     return render_template('auth/login.html', form=form)
 

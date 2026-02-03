@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+
+{% block title %}{{ employee.name }} - تفاصيل الموظف{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-person-badge"></i>
+        {{ employee.name }}
+    </h1>
+    <div class="btn-group">
+        <a href="{{ url_for('employees.give_reward', user_id=employee.id) }}" class="btn btn-success">
+            <i class="bi bi-gift"></i>
+            إضافة مكافأة
+        </a>
+        <a href="{{ url_for('employees.give_deduction', user_id=employee.id) }}" class="btn btn-danger">
+            <i class="bi bi-dash-circle"></i>
+            إضافة خصم
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Employee Info -->
+    <div class="col-lg-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-person"></i>
+                معلومات الموظف
+            </div>
+            <div class="card-body">
+                <p><strong>الاسم:</strong> {{ employee.name }}</p>
+                <p><strong>البريد:</strong> {{ employee.email }}</p>
+                <p><strong>الهاتف:</strong> {{ employee.phone or '-' }}</p>
+                <p><strong>الوظيفة:</strong> {{ employee.role.name if employee.role else '-' }}</p>
+                <p><strong>البراند:</strong> {{ employee.brand.name if employee.brand else '-' }}</p>
+            </div>
+        </div>
+
+        <!-- Active Rewards -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-gift text-success"></i> المكافآت النشطة</span>
+                <span class="badge bg-success">{{ rewards|length }}</span>
+            </div>
+            <div class="card-body">
+                {% if rewards %}
+                <ul class="list-group list-group-flush">
+                    {% for reward in rewards %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                        <div>
+                            <strong>{{ reward.title }}</strong>
+                            <br>
+                            <small class="text-muted">{{ reward.effective_date.strftime('%Y-%m-%d') }}</small>
+                            {% if reward.is_recurring %}
+                            <span class="badge bg-info">شهري</span>
+                            {% endif %}
+                        </div>
+                        <div class="text-end">
+                            <span class="text-success">+{{ reward.amount|int }} ر.س</span>
+                            <br>
+                            <form action="{{ url_for('employees.cancel_reward', reward_id=reward.id) }}" method="post" class="d-inline">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('هل تريد إلغاء هذه المكافأة؟')">
+                                    <i class="bi bi-x"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted text-center mb-0">لا توجد مكافآت نشطة</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Recent Deductions -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-dash-circle text-danger"></i> الخصومات الأخيرة</span>
+                <span class="badge bg-danger">{{ deductions|length }}</span>
+            </div>
+            <div class="card-body">
+                {% if deductions %}
+                <ul class="list-group list-group-flush">
+                    {% for ded in deductions[:10] %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                        <div>
+                            <strong>{{ ded.title }}</strong>
+                            <span class="badge bg-{{ ded.type_class }}">{{ ded.type_text }}</span>
+                            <br>
+                            <small class="text-muted">{{ ded.deduction_date.strftime('%Y-%m-%d') }}</small>
+                        </div>
+                        <span class="text-danger">-{{ ded.amount|int }} ر.س</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted text-center mb-0">لا توجد خصومات</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Attendance History -->
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-calendar-check"></i>
+                سجل الحضور
+                <small class="text-muted">({{ start_date.strftime('%Y-%m-%d') }} - {{ end_date.strftime('%Y-%m-%d') }})</small>
+            </div>
+            <div class="card-body">
+                <!-- Date Filter -->
+                <form method="get" class="row g-2 mb-4 align-items-end">
+                    <div class="col-md-4">
+                        <label class="form-label">من</label>
+                        <input type="date" name="start_date" class="form-control" value="{{ start_date }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">إلى</label>
+                        <input type="date" name="end_date" class="form-control" value="{{ end_date }}">
+                    </div>
+                    <div class="col-md-4">
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="bi bi-filter"></i> فلترة
+                        </button>
+                    </div>
+                </form>
+
+                {% if attendance %}
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>التاريخ</th>
+                                <th>الحضور</th>
+                                <th>الانصراف</th>
+                                <th>التأخير</th>
+                                <th>الحالة</th>
+                                <th>المصدر</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for att in attendance %}
+                            <tr>
+                                <td>{{ att.date.strftime('%Y-%m-%d') }}</td>
+                                <td>{{ att.check_in.strftime('%H:%M') if att.check_in else '-' }}</td>
+                                <td>{{ att.check_out.strftime('%H:%M') if att.check_out else '-' }}</td>
+                                <td>
+                                    {% if att.late_minutes > 0 %}
+                                    <span class="text-warning">{{ att.late_minutes }} دقيقة</span>
+                                    {% else %}
+                                    <span class="text-success">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge bg-{{ att.status_class }}">{{ att.status_text }}</span>
+                                </td>
+                                <td>
+                                    <small class="text-muted">{{ att.source_text }}</small>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="empty-state">
+                    <i class="bi bi-calendar-x"></i>
+                    <h5>لا يوجد سجل حضور</h5>
+                    <p class="text-muted">لم يتم تسجيل حضور لهذه الفترة</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

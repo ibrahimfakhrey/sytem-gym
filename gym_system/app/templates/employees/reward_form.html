@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}إضافة مكافأة - {{ employee.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-gift text-success"></i>
+        إضافة مكافأة
+    </h1>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-person"></i>
+                {{ employee.name }}
+                <span class="badge bg-secondary">{{ employee.role.name if employee.role else '' }}</span>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+
+                    <div class="mb-3">
+                        <label class="form-label">عنوان المكافأة *</label>
+                        {{ form.title(class="form-control", placeholder="مثال: مكافأة حضور، مكافأة أداء متميز") }}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">المبلغ (ر.س) *</label>
+                        {{ form.amount(class="form-control", type="number", step="0.01", min="1") }}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">السبب</label>
+                        {{ form.reason(class="form-control", rows="3", placeholder="سبب المكافأة...") }}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">تاريخ السريان</label>
+                        {{ form.effective_date(class="form-control", type="date") }}
+                    </div>
+
+                    <hr>
+
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            {{ form.is_recurring(class="form-check-input", id="is_recurring") }}
+                            <label class="form-check-label" for="is_recurring">
+                                مكافأة شهرية متكررة
+                            </label>
+                        </div>
+                        <small class="text-muted">سيتم إضافة هذه المكافأة كل شهر</small>
+                    </div>
+
+                    <div class="mb-3" id="recurring_day_field" style="display: none;">
+                        <label class="form-label">يوم الشهر للصرف</label>
+                        {{ form.recurring_day(class="form-control", type="number", min="1", max="28") }}
+                        <small class="text-muted">اختر يوم من 1 إلى 28</small>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-success">
+                            <i class="bi bi-check-lg"></i>
+                            إضافة المكافأة
+                        </button>
+                        <a href="{{ url_for('employees.details', user_id=employee.id) }}" class="btn btn-secondary">
+                            <i class="bi bi-x-lg"></i>
+                            إلغاء
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('is_recurring').addEventListener('change', function() {
+    document.getElementById('recurring_day_field').style.display = this.checked ? 'block' : 'none';
+});
+</script>
+{% endblock %}

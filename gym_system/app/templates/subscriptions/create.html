@@ -26,9 +26,9 @@
                     {{ form.hidden_tag() }}
 
                     <div class="mb-3">
-                        <label class="form-label">نوع الخدمة *</label>
+                        <label class="form-label">نوع الخدمة</label>
                         {{ form.service_type_id(class="form-select", id="service-type-select") }}
-                        <small class="text-muted">اختر نوع النشاط (جيم، سباحة، كاراتيه، إلخ)</small>
+                        <small class="text-muted">اختر نوع النشاط (جيم، مسبح، كاراتيه...)</small>
                     </div>
 
                     <div class="mb-3">
@@ -81,7 +81,8 @@
 
                     <div class="mb-3">
                         <label class="form-label">طريقة الدفع *</label>
-                        {{ form.payment_method(class="form-select") }}
+                        {{ form.payment_method(class="form-control") }}
+                        <div class="form-text">يجب اختيار طريقة الدفع قبل إنشاء الاشتراك</div>
                     </div>
 
                     <div class="mb-3">
@@ -115,11 +116,17 @@
                 {% for plan in plans %}
                 <div class="plan-option p-3 mb-2 rounded border" data-plan-id="{{ plan.id }}"
                      data-duration="{{ plan.duration_days }}" data-price="{{ plan.price }}"
+                     data-service-type="{{ plan.service_type_id or 0 }}"
                      style="cursor: pointer;">
                     <div class="d-flex justify-content-between align-items-center">
                         <strong>{{ plan.name }}</strong>
                         <span class="badge bg-success">{{ "{:,.0f}".format(plan.price) }} ر.س</span>
                     </div>
+                    {% if plan.service_type %}
+                    <div class="small text-muted">
+                        <i class="bi bi-trophy"></i> {{ plan.service_type.name }}
+                    </div>
+                    {% endif %}
                     <div class="small text-muted mt-1">
                         <i class="bi bi-calendar3"></i> {{ plan.duration_days }} يوم
                         {% if plan.duration_days == 30 %}(شهر){% endif %}
@@ -187,11 +194,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Build plans data
     const plans = {};
+    const allPlanOptions = [];
     document.querySelectorAll('.plan-option').forEach(el => {
-        plans[el.dataset.planId] = {
+        const planId = el.dataset.planId;
+        plans[planId] = {
             duration: parseInt(el.dataset.duration),
-            price: parseFloat(el.dataset.price)
+            price: parseFloat(el.dataset.price),
+            serviceType: el.dataset.serviceType || '0'
         };
+        allPlanOptions.push(el);
 
         // Click to select plan
         el.addEventListener('click', function() {
@@ -203,6 +214,40 @@ document.addEventListener('DOMContentLoaded', function() {
             this.classList.add('border-primary', 'bg-light');
         });
     });
+
+    // Filter plans by service type
+    function filterPlansByServiceType() {
+        const selectedServiceType = serviceTypeSelect.value;
+
+        // Filter visible plan cards
+        allPlanOptions.forEach(el => {
+            const planServiceType = el.dataset.serviceType || '0';
+            if (selectedServiceType === '0' || planServiceType === '0' || planServiceType === selectedServiceType) {
+                el.style.display = '';
+            } else {
+                el.style.display = 'none';
+            }
+        });
+
+        // Filter plan dropdown options
+        Array.from(planSelect.options).forEach(option => {
+            if (!option.value) return; // Skip empty option
+            const plan = plans[option.value];
+            if (!plan) return;
+
+            if (selectedServiceType === '0' || plan.serviceType === '0' || plan.serviceType === selectedServiceType) {
+                option.style.display = '';
+            } else {
+                option.style.display = 'none';
+            }
+        });
+    }
+
+    // Listen to service type changes
+    serviceTypeSelect.addEventListener('change', filterPlansByServiceType);
+
+    // Initial filter
+    filterPlansByServiceType();
 
     function updateCalculations() {
         const planId = planSelect.value;

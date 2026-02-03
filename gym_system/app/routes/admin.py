@@ -9,6 +9,8 @@ from app import db
 from app.models.company import Company, Brand, Branch
 from app.models.user import User, Role
 from app.models.subscription import Plan
+from app.models.service import ServiceType
+from app.forms import BranchForm
 from app.utils.decorators import owner_required, brand_manager_required
 from app.utils.helpers import save_uploaded_file, delete_uploaded_file
 
@@ -25,14 +27,6 @@ class BrandForm(FlaskForm):
     uses_fingerprint = BooleanField('يستخدم نظام البصمة')
     fingerprint_ip = StringField('IP جهاز البصمة')
     fingerprint_port = IntegerField('Port', default=5005)
-    is_active = BooleanField('مفعل', default=True)
-
-
-class BranchForm(FlaskForm):
-    """Branch form"""
-    name = StringField('اسم الفرع', validators=[DataRequired()])
-    address = StringField('العنوان')
-    phone = StringField('الهاتف')
     is_active = BooleanField('مفعل', default=True)
 
 
@@ -54,10 +48,31 @@ class PlanForm(FlaskForm):
     """Plan form"""
     name = StringField('اسم الباقة', validators=[DataRequired()])
     description = StringField('الوصف')
+    service_type_id = SelectField('نوع الخدمة', coerce=int, validators=[Optional()])
     duration_days = IntegerField('المدة (بالأيام)', validators=[DataRequired()])
     price = DecimalField('السعر', validators=[DataRequired()])
     max_freezes = IntegerField('عدد مرات التجميد', default=1)
     max_freeze_days = IntegerField('أقصى أيام تجميد', default=14)
+    freeze_is_paid = BooleanField('التجميد مدفوع')
+    freeze_daily_rate = DecimalField('رسوم التجميد اليومية', default=0, validators=[Optional()])
+    requires_class_booking = BooleanField('يتطلب حجز كلاس')
+    is_active = BooleanField('مفعل', default=True)
+
+
+class ServiceTypeForm(FlaskForm):
+    """Service type form"""
+    name = StringField('اسم الخدمة (عربي)', validators=[DataRequired()])
+    name_en = StringField('اسم الخدمة (إنجليزي)')
+    category = SelectField('التصنيف', choices=[
+        ('gym', 'جيم'),
+        ('swimming', 'سباحة'),
+        ('karate', 'كاراتيه'),
+        ('salon', 'صالون'),
+        ('package', 'باقة متعددة')
+    ])
+    description = StringField('الوصف')
+    requires_class_booking = BooleanField('يتطلب حجز كلاس')
+    capacity = IntegerField('السعة', validators=[Optional()])
     is_active = BooleanField('مفعل', default=True)
 
 
@@ -181,6 +196,10 @@ def branches_create(brand_id):
             name=form.name.data,
             address=form.address.data,
             phone=form.phone.data,
+            gym_capacity=form.gym_capacity.data,
+            pool_capacity=form.pool_capacity.data,
+            lease_expiry_date=form.lease_expiry_date.data,
+            commercial_registration_expiry=form.commercial_registration_expiry.data,
             is_active=form.is_active.data
         )
         db.session.add(branch)
@@ -190,6 +209,38 @@ def branches_create(brand_id):
         return redirect(url_for('admin.branches_list', brand_id=brand_id))
 
     return render_template('admin/branches/create.html', form=form, brand=brand)
+
+
+@admin_bp.route('/branches/<int:branch_id>/edit', methods=['GET', 'POST'])
+@login_required
+@brand_manager_required
+def branches_edit(branch_id):
+    """Edit branch"""
+    branch = Branch.query.get_or_404(branch_id)
+    brand = branch.brand
+
+    if not current_user.can_access_brand(brand.id):
+        flash('ليس لديك صلاحية للوصول لهذا البراند', 'danger')
+        return redirect(url_for('dashboard.index'))
+
+    form = BranchForm(obj=branch)
+
+    if form.validate_on_submit():
+        branch.name = form.name.data
+        branch.address = form.address.data
+        branch.phone = form.phone.data
+        branch.gym_capacity = form.gym_capacity.data
+        branch.pool_capacity = form.pool_capacity.data
+        branch.lease_expiry_date = form.lease_expiry_date.data
+        branch.commercial_registration_expiry = form.commercial_registration_expiry.data
+        branch.is_active = form.is_active.data
+
+        db.session.commit()
+
+        flash('تم تحديث الفرع بنجاح', 'success')
+        return redirect(url_for('admin.branches_list', brand_id=brand.id))
+
+    return render_template('admin/branches/edit.html', form=form, branch=branch, brand=brand)
 
 
 # ============== Users ==============
@@ -226,6 +277,12 @@ def users_create():
         form.brand_id.choices = [(current_user.brand_id, current_user.brand.name)]
 
     form.branch_id.choices = [(0, '-- بدون فرع --')]
+
+    # Pre-select brand from query parameter (when coming from dashboard)
+    if request.method == 'GET':
+        preselect_brand_id = request.args.get('brand_id', type=int)
+        if preselect_brand_id and current_user.is_owner:
+            form.brand_id.data = preselect_brand_id
 
     if form.validate_on_submit():
         # Validate role
@@ -265,6 +322,74 @@ def users_create():
     return render_template('admin/users/form.html', form=form)
 
 
+@admin_bp.route('/users/<int:user_id>/edit', methods=['GET', 'POST'])
+@login_required
+@brand_manager_required
+def users_edit(user_id):
+    """Edit user"""
+    user = User.query.get_or_404(user_id)
+
+    # Check permissions
+    if not current_user.is_owner and user.brand_id != current_user.brand_id:
+        flash('ليس لديك صلاحية لتعديل هذا المستخدم', 'danger')
+        return redirect(url_for('admin.users_list'))
+
+    form = UserForm(obj=user)
+
+    # Populate choices
+    roles = Role.query.all()
+    form.role_id.choices = [(0, '-- اختر الدور --')] + [(r.id, r.name) for r in roles]
+
+    if current_user.is_owner:
+        form.brand_id.choices = [(0, '-- بدون براند --')] + [(b.id, b.name) for b in Brand.query.filter_by(is_active=True).all()]
+    else:
+        form.brand_id.choices = [(current_user.brand_id, current_user.brand.name)]
+
+    form.branch_id.choices = [(0, '-- بدون فرع --')]
+
+    # Load branches for selected brand
+    if user.brand_id:
+        branches = Branch.query.filter_by(brand_id=user.brand_id, is_active=True).all()
+        form.branch_id.choices += [(b.id, b.name) for b in branches]
+
+    # Make password optional for edit
+    form.password.validators = []
+
+    if form.validate_on_submit():
+        # Validate role
+        if not form.role_id.data or form.role_id.data == 0:
+            flash('يرجى اختيار الدور', 'danger')
+            return render_template('admin/users/form.html', form=form, user=user, edit=True)
+
+        # Check email uniqueness (exclude current user)
+        existing_user = User.query.filter_by(email=form.email.data.lower()).first()
+        if existing_user and existing_user.id != user.id:
+            flash('البريد الإلكتروني مستخدم مسبقاً', 'danger')
+            return render_template('admin/users/form.html', form=form, user=user, edit=True)
+
+        # Update user
+        user.name = form.name.data
+        user.email = form.email.data.lower()
+        user.phone = form.phone.data
+        user.role_id = form.role_id.data
+        user.brand_id = form.brand_id.data if form.brand_id.data != 0 else None
+        user.branch_id = form.branch_id.data if form.branch_id.data != 0 else None
+        user.salary_type = form.salary_type.data if form.salary_type.data else None
+        user.salary_amount = form.salary_amount.data
+        user.is_active = form.is_active.data
+
+        # Update password only if provided
+        if form.password.data and len(form.password.data) >= 6:
+            user.set_password(form.password.data)
+
+        db.session.commit()
+
+        flash('تم تحديث المستخدم بنجاح', 'success')
+        return redirect(url_for('admin.users_list'))
+
+    return render_template('admin/users/form.html', form=form, user=user, edit=True)
+
+
 # ============== Plans ==============
 
 @admin_bp.route('/plans')
@@ -302,15 +427,23 @@ def plans_create():
 
     brand = Brand.query.get_or_404(brand_id)
 
+    # Populate service type choices
+    service_types = ServiceType.query.filter_by(brand_id=brand_id, is_active=True).all()
+    form.service_type_id.choices = [(0, '-- بدون نوع خدمة محدد --')] + [(st.id, st.name) for st in service_types]
+
     if form.validate_on_submit():
         plan = Plan(
             brand_id=brand_id,
             name=form.name.data,
             description=form.description.data,
+            service_type_id=form.service_type_id.data if form.service_type_id.data != 0 else None,
             duration_days=form.duration_days.data,
             price=form.price.data,
             max_freezes=form.max_freezes.data,
             max_freeze_days=form.max_freeze_days.data,
+            freeze_is_paid=form.freeze_is_paid.data,
+            freeze_daily_rate=form.freeze_daily_rate.data or 0,
+            requires_class_booking=form.requires_class_booking.data,
             is_active=form.is_active.data
         )
         db.session.add(plan)
@@ -336,6 +469,10 @@ def plans_edit(plan_id):
 
     form = PlanForm(obj=plan)
 
+    # Populate service type choices
+    service_types = ServiceType.query.filter_by(brand_id=plan.brand_id, is_active=True).all()
+    form.service_type_id.choices = [(0, '-- بدون نوع خدمة محدد --')] + [(st.id, st.name) for st in service_types]
+
     if form.validate_on_submit():
         plan.name = form.name.data
         plan.description = form.description.data
@@ -345,8 +482,145 @@ def plans_edit(plan_id):
         plan.max_freeze_days = form.max_freeze_days.data
         plan.is_active = form.is_active.data
 
+        # New fields
+        plan.service_type_id = form.service_type_id.data if form.service_type_id.data else None
+        plan.freeze_is_paid = form.freeze_is_paid.data
+        plan.freeze_daily_rate = form.freeze_daily_rate.data or 0
+        plan.requires_class_booking = form.requires_class_booking.data
+
         db.session.commit()
         flash('تم تحديث الباقة بنجاح', 'success')
         return redirect(url_for('admin.plans_list'))
 
+    # Set default value for service_type_id if editing
+    if request.method == 'GET' and plan.service_type_id:
+        form.service_type_id.data = plan.service_type_id
+
     return render_template('admin/plans/form.html', form=form, plan=plan, brand=plan.brand)
+
+
+# ============== Service Types ==============
+
+@admin_bp.route('/service-types')
+@login_required
+def service_types_list():
+    """List service types"""
+    brands = []
+
+    if current_user.is_owner:
+        service_types = ServiceType.query.order_by(ServiceType.brand_id, ServiceType.name).all()
+        brands = Brand.query.filter_by(is_active=True).all()
+    elif current_user.brand_id:
+        service_types = ServiceType.query.filter_by(brand_id=current_user.brand_id).all()
+    else:
+        service_types = []
+
+    return render_template('admin/service_types/index.html', service_types=service_types, brands=brands)
+
+
+@admin_bp.route('/service-types/create', methods=['GET', 'POST'])
+@login_required
+@brand_manager_required
+def service_types_create():
+    """Create new service type"""
+    form = ServiceTypeForm()
+
+    # Get brand_id
+    if current_user.is_owner:
+        brand_id = request.args.get('brand_id', type=int)
+        if not brand_id:
+            flash('يرجى اختيار البراند أولاً', 'warning')
+            return redirect(url_for('admin.brands_list'))
+    else:
+        brand_id = current_user.brand_id
+
+    brand = Brand.query.get_or_404(brand_id)
+
+    if form.validate_on_submit():
+        service_type = ServiceType(
+            brand_id=brand_id,
+            name=form.name.data,
+            name_en=form.name_en.data,
+            category=form.category.data,
+            description=form.description.data,
+            requires_class_booking=form.requires_class_booking.data,
+            capacity=form.capacity.data,
+            is_active=form.is_active.data
+        )
+        db.session.add(service_type)
+        db.session.commit()
+
+        flash('تم إنشاء نوع الخدمة بنجاح', 'success')
+        return redirect(url_for('admin.service_types_list'))
+
+    return render_template('admin/service_types/form.html', form=form, brand=brand)
+
+
+@admin_bp.route('/service-types/<int:service_type_id>/edit', methods=['GET', 'POST'])
+@login_required
+@brand_manager_required
+def service_types_edit(service_type_id):
+    """Edit service type"""
+    service_type = ServiceType.query.get_or_404(service_type_id)
+
+    # Check access
+    if not current_user.is_owner and current_user.brand_id != service_type.brand_id:
+        flash('ليس لديك صلاحية لتعديل نوع الخدمة هذا', 'danger')
+        return redirect(url_for('admin.service_types_list'))
+
+    form = ServiceTypeForm(obj=service_type)
+
+    if form.validate_on_submit():
+        service_type.name = form.name.data
+        service_type.name_en = form.name_en.data
+        service_type.category = form.category.data
+        service_type.description = form.description.data
+        service_type.requires_class_booking = form.requires_class_booking.data
+        service_type.capacity = form.capacity.data
+        service_type.is_active = form.is_active.data
+
+        db.session.commit()
+        flash('تم تحديث نوع الخدمة بنجاح', 'success')
+        return redirect(url_for('admin.service_types_list'))
+
+    return render_template('admin/service_types/form.html', form=form, service_type=service_type, brand=service_type.brand)
+
+
+@admin_bp.route('/service-types/<int:service_type_id>/delete', methods=['POST'])
+@login_required
+@brand_manager_required
+def service_types_delete(service_type_id):
+    """Delete service type"""
+    service_type = ServiceType.query.get_or_404(service_type_id)
+
+    # Check access
+    if not current_user.is_owner and current_user.brand_id != service_type.brand_id:
+        flash('ليس لديك صلاحية لحذف نوع الخدمة هذا', 'danger')
+        return redirect(url_for('admin.service_types_list'))
+
+    # Check if used by plans
+    if service_type.plans.count() > 0:
+        flash('لا يمكن حذف نوع الخدمة لوجود باقات مرتبطة به', 'danger')
+        return redirect(url_for('admin.service_types_list'))
+
+    db.session.delete(service_type)
+    db.session.commit()
+    flash('تم حذف نوع الخدمة بنجاح', 'success')
+    return redirect(url_for('admin.service_types_list'))
+
+
+@admin_bp.route('/service-types/seed/<int:brand_id>', methods=['POST'])
+@login_required
+@brand_manager_required
+def service_types_seed(brand_id):
+    """Seed default service types for a brand"""
+    brand = Brand.query.get_or_404(brand_id)
+
+    # Check access
+    if not current_user.is_owner and current_user.brand_id != brand_id:
+        flash('ليس لديك صلاحية للوصول لهذا البراند', 'danger')
+        return redirect(url_for('admin.service_types_list'))
+
+    ServiceType.seed_defaults(brand_id)
+    flash('تم إضافة أنواع الخدمات الافتراضية بنجاح', 'success')
+    return redirect(url_for('admin.service_types_list'))

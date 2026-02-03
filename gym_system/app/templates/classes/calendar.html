@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+
+{% block title %}جدول الكلاسات{% endblock %}
+
+{% block extra_css %}
+<style>
+.schedule-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 10px;
+}
+.day-column {
+    min-width: 150px;
+}
+.day-header {
+    background: #f8f9fa;
+    padding: 10px;
+    text-align: center;
+    font-weight: bold;
+    border-radius: 5px 5px 0 0;
+}
+.day-classes {
+    border: 1px solid #dee2e6;
+    border-top: none;
+    min-height: 300px;
+    padding: 5px;
+}
+.class-item {
+    background: #e3f2fd;
+    border-radius: 5px;
+    padding: 8px;
+    margin-bottom: 5px;
+    font-size: 0.85rem;
+}
+.class-item:hover {
+    background: #bbdefb;
+}
+.class-time {
+    color: #1976d2;
+    font-weight: bold;
+}
+.class-name {
+    font-weight: 500;
+}
+.class-trainer {
+    color: #666;
+    font-size: 0.8rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-calendar3"></i>
+        جدول الكلاسات الأسبوعي
+    </h1>
+    <a href="{{ url_for('classes.index') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-list"></i>
+        عرض القائمة
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-body p-2">
+        <div class="table-responsive">
+            <div class="schedule-grid">
+                {% for day_num in range(7) %}
+                <div class="day-column">
+                    <div class="day-header">
+                        {% if day_num == 0 %}السبت
+                        {% elif day_num == 1 %}الأحد
+                        {% elif day_num == 2 %}الاثنين
+                        {% elif day_num == 3 %}الثلاثاء
+                        {% elif day_num == 4 %}الأربعاء
+                        {% elif day_num == 5 %}الخميس
+                        {% else %}الجمعة{% endif %}
+                    </div>
+                    <div class="day-classes">
+                        {% for cls in schedule[day_num]|sort(attribute='start_time') %}
+                        <a href="{{ url_for('classes.bookings', class_id=cls.id) }}" class="class-item d-block text-decoration-none text-dark">
+                            <div class="class-time">{{ cls.time_range }}</div>
+                            <div class="class-name">{{ cls.name }}</div>
+                            {% if cls.trainer %}
+                            <div class="class-trainer">
+                                <i class="bi bi-person"></i> {{ cls.trainer.name }}
+                            </div>
+                            {% endif %}
+                            <div class="class-trainer">
+                                <i class="bi bi-people"></i> {{ cls.capacity }} شخص
+                            </div>
+                        </a>
+                        {% else %}
+                        <div class="text-center text-muted py-4">
+                            <i class="bi bi-calendar-x"></i>
+                            <br>
+                            <small>لا يوجد كلاسات</small>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mt-4">
+    <div class="card-header">
+        <i class="bi bi-info-circle"></i>
+        تلميحات
+    </div>
+    <div class="card-body">
+        <ul class="mb-0 small">
+            <li>اضغط على أي كلاس لعرض وإدارة الحجوزات</li>
+            <li>يمكنك إضافة كلاسات جديدة من صفحة الكلاسات</li>
+            <li>الكلاسات المتكررة تظهر أسبوعياً في نفس الأيام والأوقات</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}

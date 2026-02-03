@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}الإقفال اليومي - {{ closing.closing_date }}{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-cash-coin"></i> إقفال {{ closing.closing_date.strftime('%Y-%m-%d') }} <span class="badge bg-{{ closing.status_class }}">{{ closing.status_arabic }}</span></h1>
+    <a href="{{ url_for('daily_closing.index') }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-right"></i> العودة</a>
+</div>
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card mb-4">
+            <div class="card-header"><i class="bi bi-graph-up"></i> تفاصيل الإقفال</div>
+            <div class="card-body">
+                <div class="row mb-4">
+                    <div class="col-md-6"><p><strong>إجمالي المبيعات:</strong> {{ "{:,.0f}".format(closing.total_sales) }} ر.س</p></div>
+                    <div class="col-md-6"><p><strong>اشتراكات جديدة:</strong> {{ closing.new_subscriptions_count }}</p></div>
+                </div>
+                <h6>توزيع المدفوعات</h6>
+                <div class="row mb-4">
+                    <div class="col-md-4"><p><strong>نقد:</strong> {{ "{:,.0f}".format(closing.cash_amount) }}</p></div>
+                    <div class="col-md-4"><p><strong>شبكة:</strong> {{ "{:,.0f}".format(closing.card_amount) }}</p></div>
+                    <div class="col-md-4"><p><strong>حوالة:</strong> {{ "{:,.0f}".format(closing.transfer_amount) }}</p></div>
+                </div>
+                {% if closing.actual_cash_submitted %}
+                <h6>التسوية النقدية</h6>
+                <div class="row">
+                    <div class="col-md-4"><p><strong>المتوقع:</strong> {{ "{:,.0f}".format(closing.expected_cash) }}</p></div>
+                    <div class="col-md-4"><p><strong>المسلم:</strong> {{ "{:,.0f}".format(closing.actual_cash_submitted) }}</p></div>
+                    <div class="col-md-4"><p><strong>الفرق:</strong> <span class="text-{{ closing.cash_difference_class }}">{{ "{:,.0f}".format(closing.cash_difference) }}</span></p></div>
+                </div>
+                {% if closing.difference_explanation %}<div class="alert alert-info">{{ closing.difference_explanation }}</div>{% endif %}
+                {% endif %}
+            </div>
+        </div>
+        {% if closing.status == 'submitted' and current_user.role and current_user.role.can_manage_daily_closing %}
+        <div class="card">
+            <div class="card-body">
+                <form method="post" action="{{ url_for('daily_closing.verify', closing_id=closing.id) }}" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="approve">
+                    <button type="submit" class="btn btn-success"><i class="bi bi-check-lg"></i> قبول</button>
+                </form>
+                <form method="post" action="{{ url_for('daily_closing.verify', closing_id=closing.id) }}" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="reject">
+                    <button type="submit" class="btn btn-danger"><i class="bi bi-x-lg"></i> رفض</button>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

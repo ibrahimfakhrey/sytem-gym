@@ -128,11 +128,13 @@
 
         <!-- Pagination -->
         {% if subscriptions.pages > 1 %}
+        {% set args_without_page = request.args.to_dict() %}
+        {% if args_without_page.pop('page', None) %}{% endif %}
         <nav class="mt-4">
             <ul class="pagination justify-content-center">
                 {% if subscriptions.has_prev %}
                 <li class="page-item">
-                    <a class="page-link" href="{{ url_for('subscriptions.index', page=subscriptions.prev_num, **request.args) }}">
+                    <a class="page-link" href="{{ url_for('subscriptions.index', page=subscriptions.prev_num, **args_without_page) }}">
                         <i class="bi bi-chevron-right"></i>
                     </a>
                 </li>
@@ -141,7 +143,7 @@
                 {% for page_num in subscriptions.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                 {% if page_num %}
                 <li class="page-item {{ 'active' if page_num == subscriptions.page else '' }}">
-                    <a class="page-link" href="{{ url_for('subscriptions.index', page=page_num, **request.args) }}">
+                    <a class="page-link" href="{{ url_for('subscriptions.index', page=page_num, **args_without_page) }}">
                         {{ page_num }}
                     </a>
                 </li>
@@ -152,7 +154,7 @@
 
                 {% if subscriptions.has_next %}
                 <li class="page-item">
-                    <a class="page-link" href="{{ url_for('subscriptions.index', page=subscriptions.next_num, **request.args) }}">
+                    <a class="page-link" href="{{ url_for('subscriptions.index', page=subscriptions.next_num, **args_without_page) }}">
                         <i class="bi bi-chevron-left"></i>
                     </a>
                 </li>

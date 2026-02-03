@@ -95,7 +95,6 @@
                         <th>البراند</th>
                         {% endif %}
                         <th>الاشتراك</th>
-                        <th>الحالة</th>
                         <th>الإجراءات</th>
                     </tr>
                 </thead>
@@ -122,26 +121,26 @@
                         {% endif %}
                         <td>
                             {% if member.active_subscription %}
-                            {{ member.active_subscription.plan.name }}
+                            <strong>{{ member.active_subscription.plan.name }}</strong>
                             <br><small class="text-muted">
-                                ينتهي: {{ member.active_subscription.end_date.strftime('%Y-%m-%d') }}
+                                <i class="bi bi-calendar-check"></i> من: {{ member.active_subscription.start_date.strftime('%Y-%m-%d') }}
                             </small>
-                            {% else %}
-                            <span class="text-muted">لا يوجد</span>
+                            <br><small class="text-muted">
+                                <i class="bi bi-calendar-x"></i> إلى: {{ member.active_subscription.end_date.strftime('%Y-%m-%d') }}
+                            </small>
+                            {% if member.days_remaining is not none %}
+                            <br><small class="{% if member.days_remaining <= 7 %}text-danger{% elif member.days_remaining <= 14 %}text-warning{% else %}text-success{% endif %}">
+                                <i class="bi bi-clock"></i> متبقي: {{ member.days_remaining }} يوم
+                            </small>
                             {% endif %}
-                        </td>
-                        <td>
-                            <span class="badge-status {{ member.subscription_status }}">
-                                {% if member.subscription_status == 'active' %}
-                                نشط
-                                {% elif member.subscription_status == 'frozen' %}
-                                مجمد
-                                {% elif member.subscription_status == 'expired' %}
-                                منتهي
-                                {% else %}
-                                بدون اشتراك
-                                {% endif %}
-                            </span>
+                            {% if member.active_subscription.remaining_amount > 0 %}
+                            <br><small class="text-danger">
+                                <i class="bi bi-cash"></i> متبقي: {{ member.active_subscription.remaining_amount }} ر.س
+                            </small>
+                            {% endif %}
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
                         </td>
                         <td>
                             <div class="btn-group">
@@ -178,7 +177,7 @@
             <ul class="pagination justify-content-center">
                 {% if members.has_prev %}
                 <li class="page-item">
-                    <a class="page-link" href="{{ url_for('members.index', page=members.prev_num, **request.args) }}">
+                    <a class="page-link" href="{{ url_for('members.index', page=members.prev_num, search=request.args.get('search', ''), status=request.args.get('status', ''), branch_id=request.args.get('branch_id', '')) }}">
                         <i class="bi bi-chevron-right"></i>
                     </a>
                 </li>
@@ -187,7 +186,7 @@
                 {% for page_num in members.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                 {% if page_num %}
                 <li class="page-item {{ 'active' if page_num == members.page else '' }}">
-                    <a class="page-link" href="{{ url_for('members.index', page=page_num, **request.args) }}">
+                    <a class="page-link" href="{{ url_for('members.index', page=page_num, search=request.args.get('search', ''), status=request.args.get('status', ''), branch_id=request.args.get('branch_id', '')) }}">
                         {{ page_num }}
                     </a>
                 </li>
@@ -198,7 +197,7 @@
 
                 {% if members.has_next %}
                 <li class="page-item">
-                    <a class="page-link" href="{{ url_for('members.index', page=members.next_num, **request.args) }}">
+                    <a class="page-link" href="{{ url_for('members.index', page=members.next_num, search=request.args.get('search', ''), status=request.args.get('status', ''), branch_id=request.args.get('branch_id', '')) }}">
                         <i class="bi bi-chevron-left"></i>
                     </a>
                 </li>

@@ -33,7 +33,7 @@
 
 <!-- Stats -->
 <div class="row g-4 mb-4">
-    <div class="col-md-4">
+    <div class="col-md-3">
         <div class="card stat-card bg-primary text-white">
             <div class="stat-icon">
                 <i class="bi bi-check2-all"></i>
@@ -42,7 +42,7 @@
             <div class="stat-label">حضور اليوم</div>
         </div>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-3">
         <div class="card stat-card bg-success text-white">
             <div class="stat-icon">
                 <i class="bi bi-people"></i>
@@ -51,86 +51,32 @@
             <div class="stat-label">الأعضاء النشطين</div>
         </div>
     </div>
-    <div class="col-md-4">
-        {% if closing_today %}
-        <div class="card stat-card bg-secondary text-white">
+    <div class="col-md-3">
+        <div class="card stat-card bg-info text-white">
             <div class="stat-icon">
-                <i class="bi bi-check-circle"></i>
+                <i class="bi bi-person-plus"></i>
             </div>
-            <div class="stat-value"><i class="bi bi-check-lg"></i></div>
-            <div class="stat-label">تم الإقفال اليوم</div>
-            <a href="{{ url_for('closing.view_closing', closing_id=closing_today.id) }}" class="btn btn-sm btn-light mt-2">
-                عرض التفاصيل
-            </a>
+            <div class="stat-value">{{ today_new_subs }}</div>
+            <div class="stat-label">اشتراكات جديدة اليوم</div>
         </div>
-        {% else %}
-        <div class="card stat-card bg-warning text-white">
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card bg-warning text-dark">
             <div class="stat-icon">
-                <i class="bi bi-cash-stack"></i>
+                <i class="bi bi-arrow-repeat"></i>
             </div>
-            <div class="stat-value"><i class="bi bi-exclamation-lg"></i></div>
-            <div class="stat-label">لم يتم الإقفال</div>
-            <a href="{{ url_for('closing.view_daily_summary', closing_date=today.isoformat()) }}" class="btn btn-sm btn-light mt-2">
-                <i class="bi bi-eye"></i> عرض ملخص اليوم
-            </a>
+            <div class="stat-value">{{ today_renewals }}</div>
+            <div class="stat-label">تجديدات اليوم</div>
         </div>
-        {% endif %}
     </div>
 </div>
 
-<!-- Today's Sessions -->
-{% if today_sessions %}
-<div class="card mb-4">
-    <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
-        <span>
-            <i class="bi bi-calendar-day"></i>
-            حصص اليوم
-        </span>
-        <a href="{{ url_for('bookings.sessions_list') }}" class="btn btn-sm btn-light">
-            عرض كل الحصص
-        </a>
-    </div>
-    <div class="card-body">
-        <div class="table-responsive">
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th>الحصة</th>
-                        <th>الوقت</th>
-                        <th>الحجوزات</th>
-                        <th>الحالة</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for session in today_sessions %}
-                    <tr {% if session.is_past %}class="text-muted"{% endif %}>
-                        <td>
-                            <strong>{{ session.name }}</strong>
-                            <br>
-                            <small class="text-muted">{{ session.type_text }}</small>
-                        </td>
-                        <td>
-                            {{ session.start_time.strftime('%H:%M') }} - {{ session.end_time.strftime('%H:%M') }}
-                        </td>
-                        <td>
-                            <span class="badge {% if session.available_slots == 0 %}bg-danger{% elif session.available_slots <= 5 %}bg-warning{% else %}bg-success{% endif %}">
-                                {{ session.current_bookings }} / {{ session.max_capacity }}
-                            </span>
-                        </td>
-                        <td>
-                            {% if session.is_past %}
-                            <span class="badge bg-secondary">انتهت</span>
-                            {% elif session.available_slots == 0 %}
-                            <span class="badge bg-danger">ممتلئة</span>
-                            {% else %}
-                            <span class="badge bg-success">متاحة</span>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+<!-- 48 Hour Urgent Alerts -->
+{% if expiring_48h %}
+<div class="alert alert-danger d-flex align-items-center mb-4" role="alert">
+    <i class="bi bi-exclamation-octagon me-2 fs-4"></i>
+    <div>
+        <strong>تنبيه عاجل:</strong> {{ expiring_48h|length }} اشتراك(ات) تنتهي خلال 48 ساعة - يرجى التواصل مع العملاء للتجديد
     </div>
 </div>
 {% endif %}
@@ -232,36 +178,31 @@
 </div>
 {% endif %}
 
-<!-- Open Complaints -->
-{% if open_complaints %}
-<div class="card border-danger mt-4">
-    <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
-        <span>
-            <i class="bi bi-exclamation-circle"></i>
-            الشكاوى المفتوحة
-        </span>
-        <a href="{{ url_for('complaints.index') }}" class="btn btn-sm btn-light">
-            عرض الكل
-        </a>
+<!-- Suspended Subscriptions -->
+{% if suspended_subs %}
+<div class="card border-secondary mt-4">
+    <div class="card-header bg-secondary text-white">
+        <i class="bi bi-pause-circle"></i>
+        اشتراكات متوقفة (تحتاج متابعة)
     </div>
     <div class="card-body">
         <ul class="list-group list-group-flush">
-            {% for complaint in open_complaints %}
+            {% for sub in suspended_subs %}
             <li class="list-group-item d-flex justify-content-between align-items-center">
                 <div>
-                    <span class="badge bg-secondary">{{ complaint.type_text }}</span>
-                    {% if complaint.member %}
-                    <strong>{{ complaint.member.name }}</strong>
-                    {% else %}
-                    <strong>عام</strong>
-                    {% endif %}
+                    <strong>{{ sub.member.name }}</strong>
                     <br>
-                    <small class="text-muted">{{ complaint.created_at.strftime('%Y-%m-%d') }}</small>
+                    <small class="text-muted">{{ sub.member.phone }}</small>
+                    {% if sub.stop_reason %}
+                    <br>
+                    <small class="text-danger">السبب: {{ sub.stop_reason[:30] }}{% if sub.stop_reason|length > 30 %}...{% endif %}</small>
+                    {% endif %}
                 </div>
-                <a href="{{ url_for('complaints.view', complaint_id=complaint.id) }}" class="btn btn-sm btn-info">
-                    <i class="bi bi-eye"></i>
-                    عرض
-                </a>
+                <div class="text-end">
+                    <small class="text-muted">{{ sub.stopped_at.strftime('%m/%d') if sub.stopped_at else '-' }}</small>
+                    <br>
+                    <a href="{{ url_for('members.view', member_id=sub.member_id) }}" class="btn btn-sm btn-outline-primary mt-1">عرض</a>
+                </div>
             </li>
             {% endfor %}
         </ul>

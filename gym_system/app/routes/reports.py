@@ -54,6 +54,9 @@ def financial():
     else:
         brands = [current_user.brand]
 
+    # Branch comparison flag
+    compare_branches = request.args.get('compare_branches', type=int, default=0)
+
     # Calculate stats for each brand
     report_data = []
     totals = {'income': 0, 'expenses': 0, 'profit': 0}
@@ -63,15 +66,55 @@ def financial():
         expenses = Expense.get_total_for_period(brand.id, start_date, end_date)
         profit = income - expenses
 
+        # Income breakdown by payment method
+        income_by_payment = Income.get_by_payment_method(brand.id, start_date, end_date)
+
+        # Income breakdown by service type
+        income_by_service = db.session.query(
+            Income.service_type_id,
+            db.func.sum(Income.amount).label('total')
+        ).filter(
+            Income.brand_id == brand.id,
+            Income.date >= start_date,
+            Income.date <= end_date
+        ).group_by(Income.service_type_id).all()
+
         # Expense breakdown
         expense_breakdown = Expense.get_by_category(brand.id, start_date, end_date)
+
+        # Branch comparison if requested
+        branch_breakdown = []
+        if compare_branches and brand.branches:
+            from app.models.company import Branch
+            for branch in brand.branches:
+                branch_income = db.session.query(db.func.sum(Income.amount)).filter(
+                    Income.branch_id == branch.id,
+                    Income.date >= start_date,
+                    Income.date <= end_date
+                ).scalar() or 0
+
+                branch_expenses = db.session.query(db.func.sum(Expense.amount)).filter(
+                    Expense.branch_id == branch.id,
+                    Expense.date >= start_date,
+                    Expense.date <= end_date
+                ).scalar() or 0
+
+                branch_breakdown.append({
+                    'branch': branch,
+                    'income': float(branch_income),
+                    'expenses': float(branch_expenses),
+                    'profit': float(branch_income) - float(branch_expenses)
+                })
 
         report_data.append({
             'brand': brand,
             'income': income,
             'expenses': expenses,
             'profit': profit,
-            'expense_breakdown': expense_breakdown
+            'income_by_payment': income_by_payment,
+            'income_by_service': income_by_service,
+            'expense_breakdown': expense_breakdown,
+            'branch_breakdown': branch_breakdown
         })
 
         totals['income'] += income
@@ -89,7 +132,8 @@ def financial():
                           brands=all_brands,
                           start_date=start_date,
                           end_date=end_date,
-                          period=period)
+                          period=period,
+                          compare_branches=compare_branches)
 
 
 @reports_bp.route('/members')

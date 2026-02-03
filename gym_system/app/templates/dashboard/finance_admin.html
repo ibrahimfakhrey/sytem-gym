@@ -40,6 +40,148 @@
     </div>
 </div>
 
+<!-- Payment Method Breakdown -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-pie-chart"></i>
+                توزيع طرق الدفع
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span><i class="bi bi-cash text-success"></i> نقدي</span>
+                        <strong>{{ "{:,.0f}".format(payment_stats.cash) }} ر.س</strong>
+                    </div>
+                    <div class="progress" style="height: 8px;">
+                        <div class="progress-bar bg-success" style="width: {{ (payment_stats.cash / total_income * 100) if total_income > 0 else 0 }}%"></div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span><i class="bi bi-credit-card text-primary"></i> بطاقة</span>
+                        <strong>{{ "{:,.0f}".format(payment_stats.card) }} ر.س</strong>
+                    </div>
+                    <div class="progress" style="height: 8px;">
+                        <div class="progress-bar bg-primary" style="width: {{ (payment_stats.card / total_income * 100) if total_income > 0 else 0 }}%"></div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span><i class="bi bi-bank text-info"></i> تحويل</span>
+                        <strong>{{ "{:,.0f}".format(payment_stats.transfer) }} ر.س</strong>
+                    </div>
+                    <div class="progress" style="height: 8px;">
+                        <div class="progress-bar bg-info" style="width: {{ (payment_stats.transfer / total_income * 100) if total_income > 0 else 0 }}%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pending Daily Closings -->
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-cash-stack"></i> إقفالات بانتظار المراجعة</span>
+                <span class="badge bg-warning">{{ pending_closings|length }}</span>
+            </div>
+            <div class="card-body">
+                {% if pending_closings %}
+                <ul class="list-group list-group-flush">
+                    {% for closing in pending_closings[:5] %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center py-2">
+                        <div>
+                            <strong>{{ closing.brand.name }}</strong>
+                            <br>
+                            <small class="text-muted">{{ closing.closing_date.strftime('%Y-%m-%d') }}</small>
+                        </div>
+                        <a href="{{ url_for('daily_closing.view', closing_id=closing.id) }}" class="btn btn-sm btn-outline-primary">مراجعة</a>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% if pending_closings|length > 5 %}
+                <div class="text-center mt-2">
+                    <a href="{{ url_for('daily_closing.index') }}" class="text-primary">عرض الكل ({{ pending_closings|length }})</a>
+                </div>
+                {% endif %}
+                {% else %}
+                <p class="text-muted text-center mb-0">لا توجد إقفالات معلقة</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Cash Differences -->
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-exclamation-triangle"></i> فروقات الكاش</span>
+                <span class="badge bg-danger">{{ cash_differences|length }}</span>
+            </div>
+            <div class="card-body">
+                {% if cash_differences %}
+                <ul class="list-group list-group-flush">
+                    {% for closing in cash_differences %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center py-2">
+                        <div>
+                            <strong>{{ closing.brand.name }}</strong>
+                            <br>
+                            <small class="text-muted">{{ closing.closing_date.strftime('%Y-%m-%d') }}</small>
+                        </div>
+                        <span class="badge bg-{{ 'danger' if closing.cash_difference < 0 else 'warning' }}">
+                            {{ "{:+,.0f}".format(closing.cash_difference) }} ر.س
+                        </span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted text-center mb-0">لا توجد فروقات</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Pending Expenses -->
+{% if pending_expenses %}
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center bg-warning">
+        <span><i class="bi bi-receipt"></i> مصروفات بانتظار الموافقة</span>
+        <span class="badge bg-dark">{{ pending_expenses|length }}</span>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>البراند</th>
+                        <th>الوصف</th>
+                        <th>المبلغ</th>
+                        <th>التاريخ</th>
+                        <th>الإجراء</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for expense in pending_expenses %}
+                    <tr>
+                        <td>{{ expense.brand.name }}</td>
+                        <td>{{ expense.description[:30] }}{% if expense.description|length > 30 %}...{% endif %}</td>
+                        <td class="text-danger">{{ "{:,.0f}".format(expense.amount) }} ر.س</td>
+                        <td>{{ expense.date.strftime('%m/%d') }}</td>
+                        <td>
+                            <a href="{{ url_for('finance.expense_view', expense_id=expense.id) }}" class="btn btn-sm btn-outline-primary">عرض</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <!-- Brand Comparison -->
 <div class="card">
     <div class="card-header">

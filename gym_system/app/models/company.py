@@ -68,9 +68,87 @@ class Branch(db.Model):
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+    # Capacity settings
+    gym_capacity = db.Column(db.Integer, default=100)
+    pool_capacity = db.Column(db.Integer, default=50)
+    current_gym_occupancy = db.Column(db.Integer, default=0)
+    current_pool_occupancy = db.Column(db.Integer, default=0)
+
+    # Contract/Lease expiry tracking
+    lease_expiry_date = db.Column(db.Date)
+    commercial_registration_expiry = db.Column(db.Date)
+
     # Relationships
     users = db.relationship('User', backref='branch', lazy='dynamic')
     members = db.relationship('Member', backref='branch', lazy='dynamic')
 
     def __repr__(self):
         return f'<Branch {self.name}>'
+
+    @property
+    def gym_occupancy_percent(self):
+        """Get gym occupancy as percentage"""
+        if self.gym_capacity and self.gym_capacity > 0:
+            return round((self.current_gym_occupancy / self.gym_capacity) * 100, 1)
+        return 0
+
+    @property
+    def pool_occupancy_percent(self):
+        """Get pool occupancy as percentage"""
+        if self.pool_capacity and self.pool_capacity > 0:
+            return round((self.current_pool_occupancy / self.pool_capacity) * 100, 1)
+        return 0
+
+    @property
+    def is_gym_full(self):
+        """Check if gym is at capacity"""
+        return self.current_gym_occupancy >= (self.gym_capacity or 0)
+
+    @property
+    def is_pool_full(self):
+        """Check if pool is at capacity"""
+        return self.current_pool_occupancy >= (self.pool_capacity or 0)
+
+    @property
+    def lease_days_remaining(self):
+        """Days remaining on lease"""
+        from datetime import date
+        if self.lease_expiry_date:
+            return (self.lease_expiry_date - date.today()).days
+        return None
+
+    @property
+    def registration_days_remaining(self):
+        """Days remaining on commercial registration"""
+        from datetime import date
+        if self.commercial_registration_expiry:
+            return (self.commercial_registration_expiry - date.today()).days
+        return None
+
+    def check_in_gym(self):
+        """Increment gym occupancy"""
+        self.current_gym_occupancy = (self.current_gym_occupancy or 0) + 1
+        db.session.commit()
+
+    def check_out_gym(self):
+        """Decrement gym occupancy"""
+        if self.current_gym_occupancy and self.current_gym_occupancy > 0:
+            self.current_gym_occupancy -= 1
+            db.session.commit()
+
+    def check_in_pool(self):
+        """Increment pool occupancy"""
+        self.current_pool_occupancy = (self.current_pool_occupancy or 0) + 1
+        db.session.commit()
+
+    def check_out_pool(self):
+        """Decrement pool occupancy"""
+        if self.current_pool_occupancy and self.current_pool_occupancy > 0:
+            self.current_pool_occupancy -= 1
+            db.session.commit()
+
+    def reset_occupancy(self):
+        """Reset all occupancy counts (for end of day)"""
+        self.current_gym_occupancy = 0
+        self.current_pool_occupancy = 0
+        db.session.commit()

@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block title %}{% if gym_class %}تعديل{% else %}إضافة{% endif %} كلاس{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-calendar-event"></i>
+        {% if gym_class %}تعديل كلاس: {{ gym_class.name }}{% else %}إضافة كلاس جديد{% endif %}
+    </h1>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-body">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+
+                    {% if brand %}
+                    <div class="mb-3">
+                        <label class="form-label">البراند</label>
+                        <input type="text" class="form-control" value="{{ brand.name }}" disabled>
+                    </div>
+                    {% endif %}
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">اسم الكلاس *</label>
+                            {{ form.name(class="form-control", placeholder="مثال: سباحة المبتدئين") }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">نوع الخدمة *</label>
+                            {{ form.service_type_id(class="form-select") }}
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">المدرب</label>
+                        {{ form.trainer_id(class="form-select") }}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">الوصف</label>
+                        {{ form.description(class="form-control", rows="2", placeholder="وصف مختصر للكلاس...") }}
+                    </div>
+
+                    <hr class="my-4">
+                    <h5 class="mb-3"><i class="bi bi-clock"></i> الجدول الزمني</h5>
+
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">اليوم *</label>
+                            {{ form.day_of_week(class="form-select") }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">وقت البداية *</label>
+                            {{ form.start_time(class="form-control", type="time") }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">وقت النهاية *</label>
+                            {{ form.end_time(class="form-control", type="time") }}
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">السعة *</label>
+                            {{ form.capacity(class="form-control", type="number", min="1", max="100") }}
+                            <small class="text-muted">الحد الأقصى لعدد المشتركين</small>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="form-check">
+                            {{ form.is_active(class="form-check-input", id="is_active") }}
+                            <label class="form-check-label" for="is_active">
+                                الكلاس نشط
+                            </label>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg"></i>
+                            {% if gym_class %}حفظ التعديلات{% else %}إنشاء الكلاس{% endif %}
+                        </button>
+                        <a href="{{ url_for('classes.index') }}" class="btn btn-secondary">
+                            <i class="bi bi-x-lg"></i>
+                            إلغاء
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-lightbulb"></i>
+                معلومات
+            </div>
+            <div class="card-body small">
+                <ul class="mb-0">
+                    <li class="mb-2">اختر نوع الخدمة المرتبط بالكلاس</li>
+                    <li class="mb-2">حدد المدرب المسؤول عن الكلاس</li>
+                    <li class="mb-2">تأكد من عدم تعارض المواعيد مع كلاسات أخرى</li>
+                    <li class="mb-2">السعة تحدد الحد الأقصى للحجوزات</li>
+                </ul>
+            </div>
+        </div>
+
+        {% if gym_class %}
+        <div class="card mt-4">
+            <div class="card-header">
+                <i class="bi bi-bar-chart"></i>
+                إحصائيات
+            </div>
+            <div class="card-body">
+                <p class="mb-1"><strong>إجمالي الحجوزات:</strong> {{ gym_class.bookings.count() }}</p>
+                <p class="mb-0"><strong>السعة:</strong> {{ gym_class.capacity }} شخص</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

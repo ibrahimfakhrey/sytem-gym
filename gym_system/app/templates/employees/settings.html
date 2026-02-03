@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+
+{% block title %}إعدادات الموظفين{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-gear"></i>
+        إعدادات الموظفين
+    </h1>
+</div>
+
+<!-- Brand Selector -->
+{% if brands|length > 1 %}
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label">اختر البراند</label>
+                <select name="brand_id" class="form-select" onchange="this.form.submit()">
+                    {% for b in brands %}
+                    <option value="{{ b.id }}" {% if brand and b.id == brand.id %}selected{% endif %}>
+                        {{ b.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-sliders"></i>
+                إعدادات {{ brand.name if brand else '' }}
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+
+                    <h5 class="mb-3"><i class="bi bi-clock"></i> أوقات العمل</h5>
+                    <div class="row mb-4">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">وقت بداية العمل</label>
+                            {{ form.work_start_time(class="form-control", type="time") }}
+                            <small class="text-muted">الوقت المتوقع لحضور الموظفين</small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">وقت نهاية العمل</label>
+                            {{ form.work_end_time(class="form-control", type="time") }}
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <h5 class="mb-3"><i class="bi bi-alarm"></i> قواعد التأخير</h5>
+                    <div class="row mb-4">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">فترة السماح (بالدقائق)</label>
+                            {{ form.late_threshold_minutes(class="form-control", type="number", min="0", max="60") }}
+                            <small class="text-muted">الموظف يعتبر متأخر بعد هذه الدقائق</small>
+                        </div>
+                    </div>
+
+                    <div class="row mb-4">
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check form-switch">
+                                {{ form.auto_deduction_enabled(class="form-check-input") }}
+                                <label class="form-check-label">تفعيل الخصم التلقائي للتأخير</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">مبلغ خصم التأخير (لليوم)</label>
+                            {{ form.auto_deduction_amount(class="form-control", type="number", step="0.01", min="0") }}
+                            <small class="text-muted">يتم خصمه تلقائياً عند تسجيل تأخير</small>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <h5 class="mb-3"><i class="bi bi-calendar-x"></i> قواعد الغياب</h5>
+                    <div class="row mb-4">
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check form-switch">
+                                {{ form.absence_deduction_enabled(class="form-check-input") }}
+                                <label class="form-check-label">تفعيل الخصم التلقائي للغياب</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">مبلغ خصم الغياب (لليوم)</label>
+                            {{ form.absence_deduction_amount(class="form-control", type="number", step="0.01", min="0") }}
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg"></i>
+                            حفظ الإعدادات
+                        </button>
+                        <a href="{{ url_for('employees.report', brand_id=brand.id) }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-bar-chart"></i>
+                            تقرير الموظفين
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-info-circle"></i>
+                ملاحظات
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled mb-0">
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle text-success"></i>
+                        فترة السماح: الموظف الذي يحضر خلال هذه الفترة لا يعتبر متأخر
+                    </li>
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle text-success"></i>
+                        الخصم التلقائي: يتم تسجيله عند إدخال حضور متأخر
+                    </li>
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle text-success"></i>
+                        جميع الخصومات تظهر في تقرير الرواتب
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <i class="bi bi-link-45deg"></i>
+                روابط سريعة
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('employees.report', brand_id=brand.id) }}" class="btn btn-outline-primary">
+                        <i class="bi bi-bar-chart"></i>
+                        تقرير الموظفين
+                    </a>
+                    <a href="{{ url_for('employees.attendance', brand_id=brand.id) }}" class="btn btn-outline-primary">
+                        <i class="bi bi-calendar-check"></i>
+                        تسجيل الحضور
+                    </a>
+                    <a href="{{ url_for('finance.salaries_list') }}" class="btn btn-outline-primary">
+                        <i class="bi bi-cash"></i>
+                        الرواتب
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

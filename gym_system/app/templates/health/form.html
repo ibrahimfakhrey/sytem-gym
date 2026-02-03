@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+
+{% block title %}إنشاء تقرير صحي - {{ member.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-heart-pulse"></i>
+        إنشاء تقرير صحي - {{ member.name }}
+    </h1>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-body">
+                <form method="POST" id="healthForm">
+                    {{ form.hidden_tag() }}
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">الطول (سم) *</label>
+                            {{ form.height_cm(class="form-control", type="number", min="100", max="250", step="0.1", placeholder="مثال: 175", id="height_cm") }}
+                            <small class="text-muted">الطول بالسنتيمتر</small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">الوزن (كجم) *</label>
+                            {{ form.weight_kg(class="form-control", type="number", min="30", max="300", step="0.1", placeholder="مثال: 75", id="weight_kg") }}
+                            <small class="text-muted">الوزن بالكيلوجرام</small>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">العمر *</label>
+                            {{ form.age(class="form-control", type="number", min="10", max="100", placeholder="مثال: 30", id="age") }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">الجنس *</label>
+                            {{ form.gender(class="form-select", id="gender") }}
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg"></i>
+                            إنشاء التقرير
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" onclick="calculatePreview()">
+                            <i class="bi bi-calculator"></i>
+                            حساب مبدئي
+                        </button>
+                        <a href="{{ url_for('members.view', member_id=member.id) }}" class="btn btn-secondary">
+                            <i class="bi bi-x-lg"></i>
+                            إلغاء
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Preview Card -->
+        <div class="card mt-4" id="previewCard" style="display: none;">
+            <div class="card-header">
+                <i class="bi bi-eye"></i>
+                معاينة النتائج
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-3">
+                        <div class="p-3 bg-light rounded">
+                            <h4 id="previewBmi">-</h4>
+                            <small class="text-muted">مؤشر كتلة الجسم</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="p-3 bg-light rounded">
+                            <h4 id="previewIdealWeight">-</h4>
+                            <small class="text-muted">الوزن المثالي (كجم)</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="p-3 bg-light rounded">
+                            <h4 id="previewBmr">-</h4>
+                            <small class="text-muted">معدل الحرق</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="p-3 bg-light rounded">
+                            <h4 id="previewCalories">-</h4>
+                            <small class="text-muted">السعرات اليومية</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="text-center mt-3">
+                    <span id="previewStatus" class="badge fs-6"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <!-- Member Info -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-person"></i>
+                معلومات العضو
+            </div>
+            <div class="card-body">
+                <p><strong>الاسم:</strong> {{ member.name }}</p>
+                <p><strong>الهاتف:</strong> {{ member.phone }}</p>
+                {% if member.birth_date %}
+                <p><strong>تاريخ الميلاد:</strong> {{ member.birth_date.strftime('%Y-%m-%d') }}</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- BMI Guide -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-info-circle"></i>
+                دليل مؤشر كتلة الجسم
+            </div>
+            <div class="card-body">
+                <table class="table table-sm small">
+                    <tbody>
+                        <tr>
+                            <td><span class="badge bg-info">أقل من 18.5</span></td>
+                            <td>نقص في الوزن</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge bg-success">18.5 - 24.9</span></td>
+                            <td>وزن طبيعي</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge bg-warning">25 - 29.9</span></td>
+                            <td>زيادة في الوزن</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge bg-danger">30 فأكثر</span></td>
+                            <td>سمنة</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Formula Info -->
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-calculator"></i>
+                المعادلات المستخدمة
+            </div>
+            <div class="card-body small">
+                <p><strong>BMI:</strong> الوزن (كجم) / الطول (م)²</p>
+                <p><strong>BMR:</strong> معادلة Mifflin-St Jeor</p>
+                <p><strong>الوزن المثالي:</strong> معادلة Devine</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function calculatePreview() {
+    const height = parseFloat(document.getElementById('height_cm').value);
+    const weight = parseFloat(document.getElementById('weight_kg').value);
+    const age = parseInt(document.getElementById('age').value);
+    const gender = document.getElementById('gender').value;
+
+    if (!height || !weight || !age) {
+        alert('يرجى ملء جميع الحقول المطلوبة');
+        return;
+    }
+
+    fetch('/health/api/calculate', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
+        },
+        body: JSON.stringify({
+            height_cm: height,
+            weight_kg: weight,
+            age: age,
+            gender: gender
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        document.getElementById('previewCard').style.display = 'block';
+        document.getElementById('previewBmi').textContent = data.bmi || '-';
+        document.getElementById('previewIdealWeight').textContent = data.ideal_weight || '-';
+        document.getElementById('previewBmr').textContent = data.metabolic_rate ? Math.round(data.metabolic_rate) : '-';
+        document.getElementById('previewCalories').textContent = data.daily_calories ? Math.round(data.daily_calories) : '-';
+
+        const statusEl = document.getElementById('previewStatus');
+        statusEl.textContent = data.status_message || '';
+        statusEl.className = 'badge fs-6 bg-' + (
+            data.status === 'excellent' ? 'success' :
+            data.status === 'needs_weight_loss' ? 'warning' : 'info'
+        );
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('حدث خطأ في الحساب');
+    });
+}
+</script>
+{% endblock %}

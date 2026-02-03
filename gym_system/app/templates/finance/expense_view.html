@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}تفاصيل المصروف{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-receipt"></i> تفاصيل المصروف</h1>
+    <a href="{{ url_for('finance.expenses') }}" class="btn btn-secondary">
+        <i class="bi bi-arrow-right"></i> رجوع
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-info-circle"></i> معلومات المصروف</span>
+                <span class="badge bg-{{ 'warning' if expense.status == 'pending' else ('success' if expense.status == 'approved' else 'danger') }} fs-6">
+                    {{ 'قيد الموافقة' if expense.status == 'pending' else ('معتمد' if expense.status == 'approved' else 'مرفوض') }}
+                </span>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <table class="table table-sm">
+                            <tr>
+                                <th>الفئة:</th>
+                                <td>{{ expense.category_name }}</td>
+                            </tr>
+                            <tr>
+                                <th>المبلغ:</th>
+                                <td class="text-danger fw-bold">{{ "{:,.0f}".format(expense.amount) }} ر.س</td>
+                            </tr>
+                            <tr>
+                                <th>التاريخ:</th>
+                                <td>{{ expense.date.strftime('%Y-%m-%d') }}</td>
+                            </tr>
+                            <tr>
+                                <th>البراند:</th>
+                                <td>{{ expense.brand.name }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <table class="table table-sm">
+                            <tr>
+                                <th>بواسطة:</th>
+                                <td>{{ expense.created_by_user.name if expense.created_by_user else '-' }}</td>
+                            </tr>
+                            <tr>
+                                <th>تاريخ الإنشاء:</th>
+                                <td>{{ expense.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                            </tr>
+                            {% if expense.approved_by %}
+                            <tr>
+                                <th>معالج بواسطة:</th>
+                                <td>{{ expense.approved_by_user.name if expense.approved_by_user else '-' }}</td>
+                            </tr>
+                            <tr>
+                                <th>تاريخ المعالجة:</th>
+                                <td>{{ expense.approved_at.strftime('%Y-%m-%d %H:%M') if expense.approved_at else '-' }}</td>
+                            </tr>
+                            {% endif %}
+                        </table>
+                    </div>
+                </div>
+
+                {% if expense.description %}
+                <hr>
+                <h6>الوصف:</h6>
+                <p>{{ expense.description }}</p>
+                {% endif %}
+
+                {% if expense.rejection_reason %}
+                <hr>
+                <div class="alert alert-danger">
+                    <strong>سبب الرفض:</strong> {{ expense.rejection_reason }}
+                </div>
+                {% endif %}
+
+                {% if expense.receipt_image %}
+                <hr>
+                <h6>صورة الإيصال:</h6>
+                <img src="{{ url_for('static', filename='uploads/' + expense.receipt_image) }}" class="img-fluid rounded" style="max-width: 400px;">
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        {% if expense.status == 'pending' and (current_user.is_owner or current_user.role.name == 'brand_manager') %}
+        <div class="card border-warning">
+            <div class="card-header bg-warning">
+                <i class="bi bi-check2-square"></i> إجراءات الموافقة
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-3">يرجى مراجعة المصروف واتخاذ الإجراء المناسب</p>
+                <div class="d-grid gap-2">
+                    <form method="POST" action="{{ url_for('finance.expense_approve', expense_id=expense.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-success w-100" onclick="return confirm('هل أنت متأكد من اعتماد هذا المصروف؟');">
+                            <i class="bi bi-check-lg"></i> اعتماد المصروف
+                        </button>
+                    </form>
+                    <a href="{{ url_for('finance.expense_reject', expense_id=expense.id) }}" class="btn btn-danger">
+                        <i class="bi bi-x-lg"></i> رفض المصروف
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
