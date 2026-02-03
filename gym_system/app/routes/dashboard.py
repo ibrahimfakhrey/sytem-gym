@@ -13,6 +13,7 @@ from app.models.fingerprint import FingerprintSyncLog
 from app.models.complaint import Complaint
 from app.models.daily_closing import DailyClosing
 from app.models.user import User
+from app.models.classes import GymClass
 
 dashboard_bp = Blueprint('dashboard', __name__)
 
@@ -520,11 +521,11 @@ def receptionist():
     from datetime import datetime
     current_time = datetime.now().time()
 
-    today_sessions = ClassSession.query.filter(
-        ClassSession.brand_id == brand.id,
-        ClassSession.is_active == True,
-        ClassSession.day_of_week == today_day_of_week
-    ).order_by(ClassSession.start_time).all()
+    today_sessions = GymClass.query.filter(
+        GymClass.brand_id == brand.id,
+        GymClass.is_active == True,
+        GymClass.day_of_week == today_day_of_week
+    ).order_by(GymClass.start_time).all()
 
     # Enrich sessions with booking info
     for session in today_sessions:
