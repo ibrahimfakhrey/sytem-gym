@@ -57,6 +57,7 @@ def create_app(config_name=None):
     from .routes.gift_cards import gift_cards_bp
     from .routes.offers import offers_bp
     from .routes.employees import employees_bp
+    from .routes.bookings import bookings_bp
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(dashboard_bp)
@@ -75,6 +76,7 @@ def create_app(config_name=None):
     app.register_blueprint(gift_cards_bp)
     app.register_blueprint(offers_bp)
     app.register_blueprint(employees_bp)
+    app.register_blueprint(bookings_bp, url_prefix='/bookings')
     csrf.exempt(api_bp)  # API uses API key auth, not CSRF
 
     # Register error handlers
