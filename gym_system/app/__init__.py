@@ -53,11 +53,13 @@ def create_app(config_name=None):
     from .routes.health import health_bp
     from .routes.complaints import complaints_bp
     from .routes.classes import classes_bp
+    from .routes.closing import closing_bp
     from .routes.daily_closing import daily_closing_bp
     from .routes.gift_cards import gift_cards_bp
     from .routes.offers import offers_bp
     from .routes.employees import employees_bp
     from .routes.bookings import bookings_bp
+    from .routes.invoices import invoices_bp
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(dashboard_bp)
@@ -72,11 +74,13 @@ def create_app(config_name=None):
     app.register_blueprint(health_bp)
     app.register_blueprint(complaints_bp)
     app.register_blueprint(classes_bp)
+    app.register_blueprint(closing_bp, url_prefix='/closing')
     app.register_blueprint(daily_closing_bp)
     app.register_blueprint(gift_cards_bp)
     app.register_blueprint(offers_bp)
     app.register_blueprint(employees_bp)
     app.register_blueprint(bookings_bp, url_prefix='/bookings')
+    app.register_blueprint(invoices_bp, url_prefix='/invoices')
     csrf.exempt(api_bp)  # API uses API key auth, not CSRF
 
     # Register error handlers

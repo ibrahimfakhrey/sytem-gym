@@ -70,7 +70,7 @@
             <div class="card-body text-center">
                 <h6><i class="bi bi-arrow-up-circle"></i> إجمالي المصروفات اليوم</h6>
                 <h2>{{ "{:,.2f}".format(total_expenses) }} ر.س</h2>
-                <a href="{{ url_for('finance.expenses_list') }}" class="btn btn-sm btn-light mt-2">
+                <a href="{{ url_for('finance.expenses') }}" class="btn btn-sm btn-light mt-2">
                     عرض التفاصيل
                 </a>
             </div>
@@ -194,7 +194,7 @@
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0"><i class="bi bi-cash"></i> آخر المصروفات اليوم</h5>
-                <a href="{{ url_for('finance.expenses_list') }}" class="btn btn-sm btn-outline-danger">
+                <a href="{{ url_for('finance.expenses') }}" class="btn btn-sm btn-outline-danger">
                     عرض الكل
                 </a>
             </div>
@@ -249,7 +249,7 @@
                         </a>
                     </div>
                     <div class="col-md-3">
-                        <a href="{{ url_for('finance.expenses_list') }}" class="btn btn-outline-danger w-100 mb-2">
+                        <a href="{{ url_for('finance.expenses') }}" class="btn btn-outline-danger w-100 mb-2">
                             <i class="bi bi-arrow-up-circle"></i>
                             المصروفات
                         </a>

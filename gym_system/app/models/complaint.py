@@ -81,6 +81,8 @@ class Complaint(db.Model):
     resolved_by = db.Column(db.Integer, db.ForeignKey('users.id'))  # Who resolved it
 
     # Relationships
+    brand = db.relationship('Brand', backref='complaints', foreign_keys=[brand_id])
+    member = db.relationship('Member', backref='complaints', foreign_keys=[member_id])
     creator = db.relationship('User', foreign_keys=[created_by], backref='complaints_created')
     assignee = db.relationship('User', foreign_keys=[assigned_to], backref='complaints_assigned')
     resolver = db.relationship('User', foreign_keys=[resolved_by], backref='complaints_resolved')

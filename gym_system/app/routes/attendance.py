@@ -232,4 +232,4 @@ def search_member():
             'days_remaining': m.days_remaining
         })
 
-    return jsonify({'members': results})
+    return jsonify({'results': results})

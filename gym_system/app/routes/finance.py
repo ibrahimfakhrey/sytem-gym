@@ -8,6 +8,8 @@ from datetime import date, datetime
 from app import db
 from app.models.company import Brand
 from app.models.finance import Income, Expense, Salary, Refund, ExpenseCategory
+from app.models.daily_closing import DailyClosing
+from app.models.subscription import Subscription, SubscriptionPayment
 from app.utils.decorators import finance_required, brand_manager_required
 from app.utils.helpers import pagination_args, save_uploaded_file
 

@@ -510,10 +510,10 @@ def receptionist():
                 fingerprint_enrolled=False
             ).limit(10).all()
 
-    # Open complaints (own brand only)
-    open_complaints = Complaint.query.filter_by(
-        brand_id=brand.id,
-        status='open'
+    # Pending complaints (own brand only)
+    pending_complaints = Complaint.query.filter(
+        Complaint.brand_id == brand.id,
+        Complaint.status.in_(['pending', 'in_progress'])
     ).order_by(Complaint.created_at.desc()).limit(5).all()
 
     # Today's sessions
@@ -549,7 +549,10 @@ def receptionist():
                           expiring_tomorrow=expiring_tomorrow,
                           expiring_soon=expiring_soon,
                           suspended_subs=suspended_subs,
-                          pending_enrollment=pending_enrollment)
+                          pending_enrollment=pending_enrollment,
+                          pending_complaints=pending_complaints,
+                          today_sessions=today_sessions,
+                          closing_today=closing_today)
 
 
 @dashboard_bp.route('/finance-admin')

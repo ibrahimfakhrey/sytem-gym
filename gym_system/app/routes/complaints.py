@@ -99,9 +99,25 @@ def create():
     categories = ComplaintCategory.query.filter_by(is_active=True).all()
     form.category_id.choices = [(c.id, c.name) for c in categories]
 
+    # Get member_id if provided
+    member_id = request.args.get('member_id', type=int)
+    member = None
+    if member_id:
+        member = Member.query.get_or_404(member_id)
+        # Check access to member's brand
+        if not current_user.can_access_brand(member.brand_id):
+            flash('ليس لديك صلاحية', 'danger')
+            return redirect(url_for('dashboard.index'))
+        # Pre-fill form
+        form.member_id.data = member_id
+        if not form.customer_name.data:
+            form.customer_name.data = member.name
+        if not form.customer_phone.data:
+            form.customer_phone.data = member.phone
+
     # Get brand_id
     if current_user.is_owner:
-        brand_id = request.args.get('brand_id', type=int)
+        brand_id = request.args.get('brand_id', type=int) or (member.brand_id if member else None)
         if not brand_id:
             flash('يرجى اختيار البراند', 'warning')
             return redirect(url_for('admin.brands_list'))
@@ -127,9 +143,13 @@ def create():
         db.session.commit()
 
         flash('تم تسجيل الشكوى بنجاح', 'success')
+
+        # Redirect back to member if complaint was filed from member page
+        if member:
+            return redirect(url_for('members.view', member_id=member.id))
         return redirect(url_for('complaints.view', complaint_id=complaint.id))
 
-    return render_template('complaints/form.html', form=form, brand=brand)
+    return render_template('complaints/form.html', form=form, brand=brand, member=member)
 
 
 @complaints_bp.route('/<int:complaint_id>')
