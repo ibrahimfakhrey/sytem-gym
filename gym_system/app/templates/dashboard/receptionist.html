@@ -75,12 +75,62 @@
     </div>
 </div>
 
-<!-- 48 Hour Urgent Alerts -->
+<!-- 48 Hour Urgent Alerts Widget -->
 {% if expiring_48h %}
-<div class="alert alert-danger d-flex align-items-center mb-4" role="alert">
-    <i class="bi bi-exclamation-octagon me-2 fs-4"></i>
-    <div>
-        <strong>تنبيه عاجل:</strong> {{ expiring_48h|length }} اشتراك(ات) تنتهي خلال 48 ساعة - يرجى التواصل مع العملاء للتجديد
+<div class="card border-danger mb-4">
+    <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
+        <span>
+            <i class="bi bi-alarm"></i>
+            ⚠️ تنبيه عاجل: اشتراكات تنتهي خلال 48 ساعة ({{ expiring_48h|length }})
+        </span>
+        <a href="{{ url_for('subscriptions.expiring', days=2) }}" class="btn btn-sm btn-light">
+            عرض الكل
+        </a>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>العضو</th>
+                        <th>الهاتف</th>
+                        <th>تاريخ الانتهاء</th>
+                        <th>متبقي</th>
+                        <th>إجراء</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for sub in expiring_48h %}
+                    <tr>
+                        <td>
+                            <a href="{{ url_for('members.view', member_id=sub.member.id) }}" class="text-decoration-none">
+                                <strong>{{ sub.member.name }}</strong>
+                            </a>
+                        </td>
+                        <td>
+                            <a href="tel:{{ sub.member.phone }}" class="text-decoration-none">
+                                <i class="bi bi-telephone"></i> {{ sub.member.phone }}
+                            </a>
+                        </td>
+                        <td>{{ sub.end_date.strftime('%Y-%m-%d') }}</td>
+                        <td>
+                            {% if sub.days_remaining <= 1 %}
+                            <span class="badge bg-danger">{{ sub.days_remaining }} يوم</span>
+                            {% else %}
+                            <span class="badge bg-warning text-dark">{{ sub.days_remaining }} يوم</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('subscriptions.renew', subscription_id=sub.id) }}" 
+                               class="btn btn-sm btn-success">
+                                <i class="bi bi-arrow-repeat"></i> تجديد
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 {% endif %}

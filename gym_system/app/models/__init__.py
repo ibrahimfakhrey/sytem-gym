@@ -19,3 +19,4 @@ from .giftcard import GiftCard
 from .daily_closing import DailyClosing
 from .offer import PromotionalOffer
 from .employee import EmployeeSettings, EmployeeReward, EmployeeDeduction
+from .blocked_member import BlockedMember

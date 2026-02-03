@@ -7,11 +7,26 @@ from wtforms.validators import DataRequired, Email, Optional, NumberRange
 from app import db
 from app.models.company import Brand, Branch
 from app.models.member import Member
+from app.models.blocked_member import BlockedMember
 from app.models.subscription import Subscription
 from app.models.health import HealthReport
 from app.models.complaint import Complaint
 from app.utils.decorators import members_required
 from app.utils.helpers import save_uploaded_file, pagination_args
+
+
+class BlockMemberForm(FlaskForm):
+    """Block member form"""
+    reason = SelectField('سبب الحظر', choices=[
+        ('behavior', 'سلوك سيء'),
+        ('violence', 'عنف أو تحرش'),
+        ('theft', 'سرقة'),
+        ('damage', 'إتلاف ممتلكات'),
+        ('fraud', 'احتيال'),
+        ('rules', 'مخالفة القوانين'),
+        ('other', 'أخرى')
+    ], validators=[DataRequired()])
+    details = TextAreaField('تفاصيل إضافية', validators=[DataRequired()])
 
 members_bp = Blueprint('members', __name__)
 
@@ -105,6 +120,17 @@ def create():
         brand_id = brand.id
 
     if form.validate_on_submit():
+        # Check if phone or national_id is blocked
+        blocked = BlockedMember.is_blocked(
+            brand_id=brand_id,
+            phone=form.phone.data,
+            national_id=form.national_id.data if form.national_id.data else None
+        )
+        if blocked:
+            flash(f'⛔ هذا الشخص محظور من الجيم! السبب: {blocked.reason}', 'danger')
+            flash(f'تاريخ الحظر: {blocked.blocked_at.strftime("%Y-%m-%d")}', 'warning')
+            return render_template('members/form.html', form=form, brand=brand)
+        
         # Check phone uniqueness in brand
         existing = Member.query.filter_by(
             brand_id=brand_id,
@@ -286,3 +312,110 @@ def search():
     } for m in members]
 
     return {'results': results}
+
+
+@members_bp.route('/<int:member_id>/block', methods=['GET', 'POST'])
+@login_required
+@members_required
+def block(member_id):
+    """Block/ban a member permanently"""
+    member = Member.query.get_or_404(member_id)
+
+    if not current_user.can_access_brand(member.brand_id):
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('members.index'))
+
+    form = BlockMemberForm()
+
+    if form.validate_on_submit():
+        reason_labels = {
+            'behavior': 'سلوك سيء',
+            'violence': 'عنف أو تحرش',
+            'theft': 'سرقة',
+            'damage': 'إتلاف ممتلكات',
+            'fraud': 'احتيال',
+            'rules': 'مخالفة القوانين',
+            'other': 'أخرى'
+        }
+        full_reason = f"{reason_labels.get(form.reason.data, form.reason.data)}: {form.details.data}"
+        
+        # Create blocked member record
+        blocked = BlockedMember.block_member(member, full_reason, current_user.id)
+        db.session.add(blocked)
+        
+        # Deactivate the member
+        member.is_active = False
+        
+        # Cancel any active subscriptions
+        from app.models.subscription import Subscription
+        active_subs = Subscription.query.filter_by(
+            member_id=member.id,
+            status='active'
+        ).all()
+        for sub in active_subs:
+            sub.status = 'cancelled'
+        
+        db.session.commit()
+        
+        flash(f'⛔ تم حظر العضو {member.name} بشكل دائم', 'warning')
+        return redirect(url_for('members.index'))
+
+    return render_template('members/block.html', form=form, member=member)
+
+
+@members_bp.route('/blocked')
+@login_required
+@members_required
+def blocked_list():
+    """List blocked members"""
+    page, per_page = pagination_args(request)
+    
+    if current_user.can_view_all_brands:
+        brand_id = request.args.get('brand_id', type=int)
+        if brand_id:
+            query = BlockedMember.query.filter_by(brand_id=brand_id, is_active=True)
+        else:
+            query = BlockedMember.query.filter_by(is_active=True)
+    else:
+        query = BlockedMember.query.filter_by(brand_id=current_user.brand_id, is_active=True)
+    
+    blocked_members = query.order_by(BlockedMember.blocked_at.desc()).paginate(
+        page=page, per_page=per_page, error_out=False
+    )
+    
+    # Get brands for filter
+    brands = None
+    if current_user.can_view_all_brands:
+        brands = Brand.query.filter_by(is_active=True).all()
+    
+    return render_template('members/blocked_list.html',
+                          blocked_members=blocked_members,
+                          brands=brands)
+
+
+@members_bp.route('/blocked/<int:blocked_id>/unblock', methods=['POST'])
+@login_required
+@members_required
+def unblock(blocked_id):
+    """Unblock a member (admin only)"""
+    blocked = BlockedMember.query.get_or_404(blocked_id)
+    
+    if not current_user.can_access_brand(blocked.brand_id):
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('members.blocked_list'))
+    
+    # Only owner/admin can unblock
+    if not current_user.is_owner and current_user.role.name not in ['admin', 'manager']:
+        flash('فقط المدير يمكنه إلغاء الحظر', 'danger')
+        return redirect(url_for('members.blocked_list'))
+    
+    from datetime import datetime
+    blocked.is_active = False
+    blocked.unblocked_at = datetime.utcnow()
+    blocked.unblocked_by = current_user.id
+    blocked.unblock_reason = request.form.get('reason', 'تم إلغاء الحظر')
+    
+    db.session.commit()
+    
+    flash(f'✅ تم إلغاء حظر {blocked.name}', 'success')
+    return redirect(url_for('members.blocked_list'))

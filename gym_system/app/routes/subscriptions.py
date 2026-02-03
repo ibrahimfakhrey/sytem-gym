@@ -450,8 +450,15 @@ def renew(subscription_id):
         
         # Calculate renewal cost and validate payment
         renewal_cost = float(plan.price) - discount
+        
+        # Validate: payment must not exceed renewal cost
         if paid_amount > renewal_cost:
             flash(f'المبلغ المدفوع ({paid_amount:.0f}) أكبر من تكلفة التجديد ({renewal_cost:.0f})', 'danger')
+            return render_template('subscriptions/renew.html', form=form, subscription=subscription, plans=plans)
+        
+        # Validate: full payment required for renewal
+        if paid_amount < renewal_cost:
+            flash(f'⚠️ يجب دفع المبلغ كاملاً للتجديد. المطلوب: {renewal_cost:.0f} ر.س، المدفوع: {paid_amount:.0f} ر.س', 'danger')
             return render_template('subscriptions/renew.html', form=form, subscription=subscription, plans=plans)
 
         # Update subscription

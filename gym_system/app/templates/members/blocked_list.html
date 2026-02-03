@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block title %}الأعضاء المحظورين{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-slash-circle text-danger"></i>
+        الأعضاء المحظورين
+    </h1>
+    <div>
+        <a href="{{ url_for('members.index') }}" class="btn btn-outline-primary">
+            <i class="bi bi-arrow-right"></i>
+            العودة للأعضاء
+        </a>
+    </div>
+</div>
+
+{% if brands %}
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            <div class="col-md-4">
+                <select name="brand_id" class="form-select" onchange="this.form.submit()">
+                    <option value="">كل البراندات</option>
+                    {% for brand in brands %}
+                    <option value="{{ brand.id }}" {% if request.args.get('brand_id')|int == brand.id %}selected{% endif %}>
+                        {{ brand.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<div class="card">
+    <div class="card-body">
+        {% if blocked_members.items %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>العضو</th>
+                        <th>الهاتف</th>
+                        <th>رقم الهوية</th>
+                        <th>سبب الحظر</th>
+                        <th>تاريخ الحظر</th>
+                        <th>بواسطة</th>
+                        <th>إجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for blocked in blocked_members.items %}
+                    <tr>
+                        <td>
+                            {% if blocked.photo %}
+                            <img src="{{ url_for('static', filename='uploads/' + blocked.photo) }}" 
+                                 alt="{{ blocked.name }}" class="rounded-circle me-2" style="width: 32px; height: 32px; object-fit: cover;">
+                            {% endif %}
+                            <strong>{{ blocked.name }}</strong>
+                        </td>
+                        <td>{{ blocked.phone }}</td>
+                        <td>{{ blocked.national_id or '-' }}</td>
+                        <td>
+                            <span class="text-danger" title="{{ blocked.reason }}">
+                                {{ blocked.reason[:50] }}{% if blocked.reason|length > 50 %}...{% endif %}
+                            </span>
+                        </td>
+                        <td>{{ blocked.blocked_at.strftime('%Y-%m-%d') }}</td>
+                        <td>{{ blocked.blocker.name if blocked.blocker else '-' }}</td>
+                        <td>
+                            <form action="{{ url_for('members.unblock', blocked_id=blocked.id) }}" method="POST" class="d-inline">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="reason" value="تم إلغاء الحظر بواسطة {{ current_user.name }}">
+                                <button type="submit" class="btn btn-sm btn-outline-success" 
+                                        onclick="return confirm('هل أنت متأكد من إلغاء حظر هذا العضو؟')">
+                                    <i class="bi bi-unlock"></i>
+                                    إلغاء الحظر
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if blocked_members.pages > 1 %}
+        <nav>
+            <ul class="pagination justify-content-center">
+                {% for page in blocked_members.iter_pages() %}
+                    {% if page %}
+                        <li class="page-item {% if page == blocked_members.page %}active{% endif %}">
+                            <a class="page-link" href="{{ url_for('members.blocked_list', page=page, brand_id=request.args.get('brand_id')) }}">{{ page }}</a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                    {% endif %}
+                {% endfor %}
+            </ul>
+        </nav>
+        {% endif %}
+
+        {% else %}
+        <div class="text-center py-5">
+            <i class="bi bi-check-circle display-4 text-success"></i>
+            <h5 class="mt-3">لا يوجد أعضاء محظورين</h5>
+            <p class="text-muted">جميع الأعضاء في حالة جيدة 👍</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
