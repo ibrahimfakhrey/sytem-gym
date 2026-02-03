@@ -25,7 +25,7 @@ class ServiceType(db.Model):
 
     # Relationships
     brand = db.relationship('Brand', backref='service_types')
-    plans = db.relationship('Plan', backref='service_type', lazy='dynamic')
+    # Note: Plan has explicit relationship to ServiceType, no backref needed here
 
     def __repr__(self):
         return f'<ServiceType {self.name}>'
