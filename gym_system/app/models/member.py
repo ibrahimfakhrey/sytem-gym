@@ -130,7 +130,19 @@ class Member(db.Model):
         if sub.status == 'frozen':
             return False, 'الاشتراك مجمد'
 
+        if sub.status == 'stopped':
+            return False, 'الاشتراك موقوف'
+
+        if sub.status == 'cancelled':
+            return False, 'الاشتراك ملغي'
+
+        if sub.status == 'expired':
+            return False, 'الاشتراك منتهي'
+
         if sub.end_date < date.today():
             return False, 'الاشتراك منتهي'
+
+        if sub.status != 'active':
+            return False, f'الاشتراك غير نشط ({sub.status})'
 
         return True, 'يمكن تسجيل الحضور'

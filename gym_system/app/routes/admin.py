@@ -122,6 +122,10 @@ def brands_create():
         db.session.add(brand)
         db.session.commit()
 
+        # Auto-seed default service types for new brand
+        from app.models.service import ServiceType
+        ServiceType.seed_defaults(brand.id)
+
         flash(f'تم إنشاء البراند "{brand.name}" بنجاح', 'success')
         return redirect(url_for('admin.brands_list'))
 

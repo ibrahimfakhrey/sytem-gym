@@ -58,6 +58,8 @@ class Income(db.Model):
 
     # Relationships
     service_type = db.relationship('ServiceType', backref='income_records')
+    branch = db.relationship('Branch', backref='income_records')
+    creator = db.relationship('User', foreign_keys=[created_by], backref='created_income')
 
     def __repr__(self):
         return f'<Income {self.amount} - {self.type}>'
@@ -83,6 +85,21 @@ class Income(db.Model):
             'transfer': 'حوالة'
         }
         return method_map.get(self.payment_method, self.payment_method)
+
+    @property
+    def employee_name(self):
+        """Get employee name who created this income"""
+        return self.creator.name if self.creator else 'غير محدد'
+
+    @property
+    def branch_name(self):
+        """Get branch name"""
+        return self.branch.name if self.branch else 'غير محدد'
+
+    @property
+    def service_name(self):
+        """Get service type name"""
+        return self.service_type.name if self.service_type else 'غير محدد'
 
     @classmethod
     def get_by_payment_method(cls, brand_id, start_date, end_date):

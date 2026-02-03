@@ -377,22 +377,28 @@ def receptionist():
     brand = current_user.brand
     today = date.today()
 
-    # Today's stats - Filter by branch if receptionist is assigned to one
+    # Today's stats - Filter by branch if receptionist is assigned to one (include NULL for legacy data)
     if current_user.branch_id:
         today_attendance = MemberAttendance.query.filter(
             MemberAttendance.brand_id == brand.id,
-            MemberAttendance.branch_id == current_user.branch_id,
+            db.or_(
+                MemberAttendance.branch_id == current_user.branch_id,
+                MemberAttendance.branch_id.is_(None)
+            ),
             db.func.date(MemberAttendance.check_in) == today
         ).count()
     else:
         today_attendance = MemberAttendance.get_today_count(brand.id)
 
-    # Active members - Filter by branch if assigned
+    # Active members - Filter by branch if assigned (include NULL for legacy data)
     if current_user.branch_id:
-        active_members = Member.query.filter_by(
-            brand_id=brand.id,
-            branch_id=current_user.branch_id,
-            is_active=True
+        active_members = Member.query.filter(
+            Member.brand_id == brand.id,
+            db.or_(
+                Member.branch_id == current_user.branch_id,
+                Member.branch_id.is_(None)
+            ),
+            Member.is_active == True
         ).count()
     else:
         active_members = Member.query.filter_by(
@@ -400,23 +406,28 @@ def receptionist():
             is_active=True
         ).count()
 
-    # Today's new subscriptions - Filter by branch if assigned
+    # Today's new subscriptions - Filter by branch if assigned (include NULL for legacy data)
     if current_user.branch_id:
         today_new_subs = Subscription.query.filter(
             Subscription.brand_id == brand.id,
-            Subscription.branch_id == current_user.branch_id,
+            db.or_(
+                Subscription.branch_id == current_user.branch_id,
+                Subscription.branch_id.is_(None)
+            ),
             func.date(Subscription.created_at) == today
         ).count()
 
-        # Today's renewals for this branch
+        # Today's renewals for this branch (include NULL for legacy data)
         today_renewals = db.session.query(Subscription).filter(
             Subscription.brand_id == brand.id,
-            Subscription.branch_id == current_user.branch_id,
+            db.or_(
+                Subscription.branch_id == current_user.branch_id,
+                Subscription.branch_id.is_(None)
+            ),
             func.date(Subscription.created_at) == today,
             Subscription.member_id.in_(
                 db.session.query(Subscription.member_id).filter(
-                    Subscription.brand_id == brand.id,
-                    Subscription.branch_id == current_user.branch_id
+                    Subscription.brand_id == brand.id
                 ).group_by(Subscription.member_id).having(func.count(Subscription.id) > 1)
             )
         ).count()
@@ -437,11 +448,14 @@ def receptionist():
             )
         ).count()
 
-    # === URGENT ALERTS (48 hours) === - FUTURE subscriptions only - Filter by branch if assigned
+    # === URGENT ALERTS (48 hours) === - FUTURE subscriptions only - Filter by branch if assigned (include NULL)
     if current_user.branch_id:
         expiring_48h = Subscription.query.filter(
             Subscription.brand_id == brand.id,
-            Subscription.branch_id == current_user.branch_id,
+            db.or_(
+                Subscription.branch_id == current_user.branch_id,
+                Subscription.branch_id.is_(None)
+            ),
             Subscription.status == 'active',
             Subscription.end_date > today,
             Subscription.end_date <= today + timedelta(days=2)
@@ -449,14 +463,20 @@ def receptionist():
 
         expiring_tomorrow = Subscription.query.filter(
             Subscription.brand_id == brand.id,
-            Subscription.branch_id == current_user.branch_id,
+            db.or_(
+                Subscription.branch_id == current_user.branch_id,
+                Subscription.branch_id.is_(None)
+            ),
             Subscription.status == 'active',
             Subscription.end_date == today + timedelta(days=1)
         ).all()
 
         expiring_soon = Subscription.query.filter(
             Subscription.brand_id == brand.id,
-            Subscription.branch_id == current_user.branch_id,
+            db.or_(
+                Subscription.branch_id == current_user.branch_id,
+                Subscription.branch_id.is_(None)
+            ),
             Subscription.status == 'active',
             Subscription.end_date > today + timedelta(days=2),
             Subscription.end_date <= today + timedelta(days=7)
@@ -464,7 +484,10 @@ def receptionist():
 
         suspended_subs = Subscription.query.filter(
             Subscription.brand_id == brand.id,
-            Subscription.branch_id == current_user.branch_id,
+            db.or_(
+                Subscription.branch_id == current_user.branch_id,
+                Subscription.branch_id.is_(None)
+            ),
             Subscription.status == 'stopped'
         ).order_by(Subscription.stopped_at.desc()).limit(5).all()
     else:
@@ -493,15 +516,18 @@ def receptionist():
             Subscription.status == 'stopped'
         ).order_by(Subscription.stopped_at.desc()).limit(5).all()
 
-    # Pending fingerprint enrollment - Filter by branch if assigned
+    # Pending fingerprint enrollment - Filter by branch if assigned (include NULL)
     pending_enrollment = []
     if brand.uses_fingerprint:
         if current_user.branch_id:
-            pending_enrollment = Member.query.filter_by(
-                brand_id=brand.id,
-                branch_id=current_user.branch_id,
-                is_active=True,
-                fingerprint_enrolled=False
+            pending_enrollment = Member.query.filter(
+                Member.brand_id == brand.id,
+                db.or_(
+                    Member.branch_id == current_user.branch_id,
+                    Member.branch_id.is_(None)
+                ),
+                Member.is_active == True,
+                Member.fingerprint_enrolled == False
             ).limit(10).all()
         else:
             pending_enrollment = Member.query.filter_by(

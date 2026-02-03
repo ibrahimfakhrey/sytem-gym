@@ -94,9 +94,9 @@
                 اشتراكات تنتهي اليوم
             </div>
             <div class="card-body">
-                {% if expiring_today %}
+                {% if expiring_tomorrow %}
                 <ul class="list-group list-group-flush">
-                    {% for sub in expiring_today %}
+                    {% for sub in expiring_tomorrow %}
                     <li class="list-group-item d-flex justify-content-between align-items-center">
                         <div>
                             <strong>{{ sub.member.name }}</strong>

@@ -70,22 +70,10 @@ def check_in():
     can_check_in, message = member.can_check_in()
 
     if not can_check_in:
-        # Record with warning
-        attendance = MemberAttendance(
-            member_id=member.id,
-            subscription_id=member.active_subscription.id if member.active_subscription else None,
-            brand_id=member.brand_id,
-            check_in=datetime.now(),
-            source='manual',
-            has_warning=True,
-            warning_message=message
-        )
-        db.session.add(attendance)
-        db.session.commit()
-
+        # BLOCK attendance - do NOT record!
         if request.is_json:
-            return jsonify({'success': True, 'member_name': member.name, 'warning': message})
-        flash(f'تحذير: {message}', 'warning')
+            return jsonify({'success': False, 'message': message, 'blocked': True})
+        flash(f'❌ غير مسموح بالدخول: {message}', 'danger')
         return redirect(url_for('attendance.index'))
 
     # Record attendance
@@ -93,6 +81,7 @@ def check_in():
         member_id=member.id,
         subscription_id=member.active_subscription.id,
         brand_id=member.brand_id,
+        branch_id=member.branch_id or current_user.branch_id,  # Set branch
         check_in=datetime.now(),
         source='manual'
     )

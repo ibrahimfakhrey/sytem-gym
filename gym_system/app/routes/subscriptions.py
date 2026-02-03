@@ -189,9 +189,38 @@ def create():
 
     form.plan_id.choices = [(p.id, f'{p.name} - {p.price} ر.س ({p.plan_type_text})') for p in plans]
 
-    # Get service types for this brand
-    service_types = ServiceType.query.filter_by(brand_id=member.brand_id, is_active=True).all()
-    form.service_type_id.choices = [(0, '-- بدون تحديد --')] + [(st.id, st.name) for st in service_types]
+    # Get service types for this brand (grouped by category)
+    service_types = ServiceType.query.filter_by(brand_id=member.brand_id, is_active=True).order_by(ServiceType.category, ServiceType.name).all()
+    
+    # Build grouped choices for better UX
+    service_choices = [(0, '-- اختر نوع الخدمة --')]
+    categories_seen = {}
+    for st in service_types:
+        cat = st.category or 'other'
+        if cat not in categories_seen:
+            categories_seen[cat] = []
+        categories_seen[cat].append((st.id, st.name))
+    
+    # Add services grouped by category
+    category_names = {
+        'gym': '🏋️ جيم',
+        'swimming': '🏊 سباحة',
+        'karate': '🥋 كاراتيه',
+        'salon': '💇 صالون',
+        'package': '📦 باقات',
+        'other': '📌 أخرى'
+    }
+    for cat, services in categories_seen.items():
+        if len(services) > 1:
+            # Multiple services in category - show category header
+            for sid, sname in services:
+                service_choices.append((sid, f"{category_names.get(cat, cat)} - {sname}"))
+        else:
+            # Single service - just show name
+            for sid, sname in services:
+                service_choices.append((sid, sname))
+    
+    form.service_type_id.choices = service_choices
 
     # Get active offers for this brand
     today = date.today()
@@ -240,6 +269,12 @@ def create():
 
         total_amount = float(plan.price) - discount - offer_discount - gift_card_amount
         paid_amount = float(form.paid_amount.data)
+        
+        # Validate payment amount doesn't exceed total
+        if paid_amount > total_amount:
+            flash(f'المبلغ المدفوع ({paid_amount:.0f}) أكبر من الإجمالي المطلوب ({total_amount:.0f})', 'danger')
+            return render_template('subscriptions/create.html', form=form, member=member, plans=plans, offers=offers)
+        
         remaining_amount = max(0, total_amount - paid_amount)
 
         # Calculate dates
@@ -255,6 +290,7 @@ def create():
             member_id=member.id,
             plan_id=plan.id,
             brand_id=member.brand_id,
+            branch_id=member.branch_id or current_user.branch_id,  # Set branch from member or current user
             service_type_id=form.service_type_id.data if form.service_type_id.data else None,
             start_date=start_date,
             end_date=end_date,
@@ -290,7 +326,7 @@ def create():
             # Create income record
             income = Income(
                 brand_id=member.brand_id,
-                branch_id=member.branch_id,
+                branch_id=member.branch_id or current_user.branch_id,  # Fallback to user's branch
                 subscription_id=subscription.id,
                 service_type_id=subscription.service_type_id,
                 amount=paid_amount,
@@ -411,6 +447,12 @@ def renew(subscription_id):
         discount = float(form.discount.data or 0)
         new_start = form.start_date.data
         new_end = new_start + timedelta(days=plan.duration_days)
+        
+        # Calculate renewal cost and validate payment
+        renewal_cost = float(plan.price) - discount
+        if paid_amount > renewal_cost:
+            flash(f'المبلغ المدفوع ({paid_amount:.0f}) أكبر من تكلفة التجديد ({renewal_cost:.0f})', 'danger')
+            return render_template('subscriptions/renew.html', form=form, subscription=subscription, plans=plans)
 
         # Update subscription
         subscription.plan_id = plan.id
@@ -438,7 +480,7 @@ def renew(subscription_id):
             # Create income record
             income = Income(
                 brand_id=subscription.brand_id,
-                branch_id=subscription.member.branch_id,
+                branch_id=subscription.member.branch_id or current_user.branch_id,  # Fallback
                 subscription_id=subscription.id,
                 service_type_id=subscription.service_type_id,
                 amount=paid_amount,
@@ -617,6 +659,16 @@ def add_payment(subscription_id):
 
     if form.validate_on_submit():
         amount = float(form.amount.data)
+        
+        # Validate payment doesn't exceed remaining amount
+        remaining = float(subscription.remaining_amount or 0)
+        if remaining <= 0:
+            flash('الاشتراك مدفوع بالكامل، لا يوجد مبلغ متبقي', 'warning')
+            return redirect(url_for('subscriptions.view', subscription_id=subscription_id))
+        
+        if amount > remaining:
+            flash(f'المبلغ ({amount:.0f}) أكبر من المتبقي ({remaining:.0f})', 'danger')
+            return render_template('subscriptions/payment.html', form=form, subscription=subscription)
 
         # Create payment
         payment = SubscriptionPayment(
@@ -637,7 +689,7 @@ def add_payment(subscription_id):
         # Create income
         income = Income(
             brand_id=subscription.brand_id,
-            branch_id=subscription.member.branch_id,
+            branch_id=subscription.member.branch_id or current_user.branch_id,  # Fallback
             subscription_id=subscription.id,
             service_type_id=subscription.service_type_id,
             amount=amount,
