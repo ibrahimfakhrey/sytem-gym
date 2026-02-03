@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+
+{% block title %}المصروفات المعلقة{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-hourglass-split"></i> المصروفات المعلقة - بانتظار الموافقة</h1>
+</div>
+
+<!-- Brand Filter -->
+{% if current_user.can_view_all_brands and brands %}
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">البراند</label>
+                <select name="brand_id" class="form-select" onchange="this.form.submit()">
+                    <option value="">الكل</option>
+                    {% for brand in brands %}
+                    <option value="{{ brand.id }}" {% if request.args.get('brand_id')|int == brand.id %}selected{% endif %}>
+                        {{ brand.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<!-- Summary Card -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card bg-warning text-white">
+            <div class="card-body text-center">
+                <h6>إجمالي المصروفات المعلقة</h6>
+                <h2>{{ "{:,.2f}".format(total_pending) }} ر.س</h2>
+                <small>{{ expenses.total }} مصروف بانتظار الموافقة</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Pending Expenses Table -->
+<div class="card">
+    <div class="card-body">
+        {% if expenses.items %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>التاريخ</th>
+                        <th>الفئة</th>
+                        {% if current_user.can_view_all_brands %}
+                        <th>البراند</th>
+                        {% endif %}
+                        <th>الوصف</th>
+                        <th>المبلغ</th>
+                        <th>المسجل بواسطة</th>
+                        <th>الإجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for expense in expenses.items %}
+                    <tr>
+                        <td>{{ expense.date.strftime('%Y-%m-%d') }}</td>
+                        <td><span class="badge bg-secondary">{{ expense.category_name }}</span></td>
+                        {% if current_user.can_view_all_brands %}
+                        <td>{{ expense.brand.name }}</td>
+                        {% endif %}
+                        <td>{{ expense.description or '-' }}</td>
+                        <td><strong>{{ "{:,.2f}".format(expense.amount) }} ر.س</strong></td>
+                        <td>
+                            {% if expense.creator %}
+                            {{ expense.creator.name }}
+                            <br>
+                            <small class="text-muted">{{ expense.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group" role="group">
+                                <form method="POST" action="{{ url_for('finance.approve_expense', expense_id=expense.id) }}" style="display: inline;">
+                                    <button type="submit" class="btn btn-sm btn-success" onclick="return confirm('هل أنت متأكد من اعتماد هذا المصروف؟')">
+                                        <i class="bi bi-check-circle"></i>
+                                        اعتماد
+                                    </button>
+                                </form>
+                                <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#rejectModal{{ expense.id }}">
+                                    <i class="bi bi-x-circle"></i>
+                                    رفض
+                                </button>
+                            </div>
+
+                            <!-- Reject Modal -->
+                            <div class="modal fade" id="rejectModal{{ expense.id }}" tabindex="-1">
+                                <div class="modal-dialog">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title">رفض المصروف</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <form method="POST" action="{{ url_for('finance.reject_expense', expense_id=expense.id) }}">
+                                            <div class="modal-body">
+                                                <p><strong>الفئة:</strong> {{ expense.category_name }}</p>
+                                                <p><strong>المبلغ:</strong> {{ "{:,.2f}".format(expense.amount) }} ر.س</p>
+                                                <div class="mb-3">
+                                                    <label class="form-label">سبب الرفض</label>
+                                                    <textarea name="reason" class="form-control" rows="3" required></textarea>
+                                                </div>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                                                <button type="submit" class="btn btn-danger">تأكيد الرفض</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if expenses.pages > 1 %}
+        <nav class="mt-4">
+            <ul class="pagination justify-content-center">
+                {% if expenses.has_prev %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('finance.pending_expenses', page=expenses.prev_num) }}">السابق</a>
+                </li>
+                {% endif %}
+
+                {% for page_num in expenses.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
+                    {% if page_num %}
+                        <li class="page-item {% if page_num == expenses.page %}active{% endif %}">
+                            <a class="page-link" href="{{ url_for('finance.pending_expenses', page=page_num) }}">{{ page_num }}</a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if expenses.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('finance.pending_expenses', page=expenses.next_num) }}">التالي</a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+
+        {% else %}
+        <div class="text-center text-muted py-5">
+            <i class="bi bi-check-circle fs-1 text-success"></i>
+            <p class="mt-3">لا توجد مصروفات معلقة</p>
+            <p class="text-muted">جميع المصروفات تمت معالجتها</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Quick Links -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('finance.dashboard') }}" class="btn btn-outline-primary">
+                <i class="bi bi-cash-stack"></i>
+                لوحة المالية
+            </a>
+            <a href="{{ url_for('finance.expenses_list') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-list"></i>
+                كل المصروفات
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

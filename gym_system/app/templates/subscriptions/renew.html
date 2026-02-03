@@ -72,12 +72,12 @@
 
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">المبلغ النهائي</label>
-                            <input type="text" class="form-control" id="final-amount" readonly>
+                            <label class="form-label">المبلغ المدفوع *</label>
+                            {{ form.paid_amount(class="form-control", type="number", min="0", step="0.01") }}
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">المبلغ المدفوع *</label>
-                            {{ form.amount_paid(class="form-control", type="number", min="0", step="0.01", id="amount-paid") }}
+                            <label class="form-label">طريقة الدفع *</label>
+                            {{ form.payment_method(class="form-select") }}
                         </div>
                     </div>
 

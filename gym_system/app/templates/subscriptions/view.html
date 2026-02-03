@@ -28,6 +28,9 @@
                     <div class="col-md-6">
                         <p><strong>العضو:</strong> {{ subscription.member.name }}</p>
                         <p><strong>الباقة:</strong> {{ subscription.plan.name }}</p>
+                        {% if subscription.service_type %}
+                        <p><strong>نوع الخدمة:</strong> <span class="badge bg-info">{{ subscription.service_type.name }}</span></p>
+                        {% endif %}
                         <p><strong>تاريخ البداية:</strong> {{ subscription.start_date.strftime('%Y-%m-%d') }}</p>
                         <p><strong>تاريخ النهاية:</strong> {{ subscription.end_date.strftime('%Y-%m-%d') }}</p>
                     </div>
@@ -35,6 +38,14 @@
                         <p><strong>السعر:</strong> {{ subscription.total_amount }} ر.س</p>
                         <p><strong>المدفوع:</strong> {{ subscription.paid_amount }} ر.س</p>
                         <p><strong>المتبقي:</strong> {{ subscription.remaining_amount }} ر.س</p>
+                        {% if subscription.is_session_based %}
+                        <p><strong>الحصص:</strong>
+                            <span class="badge bg-{% if subscription.sessions_remaining > 3 %}success{% elif subscription.sessions_remaining > 0 %}warning{% else %}danger{% endif %}">
+                                {{ subscription.sessions_consumed }}/{{ subscription.sessions_total }}
+                            </span>
+                            <small class="text-muted">(متبقي: {{ subscription.sessions_remaining }})</small>
+                        </p>
+                        {% endif %}
                         <p>
                             <strong>الحالة:</strong>
                             <span class="badge bg-{{ subscription.status_class }}">{{ subscription.status_text }}</span>
@@ -56,7 +67,9 @@
                         <tr>
                             <th>التاريخ</th>
                             <th>المبلغ</th>
+                            <th>طريقة الدفع</th>
                             <th>ملاحظات</th>
+                            <th>الفاتورة</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -64,7 +77,22 @@
                         <tr>
                             <td>{{ payment.payment_date.strftime('%Y-%m-%d') }}</td>
                             <td>{{ payment.amount }} ر.س</td>
+                            <td>
+                                {% if payment.payment_method == 'cash' %}نقدي{% endif %}
+                                {% if payment.payment_method == 'card' %}بطاقة{% endif %}
+                                {% if payment.payment_method == 'transfer' %}تحويل{% endif %}
+                            </td>
                             <td>{{ payment.notes or '-' }}</td>
+                            <td>
+                                {% if payment.invoice %}
+                                <a href="{{ url_for('invoices.view', invoice_id=payment.invoice.id) }}" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-receipt"></i>
+                                    عرض الفاتورة
+                                </a>
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -121,6 +149,19 @@
                     <i class="bi bi-snow"></i>
                     تجميد
                 </a>
+                <a href="{{ url_for('subscriptions.suspend', subscription_id=subscription.id) }}" class="btn btn-danger w-100 mb-2">
+                    <i class="bi bi-stop-circle"></i>
+                    إيقاف الاشتراك
+                </a>
+                {% endif %}
+                {% if subscription.status == 'frozen' %}
+                <form method="POST" action="{{ url_for('subscriptions.unfreeze', subscription_id=subscription.id) }}" class="mb-2">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-info w-100">
+                        <i class="bi bi-play-circle"></i>
+                        إلغاء التجميد
+                    </button>
+                </form>
                 {% endif %}
                 {% if subscription.status == 'expired' %}
                 <a href="{{ url_for('subscriptions.renew', subscription_id=subscription.id) }}" class="btn btn-primary w-100">

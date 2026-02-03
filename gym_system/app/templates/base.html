@@ -121,14 +121,61 @@
                         </li>
                         {% endif %}
 
+                        {% if current_user.can_manage_members %}
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint and 'bookings' in request.endpoint %}active{% endif %}"
+                               href="{{ url_for('bookings.index') }}">
+                                <i class="bi bi-calendar-check"></i>
+                                الحجوزات
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        {% if current_user.can_manage_members %}
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint and 'complaints' in request.endpoint %}active{% endif %}"
+                               href="{{ url_for('complaints.index') }}">
+                                <i class="bi bi-exclamation-circle"></i>
+                                الشكاوى
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        {% if current_user.can_manage_members %}
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint and 'invoices' in request.endpoint %}active{% endif %}"
+                               href="{{ url_for('invoices.index') }}">
+                                <i class="bi bi-receipt"></i>
+                                الفواتير
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        {% if current_user.can_manage_members and current_user.role.name_en == 'receptionist' %}
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint and 'closing' in request.endpoint %}active{% endif %}"
+                               href="{{ url_for('closing.index') }}">
+                                <i class="bi bi-cash-stack"></i>
+                                إقفال اليوم
+                            </a>
+                        </li>
+                        {% endif %}
+
                         {% if current_user.can_manage_finance %}
                         <li class="nav-item">
-                            <a class="nav-link" data-bs-toggle="collapse" href="#financeMenu">
+                            <a class="nav-link {% if request.endpoint and request.endpoint == 'finance.dashboard' %}active{% endif %}"
+                               href="{{ url_for('finance.dashboard') }}">
                                 <i class="bi bi-cash-stack"></i>
-                                المالية
+                                لوحة المالية
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" data-bs-toggle="collapse" href="#financeMenu">
+                                <i class="bi bi-folder"></i>
+                                التقارير المالية
                                 <i class="bi bi-chevron-down float-start"></i>
                             </a>
-                            <div class="collapse {% if request.endpoint and 'finance' in request.endpoint %}show{% endif %}" id="financeMenu">
+                            <div class="collapse {% if request.endpoint and 'finance' in request.endpoint and request.endpoint != 'finance.dashboard' %}show{% endif %}" id="financeMenu">
                                 <ul class="nav flex-column ms-3">
                                     <li class="nav-item">
                                         <a class="nav-link" href="{{ url_for('finance.income_list') }}">

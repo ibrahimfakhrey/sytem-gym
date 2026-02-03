@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+
+{% block title %}مراجعة الإقفالات اليومية{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-clipboard-check"></i> مراجعة الإقفالات اليومية</h1>
+</div>
+
+<!-- Date Selector -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">تاريخ المراجعة</label>
+                <input type="date" name="date" class="form-control" value="{{ review_date.isoformat() }}" onchange="this.form.submit()">
+            </div>
+            <div class="col-md-9">
+                <label class="form-label d-block">&nbsp;</label>
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-search"></i>
+                    عرض
+                </button>
+                <a href="{{ url_for('closing.accountant_review') }}" class="btn btn-secondary">
+                    <i class="bi bi-calendar-today"></i>
+                    اليوم
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card {% if summary.has_issues %}bg-warning text-white{% else %}bg-success text-white{% endif %}">
+            <div class="card-body text-center">
+                <h6>حالة الإقفالات</h6>
+                <h2>{{ summary.closed_count }} / {{ summary.total_brands }}</h2>
+                <small>{{ summary.closed_count }} مقفل، {{ summary.unclosed_count }} غير مقفل</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body text-center">
+                <h6>إجمالي المبيعات</h6>
+                <h2>{{ "{:,.2f}".format(summary.total_sales) }}</h2>
+                <small>ر.س</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card {% if summary.total_cash_diff != 0 %}bg-danger{% else %}bg-info{% endif %} text-white">
+            <div class="card-body text-center">
+                <h6>إجمالي فرق الكاش</h6>
+                <h2>{{ "{:,.2f}".format(summary.total_cash_diff) }}</h2>
+                <small>ر.س</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card {% if summary.unclosed_count > 0 %}bg-warning{% else %}bg-light{% endif %} {% if summary.unclosed_count > 0 %}text-white{% endif %}">
+            <div class="card-body text-center">
+                <h6>فروع غير مقفلة</h6>
+                <h2>{{ summary.unclosed_count }}</h2>
+                {% if summary.unclosed_count > 0 %}
+                <small>يرجى المتابعة</small>
+                {% else %}
+                <small class="text-muted">كل الفروع مقفلة</small>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Alerts -->
+{% if summary.has_issues %}
+<div class="alert alert-warning alert-dismissible fade show" role="alert">
+    <i class="bi bi-exclamation-triangle"></i>
+    <strong>تنبيه:</strong>
+    {% if summary.unclosed_count > 0 %}
+    يوجد {{ summary.unclosed_count }} فرع/فروع لم يتم إقفالها بعد.
+    {% endif %}
+    {% if summary.total_cash_diff|abs > 100 %}
+    يوجد فرق كبير في الكاش الإجمالي ({{ "{:,.2f}".format(summary.total_cash_diff) }} ر.س).
+    {% endif %}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<!-- Brand Status Table -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-building"></i> تفاصيل الفروع</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>البراند / الفرع</th>
+                        <th>الحالة</th>
+                        <th>إجمالي المبيعات</th>
+                        <th>نقدي</th>
+                        <th>بطاقة</th>
+                        <th>تحويل</th>
+                        <th>فرق الكاش</th>
+                        <th>المقفل بواسطة</th>
+                        <th>الإجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in brand_status %}
+                    <tr class="{% if item.status == 'unclosed' %}table-warning{% elif item.large_difference %}table-danger{% elif item.has_difference %}table-warning{% endif %}">
+                        <td><strong>{{ item.brand.name }}</strong></td>
+                        <td>
+                            {% if item.status == 'closed' %}
+                            <span class="badge bg-success">
+                                <i class="bi bi-check-circle"></i>
+                                مقفل
+                            </span>
+                            {% else %}
+                            <span class="badge bg-warning">
+                                <i class="bi bi-clock"></i>
+                                غير مقفل
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td><strong>{{ "{:,.2f}".format(item.total_sales) }} ر.س</strong></td>
+
+                        {% if item.status == 'closed' %}
+                        <td>{{ "{:,.2f}".format(item.closing.cash_amount) }} ر.س</td>
+                        <td>{{ "{:,.2f}".format(item.closing.card_amount) }} ر.س</td>
+                        <td>{{ "{:,.2f}".format(item.closing.transfer_amount) }} ر.س</td>
+                        <td>
+                            {% if item.cash_difference == 0 %}
+                            <span class="badge bg-success">متطابق</span>
+                            {% elif item.large_difference %}
+                            <span class="badge bg-danger">{{ "{:,.2f}".format(item.cash_difference) }} ر.س</span>
+                            {% else %}
+                            <span class="badge bg-warning">{{ "{:,.2f}".format(item.cash_difference) }} ر.س</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if item.closing.submitter %}
+                            {{ item.closing.submitter.name }}
+                            <br>
+                            <small class="text-muted">{{ item.closing.submitted_at.strftime('%H:%M') }}</small>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('closing.view_closing', closing_id=item.closing.id) }}"
+                               class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-eye"></i>
+                                عرض
+                            </a>
+                        </td>
+                        {% else %}
+                        <td>{{ "{:,.2f}".format(item.stats.cash_sales) }} ر.س</td>
+                        <td>{{ "{:,.2f}".format(item.stats.card_sales) }} ر.س</td>
+                        <td>{{ "{:,.2f}".format(item.stats.transfer_sales) }} ر.س</td>
+                        <td><span class="text-muted">-</span></td>
+                        <td><span class="text-muted">لم يتم الإقفال</span></td>
+                        <td>
+                            {% if can_view_all %}
+                            <span class="text-muted">قيد الانتظار</span>
+                            {% else %}
+                            <a href="{{ url_for('closing.view_daily_summary', closing_date=review_date.isoformat()) }}"
+                               class="btn btn-sm btn-warning">
+                                <i class="bi bi-plus-circle"></i>
+                                إقفال
+                            </a>
+                            {% endif %}
+                        </td>
+                        {% endif %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Links -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('finance.dashboard') }}" class="btn btn-outline-primary">
+                <i class="bi bi-cash-stack"></i>
+                لوحة المالية
+            </a>
+            <a href="{{ url_for('closing.index') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-list"></i>
+                كل الإقفالات
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

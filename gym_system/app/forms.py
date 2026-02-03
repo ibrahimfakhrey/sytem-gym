@@ -51,7 +51,9 @@ class PlanForm(FlaskForm):
     """Subscription plan form"""
     name = StringField('اسم الخطة', validators=[DataRequired(), Length(max=100)])
     description = TextAreaField('الوصف', validators=[Optional()])
+    service_type_id = SelectField('نوع الخدمة', coerce=int, validators=[DataRequired()])
     duration_days = IntegerField('المدة (بالأيام)', validators=[DataRequired(), NumberRange(min=1)])
+    sessions_count = IntegerField('عدد الحصص', validators=[Optional()], default=0)
     price = DecimalField('السعر', validators=[DataRequired(), NumberRange(min=0)])
     max_freezes = IntegerField('عدد مرات التجميد', validators=[Optional()], default=0)
     max_freeze_days = IntegerField('أقصى أيام تجميد', validators=[Optional()], default=0)
@@ -75,10 +77,12 @@ class MemberForm(FlaskForm):
 
 class SubscriptionForm(FlaskForm):
     """Subscription creation form"""
+    service_type_id = SelectField('نوع الخدمة', coerce=int, validators=[DataRequired()])
     plan_id = SelectField('خطة الاشتراك', coerce=int, validators=[DataRequired()])
     start_date = DateField('تاريخ البدء', validators=[DataRequired()])
     discount = DecimalField('الخصم', validators=[Optional()], default=0)
     amount_paid = DecimalField('المبلغ المدفوع', validators=[DataRequired(), NumberRange(min=0)])
+    payment_method = SelectField('طريقة الدفع', choices=[('cash', 'نقدي'), ('card', 'بطاقة'), ('transfer', 'تحويل')], validators=[DataRequired()])
     notes = TextAreaField('ملاحظات', validators=[Optional()])
 
 

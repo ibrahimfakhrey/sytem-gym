@@ -1,0 +1,253 @@
+{% extends "base.html" %}
+
+{% block title %}تفاصيل معاملات المبيعات{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-receipt-cutoff"></i> تفاصيل معاملات المبيعات</h1>
+</div>
+
+<!-- Filters -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            {% if current_user.can_view_all_brands and brands %}
+            <div class="col-md-2">
+                <label class="form-label">البراند</label>
+                <select name="brand_id" class="form-select" onchange="this.form.submit()">
+                    <option value="">الكل</option>
+                    {% for brand in brands %}
+                    <option value="{{ brand.id }}" {% if request.args.get('brand_id')|int == brand.id %}selected{% endif %}>
+                        {{ brand.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+
+            <div class="col-md-2">
+                <label class="form-label">من تاريخ</label>
+                <input type="date" name="date_from" class="form-control" value="{{ date_from }}">
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label">إلى تاريخ</label>
+                <input type="date" name="date_to" class="form-control" value="{{ date_to }}">
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label">طريقة الدفع</label>
+                <select name="payment_method" class="form-select">
+                    <option value="">الكل</option>
+                    <option value="cash" {% if payment_method == 'cash' %}selected{% endif %}>نقدي</option>
+                    <option value="card" {% if payment_method == 'card' %}selected{% endif %}>بطاقة</option>
+                    <option value="transfer" {% if payment_method == 'transfer' %}selected{% endif %}>تحويل</option>
+                </select>
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label">الخدمة</label>
+                <select name="service_id" class="form-select">
+                    <option value="">الكل</option>
+                    {% for service in services %}
+                    <option value="{{ service.id }}" {% if service_id == service.id %}selected{% endif %}>
+                        {{ service.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label">الموظف</label>
+                <select name="receptionist_id" class="form-select">
+                    <option value="">الكل</option>
+                    {% for receptionist in receptionists %}
+                    <option value="{{ receptionist.id }}" {% if receptionist_id == receptionist.id %}selected{% endif %}>
+                        {{ receptionist.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label">بحث عن عضو</label>
+                <input type="text" name="search" class="form-control" placeholder="اسم العضو" value="{{ search }}">
+            </div>
+
+            <div class="col-md-12 d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-search"></i>
+                    بحث
+                </button>
+                <a href="{{ url_for('finance.sales_transactions') }}" class="btn btn-secondary">
+                    <i class="bi bi-x-circle"></i>
+                    إعادة تعيين
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body text-center">
+                <h6>إجمالي المبلغ</h6>
+                <h3>{{ "{:,.2f}".format(total_amount) }} ر.س</h3>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body text-center">
+                <h6>نقدي</h6>
+                <h3>{{ payment_method_counts.get('cash', 0) }}</h3>
+                <small>معاملة</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body text-center">
+                <h6>بطاقة</h6>
+                <h3>{{ payment_method_counts.get('card', 0) }}</h3>
+                <small>معاملة</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body text-center">
+                <h6>تحويل</h6>
+                <h3>{{ payment_method_counts.get('transfer', 0) }}</h3>
+                <small>معاملة</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Transactions Table -->
+<div class="card">
+    <div class="card-body">
+        {% if transactions.items %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>التاريخ والوقت</th>
+                        <th>العضو</th>
+                        <th>الخدمة</th>
+                        {% if current_user.can_view_all_brands %}
+                        <th>البراند</th>
+                        {% endif %}
+                        <th>الموظف</th>
+                        <th>طريقة الدفع</th>
+                        <th>المبلغ</th>
+                        <th>الإجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for transaction in transactions.items %}
+                    <tr>
+                        <td>{{ transaction.payment_date.strftime('%Y-%m-%d %H:%M') }}</td>
+                        <td>
+                            <a href="{{ url_for('members.view', member_id=transaction.subscription.member_id) }}">
+                                {{ transaction.subscription.member.name }}
+                            </a>
+                        </td>
+                        <td>
+                            <span class="badge bg-info">
+                                {{ transaction.subscription.plan.name }}
+                            </span>
+                        </td>
+                        {% if current_user.can_view_all_brands %}
+                        <td>{{ transaction.subscription.brand.name }}</td>
+                        {% endif %}
+                        <td>
+                            {% if transaction.subscription.creator %}
+                            {{ transaction.subscription.creator.name }}
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge
+                                {% if transaction.payment_method == 'cash' %}bg-success
+                                {% elif transaction.payment_method == 'card' %}bg-primary
+                                {% elif transaction.payment_method == 'transfer' %}bg-info
+                                {% else %}bg-secondary{% endif %}">
+                                {{ transaction.payment_method_text }}
+                            </span>
+                        </td>
+                        <td><strong>{{ "{:,.2f}".format(transaction.amount) }} ر.س</strong></td>
+                        <td>
+                            <a href="{{ url_for('subscriptions.view', subscription_id=transaction.subscription_id) }}"
+                               class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-eye"></i>
+                                عرض الاشتراك
+                            </a>
+                            {% if transaction.invoice %}
+                            <a href="{{ url_for('invoices.view', invoice_id=transaction.invoice.id) }}"
+                               class="btn btn-sm btn-outline-secondary">
+                                <i class="bi bi-receipt"></i>
+                                الفاتورة
+                            </a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if transactions.pages > 1 %}
+        <nav class="mt-4">
+            <ul class="pagination justify-content-center">
+                {% if transactions.has_prev %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('finance.sales_transactions', page=transactions.prev_num,
+                        date_from=date_from, date_to=date_to, payment_method=payment_method,
+                        service_id=service_id, receptionist_id=receptionist_id, search=search) }}">السابق</a>
+                </li>
+                {% endif %}
+
+                {% for page_num in transactions.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
+                    {% if page_num %}
+                        <li class="page-item {% if page_num == transactions.page %}active{% endif %}">
+                            <a class="page-link" href="{{ url_for('finance.sales_transactions', page=page_num,
+                                date_from=date_from, date_to=date_to, payment_method=payment_method,
+                                service_id=service_id, receptionist_id=receptionist_id, search=search) }}">{{ page_num }}</a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if transactions.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('finance.sales_transactions', page=transactions.next_num,
+                        date_from=date_from, date_to=date_to, payment_method=payment_method,
+                        service_id=service_id, receptionist_id=receptionist_id, search=search) }}">التالي</a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+
+        {% else %}
+        <div class="text-center text-muted py-5">
+            <i class="bi bi-inbox fs-1"></i>
+            <p class="mt-3">لا توجد معاملات</p>
+            {% if search or payment_method or service_id or receptionist_id %}
+            <a href="{{ url_for('finance.sales_transactions') }}" class="btn btn-sm btn-secondary">إعادة تعيين الفلاتر</a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

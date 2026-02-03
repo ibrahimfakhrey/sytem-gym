@@ -31,6 +31,10 @@
             اشتراك جديد
         </a>
         {% endif %}
+        <a href="{{ url_for('complaints.create', member_id=member.id) }}" class="btn btn-outline-danger">
+            <i class="bi bi-exclamation-circle"></i>
+            شكوى
+        </a>
     </div>
 </div>
 
@@ -155,12 +159,19 @@
                             استخدم {{ sub.total_freeze_days }} من {{ sub.plan.max_freeze_days }} يوم
                         </p>
 
-                        {% if sub.status == 'active' and sub.freeze_count < sub.plan.max_freezes %}
-                        <a href="{{ url_for('subscriptions.freeze', subscription_id=sub.id) }}"
-                           class="btn btn-sm btn-outline-warning">
-                            <i class="bi bi-snow"></i>
-                            تجميد الاشتراك
-                        </a>
+                        {% if sub.status == 'active' %}
+                            {% if sub.freeze_count < sub.plan.max_freezes %}
+                            <a href="{{ url_for('subscriptions.freeze', subscription_id=sub.id) }}"
+                               class="btn btn-sm btn-outline-warning">
+                                <i class="bi bi-snow"></i>
+                                تجميد الاشتراك
+                            </a>
+                            {% endif %}
+                            <a href="{{ url_for('subscriptions.suspend', subscription_id=sub.id) }}"
+                               class="btn btn-sm btn-outline-danger">
+                                <i class="bi bi-stop-circle"></i>
+                                إيقاف الاشتراك
+                            </a>
                         {% elif sub.status == 'frozen' %}
                         <form action="{{ url_for('subscriptions.unfreeze', subscription_id=sub.id) }}"
                               method="POST" class="d-inline">
@@ -211,7 +222,7 @@
                                 <td>{{ sub.plan.name }}</td>
                                 <td>{{ sub.start_date.strftime('%Y-%m-%d') }}</td>
                                 <td>{{ sub.end_date.strftime('%Y-%m-%d') }}</td>
-                                <td>{{ "{:,.0f}".format(sub.amount_paid) }} ر.س</td>
+                                <td>{{ "{:,.0f}".format(sub.paid_amount if sub.paid_amount else 0) }} ر.س</td>
                                 <td><span class="badge bg-{{ sub.status_class }}">{{ sub.status_text }}</span></td>
                             </tr>
                             {% endfor %}

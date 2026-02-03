@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}شكوى جديدة{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-exclamation-circle"></i>
+        شكوى جديدة
+    </h1>
+    <div>
+        <a href="{{ url_for('complaints.index') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-right"></i>
+            رجوع
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-plus-circle"></i>
+                تسجيل شكوى جديدة
+            </div>
+            <div class="card-body">
+                {% if member %}
+                <div class="alert alert-info mb-4">
+                    <strong>العضو:</strong> {{ member.name }} - {{ member.phone }}
+                </div>
+                {% endif %}
+
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+
+                    <div class="mb-3">
+                        {{ form.subject.label(class="form-label") }}
+                        {{ form.subject(class="form-control", rows=2, placeholder="اكتب موضوع الشكوى هنا...") }}
+                        {% if form.subject.errors %}
+                            <div class="text-danger">{{ form.subject.errors[0] }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form.description.label(class="form-label") }}
+                        {{ form.description(class="form-control", rows=5, placeholder="اكتب تفاصيل الشكوى هنا...") }}
+                        {% if form.description.errors %}
+                            <div class="text-danger">{{ form.description.errors[0] }}</div>
+                        {% endif %}
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check"></i>
+                        حفظ الشكوى
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+
+{% block title %}إقفال اليومي{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-cash-stack"></i> إقفال اليومي</h1>
+    <div>
+        <a href="{{ url_for('closing.view_daily_summary', closing_date=date.today().isoformat()) }}" class="btn btn-primary">
+            <i class="bi bi-eye"></i>
+            ملخص اليوم
+        </a>
+    </div>
+</div>
+
+<!-- Filters -->
+{% if current_user.can_view_all_brands and brands %}
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">البراند</label>
+                <select name="brand_id" class="form-select">
+                    <option value="">الكل</option>
+                    {% for brand in brands %}
+                    <option value="{{ brand.id }}" {% if request.args.get('brand_id')|int == brand.id %}selected{% endif %}>
+                        {{ brand.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-md-4 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="bi bi-search"></i>
+                    بحث
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<!-- Closings List -->
+<div class="card">
+    <div class="card-body">
+        {% if closings.items %}
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>التاريخ</th>
+                        {% if current_user.can_view_all_brands %}
+                        <th>البراند</th>
+                        {% endif %}
+                        <th>إجمالي المبيعات</th>
+                        <th>النقدي المتوقع</th>
+                        <th>النقدي الفعلي</th>
+                        <th>الفرق</th>
+                        <th>أقفل بواسطة</th>
+                        <th>الإجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for closing in closings.items %}
+                    <tr>
+                        <td>{{ closing.closing_date.strftime('%Y-%m-%d') }}</td>
+                        {% if current_user.can_view_all_brands %}
+                        <td>{{ closing.brand.name }}</td>
+                        {% endif %}
+                        <td class="text-success"><strong>{{ "{:,.2f}".format(closing.total_sales) }} ر.س</strong></td>
+                        <td>{{ "{:,.2f}".format(closing.expected_cash) }} ر.س</td>
+                        <td>{{ "{:,.2f}".format(closing.actual_cash_submitted) }} ر.س</td>
+                        <td>
+                            {% if closing.has_discrepancy %}
+                            <span class="badge bg-{{ closing.discrepancy_class }}">
+                                {{ "{:,.2f}".format(closing.cash_difference) }} ر.س
+                            </span>
+                            {% else %}
+                            <span class="badge bg-success">
+                                <i class="bi bi-check"></i> متطابق
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td><small>{{ closing.closed_by_user.name }}</small></td>
+                        <td>
+                            <a href="{{ url_for('closing.view_closing', closing_id=closing.id) }}" class="btn btn-sm btn-info">
+                                <i class="bi bi-eye"></i>
+                                عرض
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if closings.pages > 1 %}
+        <nav>
+            <ul class="pagination justify-content-center mt-3">
+                {% if closings.has_prev %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('closing.index', page=closings.prev_num) }}">السابق</a>
+                </li>
+                {% endif %}
+
+                {% for page_num in closings.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
+                    {% if page_num %}
+                        <li class="page-item {% if page_num == closings.page %}active{% endif %}">
+                            <a class="page-link" href="{{ url_for('closing.index', page=page_num) }}">{{ page_num }}</a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if closings.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('closing.index', page=closings.next_num) }}">التالي</a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+
+        {% else %}
+        <p class="text-muted text-center mb-0">لا توجد إقفالات</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

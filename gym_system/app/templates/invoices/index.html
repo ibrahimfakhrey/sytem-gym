@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+
+{% block title %}الفواتير{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-receipt"></i> الفواتير</h1>
+</div>
+
+<!-- Filters -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            {% if current_user.can_view_all_brands and brands %}
+            <div class="col-md-3">
+                <label class="form-label">البراند</label>
+                <select name="brand_id" class="form-select">
+                    <option value="">الكل</option>
+                    {% for brand in brands %}
+                    <option value="{{ brand.id }}" {% if request.args.get('brand_id')|int == brand.id %}selected{% endif %}>
+                        {{ brand.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+
+            <div class="col-md-3">
+                <label class="form-label">البحث</label>
+                <input type="text" name="search" class="form-control" placeholder="رقم الفاتورة أو اسم العضو" value="{{ search }}">
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label">طريقة الدفع</label>
+                <select name="payment_method" class="form-select">
+                    <option value="">الكل</option>
+                    <option value="cash" {% if payment_method == 'cash' %}selected{% endif %}>نقدي</option>
+                    <option value="card" {% if payment_method == 'card' %}selected{% endif %}>بطاقة</option>
+                    <option value="transfer" {% if payment_method == 'transfer' %}selected{% endif %}>تحويل</option>
+                </select>
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label">من تاريخ</label>
+                <input type="date" name="from_date" class="form-control" value="{{ from_date }}">
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label">إلى تاريخ</label>
+                <input type="date" name="to_date" class="form-control" value="{{ to_date }}">
+            </div>
+
+            <div class="col-md-12 d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-search"></i>
+                    بحث
+                </button>
+                <a href="{{ url_for('invoices.index') }}" class="btn btn-secondary">
+                    <i class="bi bi-x-circle"></i>
+                    إعادة تعيين
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Invoices List -->
+<div class="card">
+    <div class="card-body">
+        {% if invoices.items %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>رقم الفاتورة</th>
+                        <th>التاريخ</th>
+                        <th>العضو</th>
+                        <th>نوع الخدمة</th>
+                        {% if current_user.can_view_all_brands %}
+                        <th>البراند</th>
+                        {% endif %}
+                        <th>المبلغ</th>
+                        <th>طريقة الدفع</th>
+                        <th>الإجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for invoice in invoices.items %}
+                    <tr>
+                        <td><strong>{{ invoice.invoice_number }}</strong></td>
+                        <td>{{ invoice.invoice_date.strftime('%Y-%m-%d %H:%M') }}</td>
+                        <td>{{ invoice.member_name }}</td>
+                        <td>
+                            {% if invoice.service_type_name %}
+                            <span class="badge bg-info">{{ invoice.service_type_name }}</span>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        {% if current_user.can_view_all_brands %}
+                        <td>{{ invoice.subscription.brand.name }}</td>
+                        {% endif %}
+                        <td><strong>{{ "{:,.2f}".format(invoice.total_amount) }} ر.س</strong></td>
+                        <td>
+                            <span class="badge
+                                {% if invoice.payment_method == 'cash' %}bg-success
+                                {% elif invoice.payment_method == 'card' %}bg-primary
+                                {% elif invoice.payment_method == 'transfer' %}bg-info
+                                {% else %}bg-secondary{% endif %}">
+                                {{ invoice.payment_method_text }}
+                            </span>
+                        </td>
+                        <td>
+                            <a href="{{ url_for('invoices.view', invoice_id=invoice.id) }}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-eye"></i>
+                                عرض
+                            </a>
+                            <a href="{{ url_for('subscriptions.view', subscription_id=invoice.subscription_id) }}" class="btn btn-sm btn-outline-secondary">
+                                <i class="bi bi-card-checklist"></i>
+                                الاشتراك
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Summary -->
+        <div class="row mt-4 pt-3 border-top">
+            <div class="col-md-12">
+                <h5>ملخص النتائج</h5>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-light">
+                    <div class="card-body text-center">
+                        <h6 class="text-muted">إجمالي الفواتير</h6>
+                        <h3>{{ invoices.total }}</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-success text-white">
+                    <div class="card-body text-center">
+                        <h6>إجمالي المبلغ</h6>
+                        <h3>
+                            {% set total_amount = invoices.items|sum(attribute='total_amount') %}
+                            {{ "{:,.2f}".format(total_amount) }} ر.س
+                        </h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pagination -->
+        {% if invoices.pages > 1 %}
+        <nav class="mt-4">
+            <ul class="pagination justify-content-center">
+                {% if invoices.has_prev %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('invoices.index', page=invoices.prev_num, search=search, payment_method=payment_method, from_date=from_date, to_date=to_date) }}">السابق</a>
+                </li>
+                {% endif %}
+
+                {% for page_num in invoices.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
+                    {% if page_num %}
+                        <li class="page-item {% if page_num == invoices.page %}active{% endif %}">
+                            <a class="page-link" href="{{ url_for('invoices.index', page=page_num, search=search, payment_method=payment_method, from_date=from_date, to_date=to_date) }}">{{ page_num }}</a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if invoices.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('invoices.index', page=invoices.next_num, search=search, payment_method=payment_method, from_date=from_date, to_date=to_date) }}">التالي</a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+
+        {% else %}
+        <div class="text-center text-muted py-5">
+            <i class="bi bi-receipt fs-1"></i>
+            <p class="mt-3">لا توجد فواتير</p>
+            {% if search or payment_method or from_date or to_date %}
+            <a href="{{ url_for('invoices.index') }}" class="btn btn-sm btn-secondary">إعادة تعيين الفلاتر</a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

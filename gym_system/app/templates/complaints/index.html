@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+
+{% block title %}الشكاوى{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-exclamation-circle"></i> الشكاوى</h1>
+    <div>
+        <a href="{{ url_for('complaints.create') }}" class="btn btn-primary">
+            <i class="bi bi-plus"></i>
+            شكوى جديدة
+        </a>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            {% if current_user.can_view_all_brands and brands %}
+            <div class="col-md-3">
+                <label class="form-label">البراند</label>
+                <select name="brand_id" class="form-select">
+                    <option value="">الكل</option>
+                    {% for brand in brands %}
+                    <option value="{{ brand.id }}" {% if request.args.get('brand_id')|int == brand.id %}selected{% endif %}>
+                        {{ brand.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+
+            <div class="col-md-3">
+                <label class="form-label">الحالة</label>
+                <select name="status" class="form-select">
+                    <option value="">الكل</option>
+                    <option value="open" {% if status == 'open' %}selected{% endif %}>مفتوح</option>
+                    <option value="in_progress" {% if status == 'in_progress' %}selected{% endif %}>قيد المعالجة</option>
+                    <option value="resolved" {% if status == 'resolved' %}selected{% endif %}>محلول</option>
+                    <option value="closed" {% if status == 'closed' %}selected{% endif %}>مغلق</option>
+                </select>
+            </div>
+
+            <div class="col-md-6 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="bi bi-search"></i>
+                    بحث
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Complaints List -->
+<div class="card">
+    <div class="card-body">
+        {% if complaints.items %}
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>رقم</th>
+                        <th>الموضوع</th>
+                        <th>العضو</th>
+                        {% if current_user.can_view_all_brands %}
+                        <th>البراند</th>
+                        {% endif %}
+                        <th>التاريخ</th>
+                        <th>الحالة</th>
+                        <th>الإجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for complaint in complaints.items %}
+                    <tr>
+                        <td>{{ complaint.id }}</td>
+                        <td>{{ complaint.subject[:50] }}{% if complaint.subject|length > 50 %}...{% endif %}</td>
+                        <td>{{ complaint.member.name if complaint.member else '-' }}</td>
+                        {% if current_user.can_view_all_brands %}
+                        <td>{{ complaint.brand.name }}</td>
+                        {% endif %}
+                        <td>{{ complaint.created_at.strftime('%Y-%m-%d') }}</td>
+                        <td>
+                            <span class="badge bg-{{ complaint.status_class }}">{{ complaint.status_text }}</span>
+                        </td>
+                        <td>
+                            <a href="{{ url_for('complaints.view', complaint_id=complaint.id) }}" class="btn btn-sm btn-info">
+                                <i class="bi bi-eye"></i>
+                                عرض
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if complaints.pages > 1 %}
+        <nav>
+            <ul class="pagination justify-content-center">
+                {% if complaints.has_prev %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('complaints.index', page=complaints.prev_num, status=status) }}">السابق</a>
+                </li>
+                {% endif %}
+
+                {% for page_num in complaints.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
+                    {% if page_num %}
+                        <li class="page-item {% if page_num == complaints.page %}active{% endif %}">
+                            <a class="page-link" href="{{ url_for('complaints.index', page=page_num, status=status) }}">{{ page_num }}</a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if complaints.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('complaints.index', page=complaints.next_num, status=status) }}">التالي</a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+
+        {% else %}
+        <p class="text-muted text-center mb-0">لا توجد شكاوى</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

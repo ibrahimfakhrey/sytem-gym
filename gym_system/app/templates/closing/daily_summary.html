@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+
+{% block title %}ملخص اليوم{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-calendar-day"></i>
+        ملخص اليوم - {{ closing_date.strftime('%Y-%m-%d') }}
+    </h1>
+    <div>
+        <a href="{{ url_for('closing.index') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-right"></i>
+            رجوع
+        </a>
+        <a href="{{ url_for('closing.create', date=closing_date.isoformat()) }}" class="btn btn-primary">
+            <i class="bi bi-cash-stack"></i>
+            إقفال اليوم
+        </a>
+    </div>
+</div>
+
+<div class="alert alert-info mb-4">
+    <i class="bi bi-info-circle"></i>
+    <strong>عرض فقط:</strong> هذا ملخص لعمليات اليوم. لإتمام الإقفال، اضغط على زر "إقفال اليوم" أعلاه.
+</div>
+
+<!-- Stats Cards -->
+<div class="row g-4 mb-4">
+    <div class="col-md-6 col-lg-3">
+        <div class="card stat-card bg-primary text-white">
+            <div class="stat-icon">
+                <i class="bi bi-plus-circle"></i>
+            </div>
+            <div class="stat-value">{{ stats.new_subscriptions_count }}</div>
+            <div class="stat-label">اشتراكات جديدة</div>
+        </div>
+    </div>
+
+    <div class="col-md-6 col-lg-3">
+        <div class="card stat-card bg-success text-white">
+            <div class="stat-icon">
+                <i class="bi bi-arrow-repeat"></i>
+            </div>
+            <div class="stat-value">{{ stats.renewals_count }}</div>
+            <div class="stat-label">تجديدات</div>
+        </div>
+    </div>
+
+    <div class="col-md-6 col-lg-3">
+        <div class="card stat-card bg-info text-white">
+            <div class="stat-icon">
+                <i class="bi bi-cash-stack"></i>
+            </div>
+            <div class="stat-value">{{ "{:,.0f}".format(stats.total_sales) }}</div>
+            <div class="stat-label">إجمالي المبيعات (ر.س)</div>
+        </div>
+    </div>
+
+    <div class="col-md-6 col-lg-3">
+        <div class="card stat-card bg-warning text-white">
+            <div class="stat-icon">
+                <i class="bi bi-wallet2"></i>
+            </div>
+            <div class="stat-value">{{ "{:,.0f}".format(stats.cash_sales) }}</div>
+            <div class="stat-label">النقدي (ر.س)</div>
+        </div>
+    </div>
+</div>
+
+<!-- Payment Methods Breakdown -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <i class="bi bi-credit-card"></i>
+                طرق الدفع
+            </div>
+            <div class="card-body">
+                <table class="table table-borderless mb-0">
+                    <tr>
+                        <td><i class="bi bi-cash text-success"></i> <strong>نقدي:</strong></td>
+                        <td class="text-end"><strong>{{ "{:,.2f}".format(stats.cash_sales) }} ر.س</strong></td>
+                    </tr>
+                    <tr>
+                        <td><i class="bi bi-credit-card-2-front text-primary"></i> <strong>شبكة:</strong></td>
+                        <td class="text-end"><strong>{{ "{:,.2f}".format(stats.card_sales) }} ر.س</strong></td>
+                    </tr>
+                    <tr>
+                        <td><i class="bi bi-bank text-info"></i> <strong>حوالة:</strong></td>
+                        <td class="text-end"><strong>{{ "{:,.2f}".format(stats.transfer_sales) }} ر.س</strong></td>
+                    </tr>
+                    <tr class="border-top">
+                        <td><strong>الإجمالي:</strong></td>
+                        <td class="text-end"><strong class="text-success">{{ "{:,.2f}".format(stats.total_sales) }} ر.س</strong></td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <i class="bi bi-graph-up"></i>
+                ملخص النشاط
+            </div>
+            <div class="card-body">
+                <table class="table table-borderless mb-0">
+                    <tr>
+                        <td><i class="bi bi-plus-circle text-primary"></i> <strong>اشتراكات جديدة:</strong></td>
+                        <td class="text-end"><strong>{{ stats.new_subscriptions_count }}</strong></td>
+                    </tr>
+                    <tr>
+                        <td><i class="bi bi-arrow-repeat text-success"></i> <strong>تجديدات:</strong></td>
+                        <td class="text-end"><strong>{{ stats.renewals_count }}</strong></td>
+                    </tr>
+                    <tr>
+                        <td><i class="bi bi-receipt text-info"></i> <strong>عدد العمليات:</strong></td>
+                        <td class="text-end"><strong>{{ stats.payments|length }}</strong></td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Transactions -->
+<div class="card">
+    <div class="card-header">
+        <i class="bi bi-list-ul"></i>
+        آخر العمليات
+    </div>
+    <div class="card-body">
+        {% if stats.payments %}
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>الوقت</th>
+                        <th>المبلغ</th>
+                        <th>طريقة الدفع</th>
+                        <th>الاشتراك</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for payment in stats.payments[-10:] %}
+                    <tr>
+                        <td>{{ payment.payment_date.strftime('%H:%M') }}</td>
+                        <td class="text-success"><strong>{{ "{:,.2f}".format(payment.amount) }} ر.س</strong></td>
+                        <td>
+                            {% if payment.payment_method == 'cash' %}
+                            <span class="badge bg-success">نقدي</span>
+                            {% elif payment.payment_method == 'card' %}
+                            <span class="badge bg-primary">شبكة</span>
+                            {% else %}
+                            <span class="badge bg-info">حوالة</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ payment.subscription.member.name if payment.subscription else '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted text-center mb-0">لا توجد عمليات اليوم</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

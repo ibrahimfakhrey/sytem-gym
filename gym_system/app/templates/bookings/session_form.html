@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block title %}حصة جديدة{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-plus-circle"></i>
+        حصة جديدة
+    </h1>
+    <div>
+        <a href="{{ url_for('bookings.sessions_list') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-right"></i>
+            رجوع
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-calendar-plus"></i>
+                تفاصيل الحصة
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            {{ form.name.label(class="form-label") }}
+                            {{ form.name(class="form-control", placeholder="مثال: كلاس صباحي") }}
+                            {% if form.name.errors %}
+                                <div class="text-danger">{{ form.name.errors[0] }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            {{ form.session_type.label(class="form-label") }}
+                            {{ form.session_type(class="form-select") }}
+                            {% if form.session_type.errors %}
+                                <div class="text-danger">{{ form.session_type.errors[0] }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            {{ form.day_of_week.label(class="form-label") }}
+                            {{ form.day_of_week(class="form-select") }}
+                            {% if form.day_of_week.errors %}
+                                <div class="text-danger">{{ form.day_of_week.errors[0] }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-md-4 mb-3">
+                            {{ form.start_time.label(class="form-label") }}
+                            {{ form.start_time(class="form-control") }}
+                            {% if form.start_time.errors %}
+                                <div class="text-danger">{{ form.start_time.errors[0] }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-md-4 mb-3">
+                            {{ form.end_time.label(class="form-label") }}
+                            {{ form.end_time(class="form-control") }}
+                            {% if form.end_time.errors %}
+                                <div class="text-danger">{{ form.end_time.errors[0] }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            {{ form.max_capacity.label(class="form-label") }}
+                            {{ form.max_capacity(class="form-control", type="number", min="1", max="100", value="20") }}
+                            {% if form.max_capacity.errors %}
+                                <div class="text-danger">{{ form.max_capacity.errors[0] }}</div>
+                            {% endif %}
+                            <small class="text-muted">الحد الأقصى للمشاركين في الحصة</small>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            {{ form.instructor_id.label(class="form-label") }}
+                            {{ form.instructor_id(class="form-select") }}
+                            {% if form.instructor_id.errors %}
+                                <div class="text-danger">{{ form.instructor_id.errors[0] }}</div>
+                            {% endif %}
+                            <small class="text-muted">اختياري</small>
+                        </div>
+                    </div>
+
+                    <div class="mt-4">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check"></i>
+                            حفظ الحصة
+                        </button>
+                        <a href="{{ url_for('bookings.sessions_list') }}" class="btn btn-secondary">
+                            إلغاء
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -22,8 +22,14 @@
                 {% endif %}
             </div>
             <div class="card-body">
-                <form method="POST">
+                <form method="POST" id="subscription-form">
                     {{ form.hidden_tag() }}
+
+                    <div class="mb-3">
+                        <label class="form-label">نوع الخدمة *</label>
+                        {{ form.service_type_id(class="form-select", id="service-type-select") }}
+                        <small class="text-muted">اختر نوع النشاط (جيم، سباحة، كاراتيه، إلخ)</small>
+                    </div>
 
                     <div class="mb-3">
                         <label class="form-label">باقة الاشتراك *</label>
@@ -71,6 +77,11 @@
                     <div id="remaining-alert" class="alert alert-warning" style="display: none;">
                         <i class="bi bi-exclamation-triangle"></i>
                         المبلغ المتبقي: <strong id="remaining-amount">0</strong> ر.س
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">طريقة الدفع *</label>
+                        {{ form.payment_method(class="form-select") }}
                     </div>
 
                     <div class="mb-3">
@@ -152,6 +163,7 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    const serviceTypeSelect = document.getElementById('service-type-select');
     const planSelect = document.getElementById('plan-select');
     const startDate = document.getElementById('start-date');
     const endDate = document.getElementById('end-date');
@@ -161,6 +173,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const amountPaid = document.getElementById('amount-paid');
     const remainingAlert = document.getElementById('remaining-alert');
     const remainingAmount = document.getElementById('remaining-amount');
+
+    // Handle service type change - reload page to filter plans
+    serviceTypeSelect.addEventListener('change', function() {
+        const form = document.getElementById('subscription-form');
+        // Submit form to reload with filtered plans
+        form.submit();
+    });
 
     // Set today's date
     const today = new Date().toISOString().split('T')[0];

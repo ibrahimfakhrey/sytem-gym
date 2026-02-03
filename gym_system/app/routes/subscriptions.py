@@ -3,13 +3,14 @@ from flask_login import login_required, current_user
 from flask_wtf import FlaskForm
 from wtforms import SelectField, DecimalField, TextAreaField, DateField
 from wtforms.validators import DataRequired, Optional
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 
 from app import db
 from app.models.company import Brand
 from app.models.member import Member
-from app.models.subscription import Plan, Subscription, SubscriptionFreeze, SubscriptionPayment
-from app.models.finance import Income
+from app.models.subscription import Plan, Subscription, SubscriptionFreeze, SubscriptionPayment, ServiceType
+from app.models.complaint import SubscriptionSuspension
+from app.models.finance import Income, Invoice
 from app.utils.decorators import members_required
 from app.utils.helpers import pagination_args
 
@@ -18,15 +19,18 @@ subscriptions_bp = Blueprint('subscriptions', __name__)
 
 class SubscriptionForm(FlaskForm):
     """Subscription form"""
+    service_type_id = SelectField('نوع الخدمة', coerce=int, validators=[DataRequired()])
     plan_id = SelectField('الباقة', coerce=int, validators=[DataRequired()])
     discount = DecimalField('الخصم', default=0, validators=[Optional()])
     paid_amount = DecimalField('المبلغ المدفوع', validators=[DataRequired()])
+    payment_method = SelectField('طريقة الدفع', choices=[('cash', 'نقدي'), ('card', 'بطاقة'), ('transfer', 'تحويل')], validators=[DataRequired()])
     notes = TextAreaField('ملاحظات')
 
 
 class RenewalForm(FlaskForm):
     """Renewal form"""
     paid_amount = DecimalField('المبلغ المدفوع', validators=[DataRequired()])
+    payment_method = SelectField('طريقة الدفع', choices=[('cash', 'نقدي'), ('card', 'بطاقة'), ('transfer', 'تحويل')], validators=[DataRequired()])
     notes = TextAreaField('ملاحظات')
 
 
@@ -40,7 +44,20 @@ class FreezeForm(FlaskForm):
 class PaymentForm(FlaskForm):
     """Payment form"""
     amount = DecimalField('المبلغ', validators=[DataRequired()])
+    payment_method = SelectField('طريقة الدفع', choices=[('cash', 'نقدي'), ('card', 'بطاقة'), ('transfer', 'تحويل')], validators=[DataRequired()])
     notes = TextAreaField('ملاحظات')
+
+
+class SuspendForm(FlaskForm):
+    """Suspend subscription form"""
+    reason_category = SelectField('سبب الإيقاف', choices=[
+        ('price', 'سعر'),
+        ('time', 'وقت'),
+        ('service', 'خدمة'),
+        ('personal', 'سبب شخصي'),
+        ('other', 'أخرى')
+    ], validators=[DataRequired()])
+    reason_details = TextAreaField('تفاصيل السبب')
 
 
 @subscriptions_bp.route('/')
@@ -104,9 +121,26 @@ def create():
 
     form = SubscriptionForm()
 
-    # Get plans for this brand
-    plans = Plan.query.filter_by(brand_id=member.brand_id, is_active=True).all()
-    form.plan_id.choices = [(p.id, f'{p.name} - {p.price} ر.س ({p.duration_text})') for p in plans]
+    # Get service types for this brand
+    service_types = ServiceType.query.filter_by(brand_id=member.brand_id, is_active=True).all()
+    form.service_type_id.choices = [(st.id, st.name) for st in service_types]
+
+    # Get selected service type from form or first service type
+    selected_service_type = request.form.get('service_type_id', type=int)
+    if not selected_service_type and service_types:
+        selected_service_type = service_types[0].id
+
+    # Filter plans by service type
+    if selected_service_type:
+        plans = Plan.query.filter_by(
+            brand_id=member.brand_id,
+            service_type_id=selected_service_type,
+            is_active=True
+        ).all()
+    else:
+        plans = []
+
+    form.plan_id.choices = [(p.id, f'{p.name} - {p.price} ر.س ({p.plan_type_text})') for p in plans]
 
     if form.validate_on_submit():
         plan = Plan.query.get(form.plan_id.data)
@@ -126,9 +160,12 @@ def create():
             member_id=member.id,
             plan_id=plan.id,
             brand_id=member.brand_id,
+            service_type_id=form.service_type_id.data,
             start_date=start_date,
             end_date=end_date,
             original_end_date=end_date,
+            sessions_total=plan.sessions_count,  # Copy from plan
+            sessions_consumed=0,
             total_amount=total_amount,
             paid_amount=paid_amount,
             remaining_amount=remaining_amount,
@@ -146,10 +183,11 @@ def create():
                 subscription_id=subscription.id,
                 brand_id=member.brand_id,
                 amount=paid_amount,
-                payment_method='cash',
+                payment_method=form.payment_method.data,
                 created_by=current_user.id
             )
             db.session.add(payment)
+            db.session.flush()  # Get payment ID
 
             # Create income record
             income = Income(
@@ -162,6 +200,36 @@ def create():
             )
             db.session.add(income)
 
+            # Generate invoice
+            service_type_name = None
+            if subscription.service_type:
+                service_type_name = subscription.service_type.name
+
+            invoice = Invoice(
+                brand_id=member.brand_id,
+                subscription_id=subscription.id,
+                payment_id=payment.id,
+                member_id=member.id,
+                invoice_number=Invoice.generate_invoice_number(member.brand_id),
+                member_name=member.name,
+                member_phone=member.phone,
+                member_email=member.email,
+                plan_name=plan.name,
+                service_type_name=service_type_name,
+                duration_text=plan.plan_type_text,
+                original_price=plan.price,
+                discount=discount,
+                subtotal=total_amount,
+                tax_rate=0,  # Can be configured later
+                tax_amount=0,
+                total_amount=total_amount,
+                amount_paid=paid_amount,
+                payment_method=form.payment_method.data,
+                notes=form.notes.data,
+                created_by=current_user.id
+            )
+            db.session.add(invoice)
+
         db.session.commit()
 
         flash('تم إنشاء الاشتراك بنجاح', 'success')
@@ -172,7 +240,9 @@ def create():
 
         return redirect(url_for('members.view', member_id=member_id))
 
-    return render_template('subscriptions/create.html', form=form, member=member, plans=plans)
+    return render_template('subscriptions/create.html', form=form, member=member,
+                          plans=plans, service_types=service_types,
+                          selected_service_type=selected_service_type)
 
 
 @subscriptions_bp.route('/<int:subscription_id>')
@@ -232,11 +302,12 @@ def renew(subscription_id):
                 subscription_id=subscription.id,
                 brand_id=subscription.brand_id,
                 amount=paid_amount,
-                payment_method='cash',
+                payment_method=form.payment_method.data,
                 notes=form.notes.data,
                 created_by=current_user.id
             )
             db.session.add(payment)
+            db.session.flush()  # Get payment ID
 
             # Create income record
             income = Income(
@@ -248,6 +319,36 @@ def renew(subscription_id):
                 created_by=current_user.id
             )
             db.session.add(income)
+
+            # Generate invoice for renewal
+            service_type_name = None
+            if subscription.service_type:
+                service_type_name = subscription.service_type.name
+
+            invoice = Invoice(
+                brand_id=subscription.brand_id,
+                subscription_id=subscription.id,
+                payment_id=payment.id,
+                member_id=subscription.member_id,
+                invoice_number=Invoice.generate_invoice_number(subscription.brand_id),
+                member_name=subscription.member.name,
+                member_phone=subscription.member.phone,
+                member_email=subscription.member.email,
+                plan_name=plan.name,
+                service_type_name=service_type_name,
+                duration_text=plan.plan_type_text,
+                original_price=plan.price,
+                discount=0,
+                subtotal=plan.price,
+                tax_rate=0,
+                tax_amount=0,
+                total_amount=plan.price,
+                amount_paid=paid_amount,
+                payment_method=form.payment_method.data,
+                notes=form.notes.data,
+                created_by=current_user.id
+            )
+            db.session.add(invoice)
 
         db.session.commit()
 
@@ -355,11 +456,12 @@ def add_payment(subscription_id):
             subscription_id=subscription.id,
             brand_id=subscription.brand_id,
             amount=amount,
-            payment_method='cash',
+            payment_method=form.payment_method.data,
             notes=form.notes.data,
             created_by=current_user.id
         )
         db.session.add(payment)
+        db.session.flush()  # Get payment ID
 
         # Update subscription
         subscription.paid_amount = float(subscription.paid_amount) + amount
@@ -377,9 +479,78 @@ def add_payment(subscription_id):
         )
         db.session.add(income)
 
+        # Generate invoice for payment
+        service_type_name = None
+        if subscription.service_type:
+            service_type_name = subscription.service_type.name
+
+        invoice = Invoice(
+            brand_id=subscription.brand_id,
+            subscription_id=subscription.id,
+            payment_id=payment.id,
+            member_id=subscription.member_id,
+            invoice_number=Invoice.generate_invoice_number(subscription.brand_id),
+            member_name=subscription.member.name,
+            member_phone=subscription.member.phone,
+            member_email=subscription.member.email,
+            plan_name=subscription.plan.name,
+            service_type_name=service_type_name,
+            duration_text='سداد دفعة',
+            original_price=amount,
+            discount=0,
+            subtotal=amount,
+            tax_rate=0,
+            tax_amount=0,
+            total_amount=amount,
+            amount_paid=amount,
+            payment_method=form.payment_method.data,
+            notes=form.notes.data,
+            created_by=current_user.id
+        )
+        db.session.add(invoice)
+
         db.session.commit()
 
         flash('تم تسجيل الدفعة بنجاح', 'success')
         return redirect(url_for('subscriptions.view', subscription_id=subscription_id))
 
     return render_template('subscriptions/payment.html', form=form, subscription=subscription)
+
+
+@subscriptions_bp.route('/<int:subscription_id>/suspend', methods=['GET', 'POST'])
+@login_required
+@members_required
+def suspend(subscription_id):
+    """Suspend subscription"""
+    subscription = Subscription.query.get_or_404(subscription_id)
+
+    if not current_user.can_access_brand(subscription.brand_id):
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('subscriptions.index'))
+
+    if subscription.status in ['suspended', 'expired', 'cancelled']:
+        flash('لا يمكن إيقاف هذا الاشتراك', 'warning')
+        return redirect(url_for('subscriptions.view', subscription_id=subscription_id))
+
+    form = SuspendForm()
+
+    if form.validate_on_submit():
+        # Create suspension record
+        suspension = SubscriptionSuspension(
+            subscription_id=subscription.id,
+            brand_id=subscription.brand_id,
+            reason_type=form.reason_category.data,
+            reason_details=form.reason_details.data,
+            stopped_by=current_user.id
+        )
+        db.session.add(suspension)
+
+        # Update subscription status
+        subscription.status = 'suspended'
+
+        db.session.commit()
+
+        flash('تم إيقاف الاشتراك بنجاح', 'success')
+        return redirect(url_for('subscriptions.view', subscription_id=subscription_id))
+
+    return render_template('subscriptions/suspend.html', form=form, subscription=subscription)

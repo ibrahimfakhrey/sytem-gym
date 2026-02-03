@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request,
 from flask_login import login_required, current_user
 from datetime import date, datetime
 
-from app import db
+from app import db, csrf
 from app.models.company import Brand
 from app.models.member import Member
 from app.models.attendance import MemberAttendance, EmployeeAttendance
@@ -21,29 +21,42 @@ def index():
 
     brand = current_user.brand if current_user.brand_id else None
 
-    # Get today's attendance count
-    today_count = 0
+    # Get today's attendance
+    today_attendance = []
     if brand:
-        today_count = MemberAttendance.get_today_count(brand.id)
+        today_attendance = MemberAttendance.query.filter(
+            MemberAttendance.brand_id == brand.id,
+            db.func.date(MemberAttendance.check_in) == date.today()
+        ).order_by(MemberAttendance.check_in.desc()).all()
 
     return render_template('attendance/index.html',
                           brand=brand,
-                          today_count=today_count)
+                          today_attendance=today_attendance)
 
 
 @attendance_bp.route('/check-in', methods=['POST'])
 @login_required
+@csrf.exempt
 def check_in():
     """Process check-in"""
-    member_id = request.form.get('member_id', type=int)
+    # Support both JSON and form data
+    if request.is_json:
+        member_id = request.json.get('member_id')
+        member_id = int(member_id) if member_id else None
+    else:
+        member_id = request.form.get('member_id', type=int)
 
     if not member_id:
+        if request.is_json:
+            return jsonify({'success': False, 'message': 'يرجى اختيار العضو'})
         flash('يرجى اختيار العضو', 'danger')
         return redirect(url_for('attendance.index'))
 
     member = Member.query.get_or_404(member_id)
 
     if not current_user.can_access_brand(member.brand_id):
+        if request.is_json:
+            return jsonify({'success': False, 'message': 'ليس لديك صلاحية'})
         flash('ليس لديك صلاحية', 'danger')
         return redirect(url_for('attendance.index'))
 
@@ -64,6 +77,8 @@ def check_in():
         db.session.add(attendance)
         db.session.commit()
 
+        if request.is_json:
+            return jsonify({'success': True, 'member_name': member.name, 'warning': True, 'message': message})
         flash(f'تحذير: {message}', 'warning')
         return redirect(url_for('attendance.index'))
 
@@ -78,6 +93,8 @@ def check_in():
     db.session.add(attendance)
     db.session.commit()
 
+    if request.is_json:
+        return jsonify({'success': True, 'member_name': member.name})
     flash(f'تم تسجيل حضور {member.name}', 'success')
     return redirect(url_for('attendance.index'))
 
@@ -171,6 +188,7 @@ def employees_list():
 
 @attendance_bp.route('/api/search')
 @login_required
+@csrf.exempt
 def search_member():
     """Search member for check-in (AJAX)"""
     q = request.args.get('q', '')
@@ -198,10 +216,11 @@ def search_member():
             'name': m.name,
             'phone': m.phone,
             'status': m.subscription_status,
+            'status_text': m.subscription_status,
             'status_class': m.subscription_status_class,
             'can_check_in': can_check_in,
             'message': message,
             'days_remaining': m.days_remaining
         })
 
-    return jsonify({'results': results})
+    return jsonify({'members': results})

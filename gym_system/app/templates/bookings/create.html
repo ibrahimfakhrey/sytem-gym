@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}حجز جديد{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-plus-circle"></i>
+        حجز جديد
+    </h1>
+    <div>
+        <a href="{{ url_for('bookings.index') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-right"></i>
+            رجوع
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        {% if member %}
+        <div class="alert alert-info mb-4">
+            <strong><i class="bi bi-person"></i> العضو:</strong> {{ member.name }} - {{ member.phone }}
+        </div>
+        {% endif %}
+
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-calendar-plus"></i>
+                تفاصيل الحجز
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+
+                    <div class="mb-3">
+                        {{ form.class_session_id.label(class="form-label") }}
+                        {{ form.class_session_id(class="form-select") }}
+                        {% if form.class_session_id.errors %}
+                            <div class="text-danger">{{ form.class_session_id.errors[0] }}</div>
+                        {% endif %}
+                        <small class="text-muted">اختر الحصة من القائمة</small>
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form.session_date.label(class="form-label") }}
+                        {{ form.session_date(class="form-control") }}
+                        {% if form.session_date.errors %}
+                            <div class="text-danger">{{ form.session_date.errors[0] }}</div>
+                        {% endif %}
+                        <small class="text-muted">تاريخ الحصة المطلوبة</small>
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form.notes.label(class="form-label") }}
+                        {{ form.notes(class="form-control", rows=3, placeholder="ملاحظات إضافية (اختياري)") }}
+                        {% if form.notes.errors %}
+                            <div class="text-danger">{{ form.notes.errors[0] }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="alert alert-warning">
+                        <i class="bi bi-info-circle"></i>
+                        <strong>تنبيه:</strong> سيتم التحقق من توفر الأماكن قبل تأكيد الحجز
+                    </div>
+
+                    <div class="mt-4">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check"></i>
+                            تأكيد الحجز
+                        </button>
+                        <a href="{{ url_for('bookings.index') }}" class="btn btn-secondary">
+                            إلغاء
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

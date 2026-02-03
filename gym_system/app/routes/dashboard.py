@@ -9,6 +9,8 @@ from app.models.subscription import Subscription
 from app.models.attendance import MemberAttendance
 from app.models.finance import Income, Expense
 from app.models.fingerprint import FingerprintSyncLog
+from app.models.complaint import Complaint
+from app.models.schedule import ClassSession, Booking, DailyClosing
 
 dashboard_bp = Blueprint('dashboard', __name__)
 
@@ -78,11 +80,17 @@ def owner():
         Subscription.created_at.desc()
     ).limit(10).all()
 
+    # Open complaints (all brands)
+    open_complaints = Complaint.query.filter_by(status='open').order_by(
+        Complaint.created_at.desc()
+    ).limit(10).all()
+
     return render_template('dashboard/owner.html',
                           stats=stats,
                           brands=brands,
                           expiring_soon=expiring_soon,
-                          recent_subscriptions=recent_subscriptions)
+                          recent_subscriptions=recent_subscriptions,
+                          open_complaints=open_complaints)
 
 
 @dashboard_bp.route('/brand-manager')
@@ -171,13 +179,46 @@ def receptionist():
             fingerprint_enrolled=False
         ).limit(10).all()
 
+    # Open complaints (own brand only)
+    open_complaints = Complaint.query.filter_by(
+        brand_id=brand.id,
+        status='open'
+    ).order_by(Complaint.created_at.desc()).limit(5).all()
+
+    # Today's sessions
+    today_day_of_week = today.weekday()  # 0=Monday, 6=Sunday
+    from datetime import datetime
+    current_time = datetime.now().time()
+
+    today_sessions = ClassSession.query.filter(
+        ClassSession.brand_id == brand.id,
+        ClassSession.is_active == True,
+        ClassSession.day_of_week == today_day_of_week
+    ).order_by(ClassSession.start_time).all()
+
+    # Enrich sessions with booking info
+    for session in today_sessions:
+        session.current_bookings = session.get_current_bookings_count(today)
+        session.available_slots = session.max_capacity - session.current_bookings
+        session.is_past = session.end_time < current_time
+
+    # Check if daily closing done today
+    closing_today = DailyClosing.query.filter_by(
+        brand_id=brand.id,
+        closing_date=today
+    ).first()
+
     return render_template('dashboard/receptionist.html',
                           brand=brand,
                           today_attendance=today_attendance,
                           active_members=active_members,
                           expiring_today=expiring_today,
                           expiring_soon=expiring_soon,
-                          pending_enrollment=pending_enrollment)
+                          pending_enrollment=pending_enrollment,
+                          open_complaints=open_complaints,
+                          today_sessions=today_sessions,
+                          closing_today=closing_today,
+                          today=today)
 
 
 @dashboard_bp.route('/finance-admin')

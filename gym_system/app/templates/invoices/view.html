@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+
+{% block title %}فاتورة - {{ invoice.invoice_number }}{% endblock %}
+
+{% block content %}
+<div class="page-header d-print-none">
+    <h1>
+        <i class="bi bi-receipt"></i>
+        فاتورة {{ invoice.invoice_number }}
+    </h1>
+    <div>
+        <button onclick="window.print()" class="btn btn-primary">
+            <i class="bi bi-printer"></i>
+            طباعة
+        </button>
+        <a href="{{ url_for('subscriptions.view', subscription_id=invoice.subscription_id) }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-right"></i>
+            رجوع
+        </a>
+    </div>
+</div>
+
+<div class="card invoice-card">
+    <div class="card-body p-5">
+        <!-- Header -->
+        <div class="row mb-5">
+            <div class="col-6">
+                <h2 class="mb-0">{{ invoice.subscription.brand.name }}</h2>
+                <p class="text-muted mb-0">نظام إدارة الصالات الرياضية</p>
+            </div>
+            <div class="col-6 text-end">
+                <h3 class="text-primary mb-2">فاتورة</h3>
+                <p class="mb-1"><strong>رقم الفاتورة:</strong> {{ invoice.invoice_number }}</p>
+                <p class="mb-1"><strong>التاريخ:</strong> {{ invoice.invoice_date.strftime('%Y-%m-%d %H:%M') }}</p>
+            </div>
+        </div>
+
+        <!-- Customer Info -->
+        <div class="row mb-4">
+            <div class="col-6">
+                <h5 class="mb-3">معلومات العميل</h5>
+                <p class="mb-1"><strong>الاسم:</strong> {{ invoice.member_name }}</p>
+                {% if invoice.member_phone %}
+                <p class="mb-1"><strong>الهاتف:</strong> {{ invoice.member_phone }}</p>
+                {% endif %}
+                {% if invoice.member_email %}
+                <p class="mb-1"><strong>البريد:</strong> {{ invoice.member_email }}</p>
+                {% endif %}
+            </div>
+            <div class="col-6 text-end">
+                <h5 class="mb-3">تفاصيل الاشتراك</h5>
+                <p class="mb-1"><strong>رقم الاشتراك:</strong> {{ invoice.subscription_id }}</p>
+                {% if invoice.service_type_name %}
+                <p class="mb-1"><strong>نوع الخدمة:</strong> {{ invoice.service_type_name }}</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Invoice Items -->
+        <div class="table-responsive mb-4">
+            <table class="table table-bordered">
+                <thead class="table-light">
+                    <tr>
+                        <th>البند</th>
+                        <th>التفاصيل</th>
+                        <th class="text-end">المبلغ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>{{ invoice.plan_name }}</td>
+                        <td>
+                            {{ invoice.duration_text }}
+                            {% if invoice.service_type_name %}
+                            <br><small class="text-muted">{{ invoice.service_type_name }}</small>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">{{ "{:,.2f}".format(invoice.original_price) }} ر.س</td>
+                    </tr>
+                    {% if invoice.discount > 0 %}
+                    <tr>
+                        <td colspan="2" class="text-end"><strong>الخصم</strong></td>
+                        <td class="text-end text-danger">- {{ "{:,.2f}".format(invoice.discount) }} ر.س</td>
+                    </tr>
+                    {% endif %}
+                    <tr>
+                        <td colspan="2" class="text-end"><strong>المجموع قبل الضريبة</strong></td>
+                        <td class="text-end"><strong>{{ "{:,.2f}".format(invoice.subtotal) }} ر.س</strong></td>
+                    </tr>
+                    {% if invoice.tax_amount > 0 %}
+                    <tr>
+                        <td colspan="2" class="text-end">ضريبة القيمة المضافة ({{ invoice.tax_rate }}%)</td>
+                        <td class="text-end">{{ "{:,.2f}".format(invoice.tax_amount) }} ر.س</td>
+                    </tr>
+                    {% endif %}
+                    <tr class="table-primary">
+                        <td colspan="2" class="text-end"><strong>الإجمالي</strong></td>
+                        <td class="text-end"><strong>{{ "{:,.2f}".format(invoice.total_amount) }} ر.س</strong></td>
+                    </tr>
+                    <tr class="table-success">
+                        <td colspan="2" class="text-end"><strong>المبلغ المدفوع</strong></td>
+                        <td class="text-end"><strong>{{ "{:,.2f}".format(invoice.amount_paid) }} ر.س</strong></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Payment Info -->
+        <div class="row mb-4">
+            <div class="col-6">
+                <p class="mb-1"><strong>طريقة الدفع:</strong> {{ invoice.payment_method_text }}</p>
+                {% if invoice.notes %}
+                <p class="mb-1"><strong>ملاحظات:</strong> {{ invoice.notes }}</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="text-center mt-5 pt-4 border-top">
+            <p class="text-muted mb-0">شكراً لاشتراككم معنا</p>
+            <small class="text-muted">تم إنشاء هذه الفاتورة تلقائياً بواسطة نظام إدارة الصالات الرياضية</small>
+        </div>
+    </div>
+</div>
+
+<style>
+@media print {
+    .d-print-none {
+        display: none !important;
+    }
+
+    .invoice-card {
+        border: none !important;
+        box-shadow: none !important;
+    }
+
+    body {
+        background: white;
+    }
+
+    .navbar, .sidebar {
+        display: none;
+    }
+}
+</style>
+{% endblock %}

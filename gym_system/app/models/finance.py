@@ -92,11 +92,52 @@ class Expense(db.Model):
     date = db.Column(db.Date, nullable=False, default=date.today)
     receipt_image = db.Column(db.String(255))
 
+    # Approval workflow
+    status = db.Column(db.String(20), default='approved')  # pending, approved, rejected
+    approved_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    approved_at = db.Column(db.DateTime, nullable=True)
+    rejection_reason = db.Column(db.Text, nullable=True)
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
 
+    # Relationships
+    creator = db.relationship('User', foreign_keys=[created_by], backref='created_expenses')
+    approver = db.relationship('User', foreign_keys=[approved_by], backref='approved_expenses')
+
     def __repr__(self):
         return f'<Expense {self.amount} - {self.category_name}>'
+
+    @property
+    def status_text(self):
+        """Approval status in Arabic"""
+        status_map = {
+            'pending': 'معلق',
+            'approved': 'معتمد',
+            'rejected': 'مرفوض'
+        }
+        return status_map.get(self.status, self.status)
+
+    @property
+    def status_class(self):
+        """CSS class for approval status"""
+        class_map = {
+            'pending': 'warning',
+            'approved': 'success',
+            'rejected': 'danger'
+        }
+        return class_map.get(self.status, 'secondary')
+
+    def requires_approval(self):
+        """Check if expense requires approval based on amount or category"""
+        # Expenses over 1000 SAR require approval
+        if float(self.amount) > 1000:
+            return True
+        # Certain categories always require approval
+        approval_categories = ['معدات', 'صيانة', 'أخرى']
+        if self.category_name in approval_categories:
+            return True
+        return False
 
     @classmethod
     def get_total_for_period(cls, brand_id, start_date, end_date):
@@ -208,3 +249,85 @@ class Refund(db.Model):
 
     def __repr__(self):
         return f'<Refund {self.amount}>'
+
+
+class Invoice(db.Model):
+    """Invoice/Receipt records for subscription payments"""
+    __tablename__ = 'invoices'
+
+    id = db.Column(db.Integer, primary_key=True)
+    brand_id = db.Column(db.Integer, db.ForeignKey('brands.id'), nullable=False)
+    subscription_id = db.Column(db.Integer, db.ForeignKey('subscriptions.id'), nullable=False)
+    payment_id = db.Column(db.Integer, db.ForeignKey('subscription_payments.id'), nullable=False)
+    member_id = db.Column(db.Integer, db.ForeignKey('members.id'), nullable=False)
+
+    # Invoice details
+    invoice_number = db.Column(db.String(50), unique=True, nullable=False)
+    invoice_date = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    # Member info (snapshot at time of invoice)
+    member_name = db.Column(db.String(100), nullable=False)
+    member_phone = db.Column(db.String(20))
+    member_email = db.Column(db.String(100))
+
+    # Subscription/Plan info
+    plan_name = db.Column(db.String(100), nullable=False)
+    service_type_name = db.Column(db.String(100))
+    duration_text = db.Column(db.String(50))
+
+    # Financial details
+    original_price = db.Column(db.Numeric(10, 2), nullable=False)
+    discount = db.Column(db.Numeric(10, 2), default=0)
+    subtotal = db.Column(db.Numeric(10, 2), nullable=False)  # After discount
+    tax_rate = db.Column(db.Numeric(5, 2), default=0)  # VAT percentage (e.g., 15.00)
+    tax_amount = db.Column(db.Numeric(10, 2), default=0)
+    total_amount = db.Column(db.Numeric(10, 2), nullable=False)
+    amount_paid = db.Column(db.Numeric(10, 2), nullable=False)
+    payment_method = db.Column(db.String(20), nullable=False)  # cash, card, transfer
+
+    notes = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
+
+    # Relationships
+    subscription = db.relationship('Subscription', backref='invoices', foreign_keys=[subscription_id])
+    payment = db.relationship('SubscriptionPayment', backref='invoice', foreign_keys=[payment_id])
+    member = db.relationship('Member', backref='invoices', foreign_keys=[member_id])
+
+    def __repr__(self):
+        return f'<Invoice {self.invoice_number}>'
+
+    @staticmethod
+    def generate_invoice_number(brand_id):
+        """Generate unique invoice number"""
+        # Format: INV-BRANDID-YYYYMMDD-XXXX
+        today = datetime.now()
+        date_str = today.strftime('%Y%m%d')
+        prefix = f'INV-{brand_id}-{date_str}'
+
+        # Find the last invoice with this prefix
+        last_invoice = Invoice.query.filter(
+            Invoice.invoice_number.like(f'{prefix}-%')
+        ).order_by(Invoice.id.desc()).first()
+
+        if last_invoice:
+            # Extract the sequence number and increment
+            try:
+                last_seq = int(last_invoice.invoice_number.split('-')[-1])
+                new_seq = last_seq + 1
+            except:
+                new_seq = 1
+        else:
+            new_seq = 1
+
+        return f'{prefix}-{new_seq:04d}'
+
+    @property
+    def payment_method_text(self):
+        """Payment method in Arabic"""
+        method_map = {
+            'cash': 'نقدي',
+            'card': 'بطاقة',
+            'transfer': 'تحويل'
+        }
+        return method_map.get(self.payment_method, self.payment_method)

@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+
+{% block title %}تفاصيل الإقفال{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-receipt"></i>
+        تفاصيل الإقفال - {{ closing.closing_date.strftime('%Y-%m-%d') }}
+    </h1>
+    <div>
+        <a href="{{ url_for('closing.index') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-right"></i>
+            رجوع
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Stats Overview -->
+    <div class="col-lg-8">
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <i class="bi bi-graph-up"></i>
+                ملخص المبيعات
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <table class="table table-borderless">
+                            <tr>
+                                <td><i class="bi bi-plus-circle text-primary"></i> <strong>اشتراكات جديدة:</strong></td>
+                                <td class="text-end"><strong>{{ closing.new_subscriptions_count }}</strong></td>
+                            </tr>
+                            <tr>
+                                <td><i class="bi bi-arrow-repeat text-success"></i> <strong>تجديدات:</strong></td>
+                                <td class="text-end"><strong>{{ closing.renewals_count }}</strong></td>
+                            </tr>
+                            <tr class="border-top">
+                                <td><strong>إجمالي المبيعات:</strong></td>
+                                <td class="text-end"><strong class="text-success">{{ "{:,.2f}".format(closing.total_sales) }} ر.س</strong></td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <table class="table table-borderless">
+                            <tr>
+                                <td><i class="bi bi-cash text-success"></i> <strong>نقدي:</strong></td>
+                                <td class="text-end"><strong>{{ "{:,.2f}".format(closing.cash_amount) }} ر.س</strong></td>
+                            </tr>
+                            <tr>
+                                <td><i class="bi bi-credit-card-2-front text-primary"></i> <strong>شبكة:</strong></td>
+                                <td class="text-end"><strong>{{ "{:,.2f}".format(closing.card_amount) }} ر.س</strong></td>
+                            </tr>
+                            <tr>
+                                <td><i class="bi bi-bank text-info"></i> <strong>حوالة:</strong></td>
+                                <td class="text-end"><strong>{{ "{:,.2f}".format(closing.transfer_amount) }} ر.س</strong></td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card {% if closing.has_discrepancy %}border-{{ closing.discrepancy_class }}{% endif %}">
+            <div class="card-header {% if closing.has_discrepancy %}bg-{{ closing.discrepancy_class }} text-white{% endif %}">
+                <i class="bi bi-cash-stack"></i>
+                مطابقة النقدية
+            </div>
+            <div class="card-body">
+                <table class="table table-borderless table-lg">
+                    <tr>
+                        <td><strong>النقدي المتوقع (من النظام):</strong></td>
+                        <td class="text-end"><h5 class="mb-0">{{ "{:,.2f}".format(closing.expected_cash) }} ر.س</h5></td>
+                    </tr>
+                    <tr>
+                        <td><strong>النقدي الفعلي (المعدود):</strong></td>
+                        <td class="text-end"><h5 class="mb-0">{{ "{:,.2f}".format(closing.actual_cash_submitted) }} ر.س</h5></td>
+                    </tr>
+                    <tr class="border-top">
+                        <td><strong>الفرق:</strong></td>
+                        <td class="text-end">
+                            {% if closing.has_discrepancy %}
+                            <h4 class="mb-0 text-{{ closing.discrepancy_class }}">
+                                {{ "{:+,.2f}".format(closing.cash_difference) }} ر.س
+                            </h4>
+                            {% else %}
+                            <h4 class="mb-0 text-success">
+                                <i class="bi bi-check-circle"></i> متطابق
+                            </h4>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+
+                {% if closing.has_discrepancy %}
+                <div class="alert alert-{{ closing.discrepancy_class }} mb-0">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    {% if closing.cash_difference > 0 %}
+                    <strong>فائض:</strong> هناك زيادة في النقدية بمبلغ {{ "{:,.2f}".format(closing.cash_difference) }} ر.س
+                    {% else %}
+                    <strong>عجز:</strong> هناك نقص في النقدية بمبلغ {{ "{:,.2f}".format(abs(closing.cash_difference)) }} ر.س
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if closing.notes %}
+        <div class="card mt-4">
+            <div class="card-header">
+                <i class="bi bi-sticky"></i>
+                ملاحظات
+            </div>
+            <div class="card-body">
+                <p class="mb-0">{{ closing.notes }}</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Sidebar Info -->
+    <div class="col-lg-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-info-circle"></i>
+                معلومات الإقفال
+            </div>
+            <div class="card-body">
+                <p class="mb-2">
+                    <strong>التاريخ:</strong><br>
+                    {{ closing.closing_date.strftime('%Y-%m-%d') }}
+                </p>
+                {% if current_user.can_view_all_brands %}
+                <p class="mb-2">
+                    <strong>البراند:</strong><br>
+                    {{ closing.brand.name }}
+                </p>
+                {% endif %}
+                <p class="mb-2">
+                    <strong>أقفل بواسطة:</strong><br>
+                    {{ closing.closed_by_user.name }}
+                </p>
+                <p class="mb-2">
+                    <strong>وقت الإقفال:</strong><br>
+                    {{ closing.created_at.strftime('%Y-%m-%d %H:%M') }}
+                </p>
+                <p class="mb-0">
+                    <strong>الحالة:</strong><br>
+                    <span class="badge bg-success">{{ closing.status_text }}</span>
+                </p>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-printer"></i>
+                إجراءات
+            </div>
+            <div class="card-body">
+                <button class="btn btn-outline-primary w-100 mb-2" onclick="window.print()">
+                    <i class="bi bi-printer"></i>
+                    طباعة
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

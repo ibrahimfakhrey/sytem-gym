@@ -1,0 +1,295 @@
+{% extends "base.html" %}
+
+{% block title %}لوحة المالية{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-cash-stack"></i> لوحة المالية</h1>
+    <p class="text-muted">{{ today.strftime('%Y-%m-%d') }}</p>
+</div>
+
+<!-- Brand Filter -->
+{% if current_user.can_view_all_brands and brands %}
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">البراند</label>
+                <select name="brand_id" class="form-select" onchange="this.form.submit()">
+                    <option value="">الكل</option>
+                    {% for brand in brands %}
+                    <option value="{{ brand.id }}" {% if request.args.get('brand_id')|int == brand.id %}selected{% endif %}>
+                        {{ brand.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<!-- Financial Alerts -->
+<div class="row mb-4">
+    <div class="col-12">
+        {% if pending_expenses_count > 0 %}
+        <div class="alert alert-warning alert-dismissible fade show" role="alert">
+            <i class="bi bi-hourglass-split"></i>
+            <strong>تنبيه:</strong> يوجد {{ pending_expenses_count }} مصروف/مصروفات بانتظار الموافقة.
+            <a href="{{ url_for('finance.pending_expenses') }}" class="alert-link">عرض المصروفات المعلقة</a>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endif %}
+
+        {% for alert in alerts %}
+        <div class="alert alert-{{ alert.type }} alert-dismissible fade show" role="alert">
+            <i class="bi bi-exclamation-triangle"></i>
+            {{ alert.message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card bg-success text-white">
+            <div class="card-body text-center">
+                <h6><i class="bi bi-arrow-down-circle"></i> إجمالي المبيعات اليوم</h6>
+                <h2>{{ "{:,.2f}".format(total_sales) }} ر.س</h2>
+                <a href="{{ url_for('finance.income_list') }}" class="btn btn-sm btn-light mt-2">
+                    عرض التفاصيل
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card bg-danger text-white">
+            <div class="card-body text-center">
+                <h6><i class="bi bi-arrow-up-circle"></i> إجمالي المصروفات اليوم</h6>
+                <h2>{{ "{:,.2f}".format(total_expenses) }} ر.س</h2>
+                <a href="{{ url_for('finance.expenses_list') }}" class="btn btn-sm btn-light mt-2">
+                    عرض التفاصيل
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card {% if cash_difference %}{% if cash_difference < 0 %}bg-warning{% else %}bg-info{% endif %} text-white{% else %}bg-light{% endif %}">
+            <div class="card-body text-center">
+                <h6><i class="bi bi-wallet2"></i> فرق الكاش</h6>
+                {% if cash_difference is not none %}
+                <h2>{{ "{:,.2f}".format(cash_difference) }} ر.س</h2>
+                {% if cash_difference < 0 %}
+                <small>نقص في الكاش</small>
+                {% elif cash_difference > 0 %}
+                <small>زيادة في الكاش</small>
+                {% else %}
+                <small>متطابق</small>
+                {% endif %}
+                {% else %}
+                <h2>-</h2>
+                <small class="text-muted">لم يتم الإقفال بعد</small>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Stats -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h5><i class="bi bi-graph-up"></i> صافي الربح اليومي</h5>
+                <h3 class="{% if total_sales - total_expenses >= 0 %}text-success{% else %}text-danger{% endif %}">
+                    {{ "{:,.2f}".format(total_sales - total_expenses) }} ر.س
+                </h3>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h5><i class="bi bi-calendar-check"></i> حالة الإقفال</h5>
+                {% if daily_closing %}
+                <span class="badge bg-success fs-5">
+                    <i class="bi bi-check-circle"></i>
+                    تم الإقفال
+                </span>
+                <p class="text-muted mt-2 mb-0">
+                    بواسطة: {{ daily_closing.submitter.name if daily_closing.submitter else 'غير معروف' }}
+                </p>
+                {% else %}
+                <span class="badge bg-warning fs-5">
+                    <i class="bi bi-clock"></i>
+                    لم يتم الإقفال
+                </span>
+                <a href="{{ url_for('closing.view_daily_summary', closing_date=today.isoformat()) }}" class="btn btn-sm btn-primary mt-2">
+                    إقفال اليوم
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Transactions -->
+<div class="row">
+    <div class="col-md-7">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-receipt"></i> آخر المبيعات اليوم</h5>
+                <a href="{{ url_for('invoices.index') }}" class="btn btn-sm btn-outline-primary">
+                    عرض الكل
+                </a>
+            </div>
+            <div class="card-body">
+                {% if recent_payments %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>الوقت</th>
+                                <th>العضو</th>
+                                <th>المبلغ</th>
+                                <th>طريقة الدفع</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for payment in recent_payments %}
+                            <tr>
+                                <td>{{ payment.payment_date.strftime('%H:%M') }}</td>
+                                <td>{{ payment.subscription.member.name }}</td>
+                                <td><strong>{{ "{:,.2f}".format(payment.amount) }} ر.س</strong></td>
+                                <td>
+                                    <span class="badge
+                                        {% if payment.payment_method == 'cash' %}bg-success
+                                        {% elif payment.payment_method == 'card' %}bg-primary
+                                        {% elif payment.payment_method == 'transfer' %}bg-info
+                                        {% else %}bg-secondary{% endif %}">
+                                        {{ payment.payment_method_text }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center text-muted py-3">
+                    <i class="bi bi-inbox fs-1"></i>
+                    <p class="mt-2">لا توجد مبيعات اليوم</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-5">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-cash"></i> آخر المصروفات اليوم</h5>
+                <a href="{{ url_for('finance.expenses_list') }}" class="btn btn-sm btn-outline-danger">
+                    عرض الكل
+                </a>
+            </div>
+            <div class="card-body">
+                {% if recent_expenses %}
+                <div class="list-group list-group-flush">
+                    {% for expense in recent_expenses %}
+                    <div class="list-group-item px-0">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <strong>{{ expense.category_name }}</strong>
+                                <br>
+                                <small class="text-muted">{{ expense.description or '-' }}</small>
+                            </div>
+                            <span class="badge bg-danger">
+                                {{ "{:,.2f}".format(expense.amount) }} ر.س
+                            </span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center text-muted py-3">
+                    <i class="bi bi-inbox fs-1"></i>
+                    <p class="mt-2">لا توجد مصروفات اليوم</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Links -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-link-45deg"></i> روابط سريعة</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <a href="{{ url_for('finance.sales_transactions') }}" class="btn btn-outline-success w-100 mb-2">
+                            <i class="bi bi-receipt-cutoff"></i>
+                            معاملات المبيعات
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="{{ url_for('finance.income_list') }}" class="btn btn-outline-success w-100 mb-2">
+                            <i class="bi bi-arrow-down-circle"></i>
+                            الدخل
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="{{ url_for('finance.expenses_list') }}" class="btn btn-outline-danger w-100 mb-2">
+                            <i class="bi bi-arrow-up-circle"></i>
+                            المصروفات
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="{{ url_for('finance.pending_expenses') }}" class="btn btn-outline-warning w-100 mb-2">
+                            <i class="bi bi-hourglass-split"></i>
+                            المصروفات المعلقة
+                            {% if pending_expenses_count > 0 %}
+                            <span class="badge bg-danger">{{ pending_expenses_count }}</span>
+                            {% endif %}
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="{{ url_for('finance.salaries_list') }}" class="btn btn-outline-primary w-100 mb-2">
+                            <i class="bi bi-wallet2"></i>
+                            الرواتب
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="{{ url_for('closing.accountant_review') }}" class="btn btn-outline-info w-100 mb-2">
+                            <i class="bi bi-clipboard-check"></i>
+                            مراجعة الإقفالات
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="{{ url_for('closing.index') }}" class="btn btn-outline-secondary w-100 mb-2">
+                            <i class="bi bi-calendar-check"></i>
+                            الإقفالات اليومية
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="{{ url_for('invoices.index') }}" class="btn btn-outline-secondary w-100 mb-2">
+                            <i class="bi bi-receipt"></i>
+                            الفواتير
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

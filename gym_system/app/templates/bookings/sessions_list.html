@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+
+{% block title %}الحصص والكلاسات{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-calendar-check"></i> الحصص والكلاسات</h1>
+    <div>
+        {% if current_user.can_manage_users or current_user.is_brand_manager %}
+        <a href="{{ url_for('bookings.create_session') }}" class="btn btn-primary">
+            <i class="bi bi-plus"></i>
+            حصة جديدة
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            {% if current_user.can_view_all_brands and brands %}
+            <div class="col-md-4">
+                <label class="form-label">البراند</label>
+                <select name="brand_id" class="form-select">
+                    <option value="">الكل</option>
+                    {% for brand in brands %}
+                    <option value="{{ brand.id }}" {% if request.args.get('brand_id')|int == brand.id %}selected{% endif %}>
+                        {{ brand.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+
+            <div class="col-md-4">
+                <label class="form-label">النوع</label>
+                <select name="type" class="form-select">
+                    <option value="">الكل</option>
+                    <option value="gym_class" {% if session_type == 'gym_class' %}selected{% endif %}>كلاس جيم</option>
+                    <option value="swimming_education" {% if session_type == 'swimming_education' %}selected{% endif %}>سباحة - تعليم</option>
+                    <option value="swimming_recreation" {% if session_type == 'swimming_recreation' %}selected{% endif %}>سباحة - ترفيه</option>
+                    <option value="karate" {% if session_type == 'karate' %}selected{% endif %}>كاراتيه</option>
+                    <option value="other" {% if session_type == 'other' %}selected{% endif %}>أخرى</option>
+                </select>
+            </div>
+
+            <div class="col-md-4 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="bi bi-search"></i>
+                    بحث
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Sessions List -->
+<div class="row">
+    {% if sessions.items %}
+    {% for session in sessions.items %}
+    <div class="col-md-6 col-lg-4 mb-4">
+        <div class="card h-100">
+            <div class="card-header bg-primary text-white">
+                <strong>{{ session.name }}</strong>
+                <span class="badge bg-light text-dark float-start">{{ session.type_text }}</span>
+            </div>
+            <div class="card-body">
+                <p class="mb-2">
+                    <i class="bi bi-calendar"></i>
+                    <strong>{{ session.day_text }}</strong>
+                </p>
+                <p class="mb-2">
+                    <i class="bi bi-clock"></i>
+                    {{ session.time_slot }}
+                </p>
+                <p class="mb-2">
+                    <i class="bi bi-people"></i>
+                    الطاقة: {{ session.available_slots }}/{{ session.max_capacity }}
+                </p>
+                {% if session.instructor_id %}
+                <p class="mb-0">
+                    <i class="bi bi-person-badge"></i>
+                    <small>{{ session.instructor.name if session.instructor else '-' }}</small>
+                </p>
+                {% endif %}
+            </div>
+            <div class="card-footer">
+                <a href="{{ url_for('bookings.index', class_session_id=session.id) }}" class="btn btn-sm btn-info">
+                    <i class="bi bi-eye"></i>
+                    عرض الحجوزات
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+
+    <!-- Pagination -->
+    {% if sessions.pages > 1 %}
+    <div class="col-12">
+        <nav>
+            <ul class="pagination justify-content-center">
+                {% if sessions.has_prev %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('bookings.sessions_list', page=sessions.prev_num, type=session_type) }}">السابق</a>
+                </li>
+                {% endif %}
+
+                {% for page_num in sessions.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
+                    {% if page_num %}
+                        <li class="page-item {% if page_num == sessions.page %}active{% endif %}">
+                            <a class="page-link" href="{{ url_for('bookings.sessions_list', page=page_num, type=session_type) }}">{{ page_num }}</a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if sessions.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('bookings.sessions_list', page=sessions.next_num, type=session_type) }}">التالي</a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body text-center">
+                <p class="text-muted mb-0">لا توجد حصص</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+
+{% block title %}الحجوزات{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-calendar-check"></i> الحجوزات</h1>
+    <div>
+        <a href="{{ url_for('bookings.sessions_list') }}" class="btn btn-outline-primary">
+            <i class="bi bi-list"></i>
+            الحصص
+        </a>
+        <a href="{{ url_for('bookings.create') }}" class="btn btn-primary">
+            <i class="bi bi-plus"></i>
+            حجز جديد
+        </a>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            {% if current_user.can_view_all_brands and brands %}
+            <div class="col-md-3">
+                <label class="form-label">البراند</label>
+                <select name="brand_id" class="form-select">
+                    <option value="">الكل</option>
+                    {% for brand in brands %}
+                    <option value="{{ brand.id }}" {% if request.args.get('brand_id')|int == brand.id %}selected{% endif %}>
+                        {{ brand.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+
+            <div class="col-md-3">
+                <label class="form-label">التاريخ</label>
+                <input type="date" name="date" class="form-control" value="{{ session_date }}">
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label">الحالة</label>
+                <select name="status" class="form-select">
+                    <option value="">الكل</option>
+                    <option value="confirmed" {% if status == 'confirmed' %}selected{% endif %}>مؤكد</option>
+                    <option value="cancelled" {% if status == 'cancelled' %}selected{% endif %}>ملغي</option>
+                    <option value="attended" {% if status == 'attended' %}selected{% endif %}>حضر</option>
+                    <option value="no_show" {% if status == 'no_show' %}selected{% endif %}>لم يحضر</option>
+                </select>
+            </div>
+
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="bi bi-search"></i>
+                    بحث
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Bookings List -->
+<div class="card">
+    <div class="card-body">
+        {% if bookings.items %}
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>العضو</th>
+                        <th>الحصة</th>
+                        <th>التاريخ</th>
+                        <th>الوقت</th>
+                        <th>الحالة</th>
+                        <th>الإجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for booking in bookings.items %}
+                    <tr>
+                        <td>
+                            <a href="{{ url_for('members.view', member_id=booking.member.id) }}">
+                                {{ booking.member.name }}
+                            </a>
+                        </td>
+                        <td>
+                            <strong>{{ booking.class_session.name }}</strong>
+                            <br>
+                            <small class="text-muted">{{ booking.class_session.type_text }}</small>
+                        </td>
+                        <td>{{ booking.session_date.strftime('%Y-%m-%d') }}</td>
+                        <td>{{ booking.class_session.time_slot }}</td>
+                        <td>
+                            <span class="badge bg-{{ booking.status_class }}">{{ booking.status_text }}</span>
+                        </td>
+                        <td>
+                            {% if booking.status == 'confirmed' %}
+                            <form method="POST" action="{{ url_for('bookings.cancel', booking_id=booking.id) }}" style="display:inline;">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('هل أنت متأكد من إلغاء الحجز?')">
+                                    <i class="bi bi-x-circle"></i>
+                                    إلغاء
+                                </button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if bookings.pages > 1 %}
+        <nav>
+            <ul class="pagination justify-content-center mt-3">
+                {% if bookings.has_prev %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('bookings.index', page=bookings.prev_num, date=session_date, status=status) }}">السابق</a>
+                </li>
+                {% endif %}
+
+                {% for page_num in bookings.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
+                    {% if page_num %}
+                        <li class="page-item {% if page_num == bookings.page %}active{% endif %}">
+                            <a class="page-link" href="{{ url_for('bookings.index', page=page_num, date=session_date, status=status) }}">{{ page_num }}</a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if bookings.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('bookings.index', page=bookings.next_num, date=session_date, status=status) }}">التالي</a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+
+        {% else %}
+        <p class="text-muted text-center mb-0">لا توجد حجوزات</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

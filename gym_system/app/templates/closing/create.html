@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+
+{% block title %}إقفال اليوم{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-cash-stack"></i>
+        إقفال اليوم - {{ closing_date.strftime('%Y-%m-%d') }}
+    </h1>
+    <div>
+        <a href="{{ url_for('closing.view_daily_summary', closing_date=closing_date.isoformat()) }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-right"></i>
+            رجوع للملخص
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Left: Stats Summary -->
+    <div class="col-lg-7">
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <i class="bi bi-info-circle"></i>
+                ملخص اليوم
+            </div>
+            <div class="card-body">
+                <table class="table table-borderless">
+                    <tr>
+                        <td><i class="bi bi-plus-circle text-primary"></i> <strong>اشتراكات جديدة:</strong></td>
+                        <td class="text-end"><strong>{{ stats.new_subscriptions_count }}</strong></td>
+                    </tr>
+                    <tr>
+                        <td><i class="bi bi-arrow-repeat text-success"></i> <strong>تجديدات:</strong></td>
+                        <td class="text-end"><strong>{{ stats.renewals_count }}</strong></td>
+                    </tr>
+                    <tr class="border-top">
+                        <td><strong>إجمالي المبيعات:</strong></td>
+                        <td class="text-end"><strong class="text-success">{{ "{:,.2f}".format(stats.total_sales) }} ر.س</strong></td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <i class="bi bi-credit-card"></i>
+                طرق الدفع
+            </div>
+            <div class="card-body">
+                <table class="table table-borderless">
+                    <tr>
+                        <td><i class="bi bi-cash text-success"></i> <strong>نقدي:</strong></td>
+                        <td class="text-end"><strong class="text-success">{{ "{:,.2f}".format(stats.cash_sales) }} ر.س</strong></td>
+                    </tr>
+                    <tr>
+                        <td><i class="bi bi-credit-card-2-front text-primary"></i> <strong>شبكة:</strong></td>
+                        <td class="text-end"><strong>{{ "{:,.2f}".format(stats.card_sales) }} ر.س</strong></td>
+                    </tr>
+                    <tr>
+                        <td><i class="bi bi-bank text-info"></i> <strong>حوالة:</strong></td>
+                        <td class="text-end"><strong>{{ "{:,.2f}".format(stats.transfer_sales) }} ر.س</strong></td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right: Cash Reconciliation Form -->
+    <div class="col-lg-5">
+        <div class="card border-warning">
+            <div class="card-header bg-warning">
+                <i class="bi bi-cash"></i>
+                <strong>تسليم النقدية</strong>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+
+                    <div class="alert alert-info">
+                        <strong>النقدي المتوقع (من النظام):</strong>
+                        <div class="h3 text-primary mb-0">{{ "{:,.2f}".format(stats.cash_sales) }} ر.س</div>
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form.actual_cash.label(class="form-label") }}
+                        {{ form.actual_cash(class="form-control form-control-lg text-center",
+                           placeholder="0.00", step="0.01", id="actual_cash") }}
+                        {% if form.actual_cash.errors %}
+                            <div class="text-danger">{{ form.actual_cash.errors[0] }}</div>
+                        {% endif %}
+                        <small class="text-muted">أدخل المبلغ النقدي الفعلي الذي تم عده</small>
+                    </div>
+
+                    <!-- Difference Calculator -->
+                    <div id="difference-alert" class="alert" style="display:none;">
+                        <strong>الفرق:</strong>
+                        <div class="h4 mb-0" id="difference-amount"></div>
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form.notes.label(class="form-label") }}
+                        {{ form.notes(class="form-control", rows=3,
+                           placeholder="أي ملاحظات أو توضيحات للفرق (إن وجد)") }}
+                        {% if form.notes.errors %}
+                            <div class="text-danger">{{ form.notes.errors[0] }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        <strong>تنبيه:</strong> بعد الإقفال لا يمكن التعديل. تأكد من المبلغ النقدي.
+                    </div>
+
+                    <button type="submit" class="btn btn-warning w-100 btn-lg">
+                        <i class="bi bi-check-circle"></i>
+                        تأكيد الإقفال
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Calculate difference on input
+document.getElementById('actual_cash').addEventListener('input', function() {
+    const expected = parseFloat({{ stats.cash_sales }});
+    const actual = parseFloat(this.value) || 0;
+    const difference = actual - expected;
+
+    const alertDiv = document.getElementById('difference-alert');
+    const amountDiv = document.getElementById('difference-amount');
+
+    if (this.value) {
+        if (Math.abs(difference) < 0.01) {
+            alertDiv.className = 'alert alert-success';
+            alertDiv.style.display = 'block';
+            amountDiv.textContent = 'متطابق ✓';
+            amountDiv.className = 'h4 mb-0 text-success';
+        } else {
+            alertDiv.className = difference > 0 ? 'alert alert-warning' : 'alert alert-danger';
+            alertDiv.style.display = 'block';
+            const sign = difference > 0 ? '+' : '';
+            amountDiv.textContent = sign + difference.toFixed(2) + ' ر.س';
+            amountDiv.className = difference > 0 ? 'h4 mb-0 text-warning' : 'h4 mb-0 text-danger';
+        }
+    } else {
+        alertDiv.style.display = 'none';
+    }
+});
+</script>
+{% endblock %}
