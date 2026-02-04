@@ -77,15 +77,15 @@
 
 <!-- 48 Hour Urgent Alerts Widget -->
 {% if expiring_48h %}
+<div class="alert alert-danger mb-4" style="border: 3px solid #dc3545; border-radius: 10px;">
+    <h5 class="alert-heading mb-3" style="font-size: 1.1rem;">
+        <i class="bi bi-alarm"></i>
+        ⚠️ تنبيه عاجل! ({{ expiring_48h|length }} اشتراك تنتهي خلال 48 ساعة)
+    </h5>
+</div>
 <div class="card border-danger mb-4">
-    <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
-        <span>
-            <i class="bi bi-alarm"></i>
-            ⚠️ تنبيه عاجل: اشتراكات تنتهي خلال 48 ساعة ({{ expiring_48h|length }})
-        </span>
-        <a href="{{ url_for('subscriptions.expiring', days=2) }}" class="btn btn-sm btn-light">
-            عرض الكل
-        </a>
+    <div class="card-header bg-danger text-white text-center py-2">
+        <strong>📋 قائمة الاشتراكات المنتهية قريباً</strong>
     </div>
     <div class="card-body p-0">
         <div class="table-responsive">

@@ -82,22 +82,17 @@
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label class="form-label">المبلغ المدفوع *</label>
-                            {{ form.paid_amount(class="form-control", type="number", min="0", step="0.01") }}
+                            {{ form.amount_paid(class="form-control", type="number", min="0", step="0.01") }}
                         </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label">طريقة الدفع *</label>
                             {{ form.payment_method(class="form-select") }}
+                            {% if form.payment_method.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.payment_method.errors[0] }}
+                            </div>
+                            {% endif %}
                         </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">طريقة الدفع *</label>
-                        {{ form.payment_method(class="form-select") }}
-                        {% if form.payment_method.errors %}
-                        <div class="invalid-feedback d-block">
-                            {{ form.payment_method.errors[0] }}
-                        </div>
-                        {% endif %}
                     </div>
 
                     <div class="mb-3">

@@ -54,7 +54,7 @@ class Plan(db.Model):
     @property
     def is_session_based(self):
         """Check if this is a session-based plan"""
-        return self.sessions_count > 0
+        return (self.sessions_count or 0) > 0
 
     @property
     def plan_type_text(self):
@@ -182,6 +182,18 @@ class Subscription(db.Model):
             'stopped': 'dark'
         }
         return class_map.get(self.status, 'secondary')
+
+    @property
+    def is_session_based(self):
+        """Check if this is a session-based subscription"""
+        return (self.sessions_total or 0) > 0
+
+    @property
+    def has_sessions_available(self):
+        """Check if sessions are still available"""
+        if not self.is_session_based:
+            return True
+        return (self.sessions_consumed or 0) < (self.sessions_total or 0)
 
     def stop(self, reason, user_id):
         """Stop subscription with reason"""

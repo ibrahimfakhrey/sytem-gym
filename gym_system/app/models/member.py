@@ -121,6 +121,27 @@ class Member(db.Model):
             return not self.fingerprint_enrolled
         return False
 
+    @property
+    def is_blocked(self):
+        """Check if member is blocked"""
+        from app.models.blocked_member import BlockedMember
+        return BlockedMember.query.filter_by(
+            brand_id=self.brand_id,
+            original_member_id=self.id,
+            is_active=True
+        ).first() is not None
+
+    @property
+    def block_reason(self):
+        """Get block reason if blocked"""
+        from app.models.blocked_member import BlockedMember
+        blocked = BlockedMember.query.filter_by(
+            brand_id=self.brand_id,
+            original_member_id=self.id,
+            is_active=True
+        ).first()
+        return blocked.reason if blocked else None
+
     def can_check_in(self):
         """Check if member can check in"""
         sub = self.active_subscription

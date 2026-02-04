@@ -10,7 +10,7 @@ from app import db
 from app.models.company import Brand
 from app.models.member import Member
 from app.models.subscription import Plan, Subscription, SubscriptionFreeze, SubscriptionPayment, RenewalRejection
-from app.models.finance import Income
+from app.models.finance import Income, Invoice
 from app.models.service import ServiceType
 from app.models.offer import PromotionalOffer
 from app.models.giftcard import GiftCard
@@ -177,15 +177,22 @@ def create():
     if not selected_service_type and service_types:
         selected_service_type = service_types[0].id
 
-    # Filter plans by service type
+    # Filter plans by service type (include plans with no service_type = general plans)
     if selected_service_type:
-        plans = Plan.query.filter_by(
-            brand_id=member.brand_id,
-            service_type_id=selected_service_type,
-            is_active=True
+        plans = Plan.query.filter(
+            Plan.brand_id == member.brand_id,
+            Plan.is_active == True,
+            db.or_(
+                Plan.service_type_id == selected_service_type,
+                Plan.service_type_id.is_(None)  # Include general plans
+            )
         ).all()
     else:
-        plans = []
+        # If no service type selected, show all plans for this brand
+        plans = Plan.query.filter_by(
+            brand_id=member.brand_id,
+            is_active=True
+        ).all()
 
     form.plan_id.choices = [(p.id, f'{p.name} - {p.price} ر.س ({p.plan_type_text})') for p in plans]
 
@@ -443,13 +450,23 @@ def renew(subscription_id):
 
     if form.validate_on_submit():
         plan = Plan.query.get(form.plan_id.data)
-        paid_amount = float(form.amount_paid.data)
+        if not plan:
+            flash('الباقة غير موجودة', 'danger')
+            return render_template('subscriptions/renew.html', form=form, subscription=subscription, plans=plans)
+        
+        paid_amount = float(form.amount_paid.data or 0)
         discount = float(form.discount.data or 0)
+        plan_price = float(plan.price or 0)
         new_start = form.start_date.data
         new_end = new_start + timedelta(days=plan.duration_days)
         
         # Calculate renewal cost and validate payment
-        renewal_cost = float(plan.price) - discount
+        renewal_cost = plan_price - discount
+        
+        # Validate: discount cannot exceed price
+        if discount > plan_price:
+            flash(f'الخصم ({discount:.0f}) أكبر من سعر الباقة ({plan_price:.0f})', 'danger')
+            return render_template('subscriptions/renew.html', form=form, subscription=subscription, plans=plans)
         
         # Validate: payment must not exceed renewal cost
         if paid_amount > renewal_cost:
