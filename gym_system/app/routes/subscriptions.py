@@ -114,6 +114,7 @@ def index():
     """List subscriptions"""
     page, per_page = pagination_args(request)
     status = request.args.get('status', '')
+    expiring = request.args.get('expiring', type=int)
 
     # Base query
     if current_user.can_view_all_brands:
@@ -128,6 +129,16 @@ def index():
     # Status filter
     if status:
         query = query.filter_by(status=status)
+    
+    # Expiring filter (subscriptions expiring within X days)
+    if expiring:
+        from datetime import timedelta
+        today = date.today()
+        query = query.filter(
+            Subscription.status == 'active',
+            Subscription.end_date >= today,
+            Subscription.end_date <= today + timedelta(days=expiring)
+        )
 
     # Pagination
     subscriptions = query.order_by(Subscription.created_at.desc()).paginate(

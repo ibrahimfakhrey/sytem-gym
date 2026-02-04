@@ -80,7 +80,41 @@ def index():
 
     # Status filter
     if status == 'active':
-        query = query.filter_by(is_active=True)
+        # Members with active subscription
+        from app.models.subscription import Subscription
+        from datetime import date
+        active_member_ids = db.session.query(Subscription.member_id).filter(
+            Subscription.status == 'active',
+            Subscription.end_date >= date.today()
+        ).distinct()
+        query = query.filter(Member.id.in_(active_member_ids))
+    elif status == 'expired':
+        # Members with expired subscription
+        from app.models.subscription import Subscription
+        from datetime import date
+        expired_member_ids = db.session.query(Subscription.member_id).filter(
+            db.or_(
+                Subscription.status == 'expired',
+                Subscription.end_date < date.today()
+            )
+        ).distinct()
+        active_member_ids = db.session.query(Subscription.member_id).filter(
+            Subscription.status == 'active',
+            Subscription.end_date >= date.today()
+        ).distinct()
+        query = query.filter(Member.id.in_(expired_member_ids), ~Member.id.in_(active_member_ids))
+    elif status == 'frozen':
+        # Members with frozen subscription
+        from app.models.subscription import Subscription
+        frozen_member_ids = db.session.query(Subscription.member_id).filter(
+            Subscription.status == 'frozen'
+        ).distinct()
+        query = query.filter(Member.id.in_(frozen_member_ids))
+    elif status == 'no_subscription':
+        # Members without any subscription
+        from app.models.subscription import Subscription
+        members_with_subs = db.session.query(Subscription.member_id).distinct()
+        query = query.filter(~Member.id.in_(members_with_subs))
     elif status == 'inactive':
         query = query.filter_by(is_active=False)
 
