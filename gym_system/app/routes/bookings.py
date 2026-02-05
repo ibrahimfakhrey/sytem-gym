@@ -220,7 +220,7 @@ def create():
         ).all()
 
     form.class_session_id.choices = [
-        (s.id, f'{s.name} - {s.day_text} {s.time_slot}') for s in sessions
+        (s.id, f'{s.name} - {s.day_name_arabic} {s.time_range}') for s in sessions
     ]
 
     # If member_id provided, validate access
