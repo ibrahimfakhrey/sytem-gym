@@ -131,6 +131,16 @@
                         </li>
                         {% endif %}
 
+                        {% if current_user.can_manage_members or (current_user.role and current_user.role.name == 'موظف استقبال') %}
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint and 'bookings' in request.endpoint %}active{% endif %}"
+                               href="{{ url_for('bookings.sessions_list') }}">
+                                <i class="bi bi-calendar-check"></i>
+                                الحصص والحجوزات
+                            </a>
+                        </li>
+                        {% endif %}
+
                         {% if current_user.role and current_user.role.can_view_complaints %}
                         <li class="nav-item">
                             <a class="nav-link {% if request.endpoint and 'complaints' in request.endpoint %}active{% endif %}"
