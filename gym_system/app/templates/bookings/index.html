@@ -101,17 +101,25 @@
                             </a>
                         </td>
                         <td>
-                            <strong>{{ booking.class_session.name }}</strong>
+                            <strong>{{ booking.gym_class.name }}</strong>
                             <br>
-                            <small class="text-muted">{{ booking.class_session.type_text }}</small>
+                            <small class="text-muted">{{ booking.gym_class.service_type.name if booking.gym_class.service_type else '-' }}</small>
                         </td>
-                        <td>{{ booking.session_date.strftime('%Y-%m-%d') }}</td>
-                        <td>{{ booking.class_session.time_slot }}</td>
+                        <td>{{ booking.booking_date.strftime('%Y-%m-%d') }}</td>
+                        <td>{{ booking.gym_class.time_range }}</td>
                         <td>
-                            <span class="badge bg-{{ booking.status_class }}">{{ booking.status_text }}</span>
+                            {% if booking.status == 'booked' %}
+                            <span class="badge bg-info">محجوز</span>
+                            {% elif booking.status == 'attended' %}
+                            <span class="badge bg-success">حضر</span>
+                            {% elif booking.status == 'cancelled' %}
+                            <span class="badge bg-secondary">ملغي</span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ booking.status }}</span>
+                            {% endif %}
                         </td>
                         <td>
-                            {% if booking.status == 'confirmed' %}
+                            {% if booking.status == 'booked' %}
                             <form method="POST" action="{{ url_for('bookings.cancel', booking_id=booking.id) }}" style="display:inline;">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('هل أنت متأكد من إلغاء الحجز?')">
