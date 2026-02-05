@@ -109,7 +109,9 @@ def create_session():
 
     form = ClassSessionForm()
 
-    # Get instructors for dropdown
+    # Get instructors for dropdown - always set default choice first
+    form.instructor_id.choices = [(0, 'بدون مدرب')]
+    
     from app.models.user import User, Role
     instructor_role = Role.query.filter_by(name_en='coach').first()
     if instructor_role:
@@ -121,7 +123,7 @@ def create_session():
                 brand_id=current_user.brand_id,
                 is_active=True
             ).all()
-        form.instructor_id.choices = [(0, 'بدون مدرب')] + [(i.id, i.name) for i in instructors]
+        form.instructor_id.choices += [(i.id, i.name) for i in instructors]
 
     if form.validate_on_submit():
         session = ClassSession(
