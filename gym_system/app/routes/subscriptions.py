@@ -23,9 +23,9 @@ subscriptions_bp = Blueprint('subscriptions', __name__)
 
 class SubscriptionForm(FlaskForm):
     """Subscription form"""
-    service_type_id = SelectField('نوع الخدمة', coerce=int, validators=[DataRequired()])
-    plan_id = SelectField('الباقة', coerce=int, validators=[DataRequired()])
     service_type_id = SelectField('نوع الخدمة', coerce=int, validators=[Optional()])
+    plan_id = SelectField('الباقة', coerce=int, validators=[DataRequired()])
+    sessions_count = IntegerField('عدد الحصص', default=8, validators=[Optional()])
     discount = DecimalField('الخصم', default=0, validators=[Optional()])
     offer_id = SelectField('العرض الترويجي', coerce=int, validators=[Optional()])
     gift_card_code = StringField('كود كرت الإهداء', validators=[Optional()])
@@ -33,9 +33,8 @@ class SubscriptionForm(FlaskForm):
         ('cash', 'نقدي'),
         ('card', 'بطاقة'),
         ('transfer', 'تحويل')
-    ], default='cash')
+    ], validators=[DataRequired()])
     paid_amount = DecimalField('المبلغ المدفوع', validators=[DataRequired()])
-    payment_method = SelectField('طريقة الدفع', choices=[('cash', 'نقدي'), ('card', 'بطاقة'), ('transfer', 'تحويل')], validators=[DataRequired()])
     notes = TextAreaField('ملاحظات')
 
 
@@ -291,7 +290,7 @@ def create():
         # Validate payment amount doesn't exceed total
         if paid_amount > total_amount:
             flash(f'المبلغ المدفوع ({paid_amount:.0f}) أكبر من الإجمالي المطلوب ({total_amount:.0f})', 'danger')
-            return render_template('subscriptions/create.html', form=form, member=member, plans=plans, offers=offers)
+            return render_template('subscriptions/create.html', form=form, member=member, plans=plans, offers=offers, service_types=service_types)
         
         remaining_amount = max(0, total_amount - paid_amount)
 
@@ -303,6 +302,16 @@ def create():
         if not member.is_active:
             member.is_active = True
 
+        # Determine sessions total based on service type
+        sessions_total = None
+        selected_service_type = ServiceType.query.get(form.service_type_id.data) if form.service_type_id.data else None
+        if selected_service_type and selected_service_type.is_session_based:
+            # Session-based service: use form sessions_count or default to 8
+            sessions_total = form.sessions_count.data or 8
+        elif plan.sessions_count:
+            # Plan has sessions defined
+            sessions_total = plan.sessions_count
+        
         # Create subscription
         subscription = Subscription(
             member_id=member.id,
@@ -313,7 +322,7 @@ def create():
             start_date=start_date,
             end_date=end_date,
             original_end_date=end_date,
-            sessions_total=plan.sessions_count,  # Copy from plan
+            sessions_total=sessions_total,
             sessions_consumed=0,
             total_amount=total_amount,
             paid_amount=paid_amount,
@@ -412,7 +421,7 @@ def create():
 
         return redirect(url_for('members.view', member_id=member_id))
 
-    return render_template('subscriptions/create.html', form=form, member=member, plans=plans, offers=offers)
+    return render_template('subscriptions/create.html', form=form, member=member, plans=plans, offers=offers, service_types=service_types)
 
 
 @subscriptions_bp.route('/<int:subscription_id>')

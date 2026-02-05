@@ -17,6 +17,7 @@ class ServiceType(db.Model):
 
     # Settings
     requires_class_booking = db.Column(db.Boolean, default=False)  # Must book class to enter
+    is_session_based = db.Column(db.Boolean, default=False)  # True = subscription by sessions, False = by days
     capacity = db.Column(db.Integer)  # Max capacity for this service
 
     # Status
@@ -34,11 +35,11 @@ class ServiceType(db.Model):
     def get_default_services(cls):
         """Get default service types to seed"""
         return [
-            {'name': 'جيم', 'name_en': 'gym', 'category': 'gym', 'requires_class_booking': False},
-            {'name': 'سباحة تعليم', 'name_en': 'swimming_teaching', 'category': 'swimming', 'requires_class_booking': True},
-            {'name': 'سباحة ترفيه', 'name_en': 'swimming_recreation', 'category': 'swimming', 'requires_class_booking': False},
-            {'name': 'كاراتيه', 'name_en': 'karate', 'category': 'karate', 'requires_class_booking': True},
-            {'name': 'صالون', 'name_en': 'salon', 'category': 'salon', 'requires_class_booking': True},
+            {'name': 'جيم', 'name_en': 'gym', 'category': 'gym', 'requires_class_booking': False, 'is_session_based': False},
+            {'name': 'سباحة تعليم', 'name_en': 'swimming_teaching', 'category': 'swimming', 'requires_class_booking': True, 'is_session_based': True},
+            {'name': 'سباحة ترفيه', 'name_en': 'swimming_recreation', 'category': 'swimming', 'requires_class_booking': False, 'is_session_based': False},
+            {'name': 'كاراتيه', 'name_en': 'karate', 'category': 'karate', 'requires_class_booking': True, 'is_session_based': False},
+            {'name': 'صالون', 'name_en': 'salon', 'category': 'salon', 'requires_class_booking': True, 'is_session_based': False},
         ]
 
     @classmethod

@@ -97,7 +97,13 @@ def sessions_list():
 @members_required
 def create_session():
     """Create new class/session"""
-    if not current_user.can_manage_users and not current_user.is_brand_manager:
+    # Allow: admins, brand managers, and receptionists
+    can_create = (
+        current_user.can_manage_users or 
+        current_user.is_brand_manager or 
+        (current_user.role and current_user.role.name == 'موظف استقبال')
+    )
+    if not can_create:
         flash('ليس لديك صلاحية', 'danger')
         return redirect(url_for('bookings.sessions_list'))
 

@@ -36,7 +36,14 @@
                         {{ form.plan_id(class="form-select", id="plan-select") }}
                     </div>
 
-                    <div class="row">
+                    <!-- Sessions count for session-based services (like swimming education) -->
+                    <div class="mb-3" id="sessions-count-container" style="display: none;">
+                        <label class="form-label">عدد الحصص *</label>
+                        {{ form.sessions_count(class="form-control", type="number", min="1", max="100", id="sessions-count") }}
+                        <small class="text-muted">عدد الحصص المتاحة للعضو (مثلاً 8 حصص)</small>
+                    </div>
+
+                    <div class="row" id="dates-container">
                         <div class="col-md-6 mb-3">
                             <label class="form-label">تاريخ البدء</label>
                             <input type="date" class="form-control" id="start-date" value="{{ today }}" readonly>
@@ -180,9 +187,37 @@ document.addEventListener('DOMContentLoaded', function() {
     const amountPaid = document.getElementById('amount-paid');
     const remainingAlert = document.getElementById('remaining-alert');
     const remainingAmount = document.getElementById('remaining-amount');
+    const sessionsCountContainer = document.getElementById('sessions-count-container');
+    const datesContainer = document.getElementById('dates-container');
+    
+    // Service types data (session-based services)
+    const sessionBasedServices = {
+        {% for st in service_types %}
+        {{ st.id }}: {{ 'true' if st.is_session_based else 'false' }},
+        {% endfor %}
+    };
+    
+    // Function to toggle session-based fields
+    function toggleSessionBasedFields() {
+        const selectedServiceId = parseInt(serviceTypeSelect.value) || 0;
+        const isSessionBased = sessionBasedServices[selectedServiceId] || false;
+        
+        if (isSessionBased) {
+            sessionsCountContainer.style.display = 'block';
+            // Optional: hide dates for session-based subscriptions
+            // datesContainer.style.display = 'none';
+        } else {
+            sessionsCountContainer.style.display = 'none';
+            // datesContainer.style.display = 'flex';
+        }
+    }
+    
+    // Initial toggle
+    toggleSessionBasedFields();
 
     // Handle service type change - reload page to filter plans
     serviceTypeSelect.addEventListener('change', function() {
+        toggleSessionBasedFields();
         const form = document.getElementById('subscription-form');
         // Submit form to reload with filtered plans
         form.submit();
