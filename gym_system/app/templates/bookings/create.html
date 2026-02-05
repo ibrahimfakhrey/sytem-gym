@@ -123,11 +123,17 @@ searchInput.addEventListener('input', function() {
         fetch(`/bookings/api/search-members?q=${encodeURIComponent(query)}`)
             .then(response => response.json())
             .then(data => {
+                if (data.error) {
+                    searchResults.innerHTML = `<div class="list-group-item text-danger">خطأ: ${data.error}</div>`;
+                    searchResults.style.display = 'block';
+                    return;
+                }
                 if (data.length > 0) {
                     searchResults.innerHTML = data.map(m => `
-                        <a href="#" class="list-group-item list-group-item-action" onclick="selectMember(${m.id}, '${m.name}', '${m.phone}'); return false;">
+                        <a href="#" class="list-group-item list-group-item-action ${m.has_active_subscription ? '' : 'list-group-item-warning'}" onclick="selectMember(${m.id}, '${m.name}', '${m.phone}'); return false;">
                             <strong>${m.name}</strong> - ${m.phone}
                             <small class="text-muted d-block">رقم العضوية: ${m.member_id || '-'}</small>
+                            ${m.has_active_subscription ? '<span class="badge bg-success">مشترك</span>' : '<span class="badge bg-warning text-dark">غير مشترك</span>'}
                         </a>
                     `).join('');
                     searchResults.style.display = 'block';
@@ -135,6 +141,10 @@ searchInput.addEventListener('input', function() {
                     searchResults.innerHTML = '<div class="list-group-item text-muted">لا توجد نتائج</div>';
                     searchResults.style.display = 'block';
                 }
+            })
+            .catch(err => {
+                searchResults.innerHTML = `<div class="list-group-item text-danger">خطأ في الاتصال</div>`;
+                searchResults.style.display = 'block';
             });
     }, 300);
 });

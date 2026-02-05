@@ -212,7 +212,7 @@ def class_bookings(class_id):
 @login_required
 @members_required
 def search_members_api():
-    """Search members with active subscriptions for booking"""
+    """Search members for booking"""
     from flask import jsonify
     from app.models.subscription import Subscription
     
@@ -221,29 +221,37 @@ def search_members_api():
     if not query or len(query) < 2:
         return jsonify([])
     
-    # Get members with active subscriptions in user's brand
-    members_query = Member.query.filter(
-        Member.brand_id == current_user.brand_id,
-        Member.is_active == True,
-        (Member.name.ilike(f'%{query}%') | Member.phone.ilike(f'%{query}%'))
-    )
-    
-    # Join with subscriptions to get only members with active subscriptions
-    members_query = members_query.join(
-        Subscription,
-        Subscription.member_id == Member.id
-    ).filter(
-        Subscription.status == 'active'
-    ).distinct()
-    
-    members = members_query.limit(10).all()
-    
-    return jsonify([{
-        'id': m.id,
-        'name': m.name,
-        'phone': m.phone,
-        'member_id': m.member_id
-    } for m in members])
+    try:
+        # Simple search - all active members in brand
+        members_query = Member.query.filter(
+            Member.brand_id == current_user.brand_id,
+            db.or_(
+                Member.name.ilike(f'%{query}%'),
+                Member.phone.ilike(f'%{query}%')
+            )
+        )
+        
+        members = members_query.limit(10).all()
+        
+        # Check each member for active subscription
+        results = []
+        for m in members:
+            has_active = Subscription.query.filter(
+                Subscription.member_id == m.id,
+                Subscription.status == 'active'
+            ).first() is not None
+            
+            results.append({
+                'id': m.id,
+                'name': m.name,
+                'phone': m.phone or '',
+                'member_id': m.member_id or '',
+                'has_active_subscription': has_active
+            })
+        
+        return jsonify(results)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 # ==================== Booking Management ====================
