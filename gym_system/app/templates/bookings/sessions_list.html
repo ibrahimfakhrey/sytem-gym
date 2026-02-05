@@ -63,25 +63,27 @@
         <div class="card h-100">
             <div class="card-header bg-primary text-white">
                 <strong>{{ session.name }}</strong>
-                <span class="badge bg-light text-dark float-start">{{ session.type_text }}</span>
+                {% if session.service_type %}
+                <span class="badge bg-light text-dark float-start">{{ session.service_type.name }}</span>
+                {% endif %}
             </div>
             <div class="card-body">
                 <p class="mb-2">
                     <i class="bi bi-calendar"></i>
-                    <strong>{{ session.day_text }}</strong>
+                    <strong>{{ session.day_name_arabic }}</strong>
                 </p>
                 <p class="mb-2">
                     <i class="bi bi-clock"></i>
-                    {{ session.time_slot }}
+                    {{ session.time_range }}
                 </p>
                 <p class="mb-2">
                     <i class="bi bi-people"></i>
-                    الطاقة: {{ session.available_slots }}/{{ session.max_capacity }}
+                    الطاقة: {{ session.capacity }}
                 </p>
-                {% if session.instructor_id %}
+                {% if session.trainer_id %}
                 <p class="mb-0">
                     <i class="bi bi-person-badge"></i>
-                    <small>{{ session.instructor.name if session.instructor else '-' }}</small>
+                    <small>{{ session.trainer.name if session.trainer else '-' }}</small>
                 </p>
                 {% endif %}
             </div>
