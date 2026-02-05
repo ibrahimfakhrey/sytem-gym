@@ -237,14 +237,14 @@ def create():
         if form.member_id.data:
             member = Member.query.get(int(form.member_id.data))
         else:
-            flash('يرجى اختيار العضو', 'warning')
-            return redirect(url_for('members.index'))
+            flash('يرجى اختيار العضو أولاً', 'warning')
+            return render_template('bookings/create.html', form=form, member=None)
 
         # Get session
         session = ClassSession.query.get(form.class_session_id.data)
 
         # Check capacity
-        if not session.has_available_slots(form.session_date.data):
+        if session.is_full(form.session_date.data):
             flash('الحصة ممتلئة', 'warning')
             return render_template('bookings/create.html', form=form, member=member)
 

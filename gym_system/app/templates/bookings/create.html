@@ -22,6 +22,26 @@
         <div class="alert alert-info mb-4">
             <strong><i class="bi bi-person"></i> العضو:</strong> {{ member.name }} - {{ member.phone }}
         </div>
+        {% else %}
+        <!-- Member Search -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-search"></i>
+                بحث عن العضو
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">اسم العضو أو رقم التليفون</label>
+                    <input type="text" id="member-search" class="form-control" placeholder="ابحث بالاسم أو رقم التليفون...">
+                </div>
+                <div id="search-results" class="list-group" style="display: none;"></div>
+                <div id="selected-member" class="alert alert-success mt-3" style="display: none;">
+                    <i class="bi bi-person-check"></i>
+                    <span id="selected-member-text"></span>
+                    <button type="button" class="btn-close float-start" onclick="clearMember()"></button>
+                </div>
+            </div>
+        </div>
         {% endif %}
 
         <div class="card">
@@ -78,4 +98,59 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+{% if not member %}
+let searchTimeout;
+const searchInput = document.getElementById('member-search');
+const searchResults = document.getElementById('search-results');
+const selectedMember = document.getElementById('selected-member');
+const selectedMemberText = document.getElementById('selected-member-text');
+const memberIdField = document.querySelector('input[name="member_id"]');
+
+searchInput.addEventListener('input', function() {
+    clearTimeout(searchTimeout);
+    const query = this.value.trim();
+    
+    if (query.length < 2) {
+        searchResults.style.display = 'none';
+        return;
+    }
+    
+    searchTimeout = setTimeout(() => {
+        fetch(`/classes/api/search-members?q=${encodeURIComponent(query)}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.length > 0) {
+                    searchResults.innerHTML = data.map(m => `
+                        <a href="#" class="list-group-item list-group-item-action" onclick="selectMember(${m.id}, '${m.name}', '${m.phone}'); return false;">
+                            <strong>${m.name}</strong> - ${m.phone}
+                            <small class="text-muted d-block">رقم العضوية: ${m.member_id || '-'}</small>
+                        </a>
+                    `).join('');
+                    searchResults.style.display = 'block';
+                } else {
+                    searchResults.innerHTML = '<div class="list-group-item text-muted">لا توجد نتائج</div>';
+                    searchResults.style.display = 'block';
+                }
+            });
+    }, 300);
+});
+
+function selectMember(id, name, phone) {
+    memberIdField.value = id;
+    selectedMemberText.textContent = `${name} - ${phone}`;
+    selectedMember.style.display = 'block';
+    searchResults.style.display = 'none';
+    searchInput.value = '';
+}
+
+function clearMember() {
+    memberIdField.value = '';
+    selectedMember.style.display = 'none';
+}
+{% endif %}
+</script>
 {% endblock %}
