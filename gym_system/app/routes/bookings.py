@@ -151,6 +151,46 @@ def create_session():
     return render_template('bookings/session_form.html', form=form)
 
 
+# ==================== Member Search API ====================
+
+@bookings_bp.route('/api/search-members')
+@login_required
+@members_required
+def search_members_api():
+    """Search members with active subscriptions for booking"""
+    from flask import jsonify
+    from app.models.subscription import Subscription
+    
+    query = request.args.get('q', '')
+    
+    if not query or len(query) < 2:
+        return jsonify([])
+    
+    # Get members with active subscriptions in user's brand
+    members_query = Member.query.filter(
+        Member.brand_id == current_user.brand_id,
+        Member.is_active == True,
+        (Member.name.ilike(f'%{query}%') | Member.phone.ilike(f'%{query}%'))
+    )
+    
+    # Join with subscriptions to get only members with active subscriptions
+    members_query = members_query.join(
+        Subscription,
+        Subscription.member_id == Member.id
+    ).filter(
+        Subscription.status == 'active'
+    ).distinct()
+    
+    members = members_query.limit(10).all()
+    
+    return jsonify([{
+        'id': m.id,
+        'name': m.name,
+        'phone': m.phone,
+        'member_id': m.member_id
+    } for m in members])
+
+
 # ==================== Booking Management ====================
 
 @bookings_bp.route('/')

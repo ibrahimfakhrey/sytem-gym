@@ -120,7 +120,7 @@ searchInput.addEventListener('input', function() {
     }
     
     searchTimeout = setTimeout(() => {
-        fetch(`/classes/api/search-members?q=${encodeURIComponent(query)}`)
+        fetch(`/bookings/api/search-members?q=${encodeURIComponent(query)}`)
             .then(response => response.json())
             .then(data => {
                 if (data.length > 0) {
