@@ -245,7 +245,6 @@ def search_members_api():
                 'id': m.id,
                 'name': m.name,
                 'phone': m.phone or '',
-                'member_id': m.member_id or '',
                 'has_active_subscription': has_active
             })
         
