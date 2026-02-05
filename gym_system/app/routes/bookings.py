@@ -200,12 +200,8 @@ def index():
     """List all bookings"""
     page, per_page = pagination_args(request)
     status = request.args.get('status', '')
-    session_date = request.args.get('date', date.today().isoformat())
-
-    try:
-        filter_date = date.fromisoformat(session_date)
-    except:
-        filter_date = date.today()
+    session_date = request.args.get('date', '')
+    class_session_id = request.args.get('class_session_id', type=int)
 
     # Base query - filter by brand access (join with gym_classes)
     query = Booking.query.join(ClassSession, Booking.class_id == ClassSession.id)
@@ -217,8 +213,20 @@ def index():
     else:
         query = query.filter(ClassSession.brand_id == current_user.brand_id)
 
-    # Date filter
-    query = query.filter(Booking.booking_date == filter_date)
+    # Class session filter
+    selected_class = None
+    if class_session_id:
+        query = query.filter(Booking.class_id == class_session_id)
+        selected_class = ClassSession.query.get(class_session_id)
+
+    # Date filter (only if provided)
+    filter_date = None
+    if session_date:
+        try:
+            filter_date = date.fromisoformat(session_date)
+            query = query.filter(Booking.booking_date == filter_date)
+        except:
+            pass
 
     # Status filter
     if status:
@@ -238,7 +246,9 @@ def index():
                           bookings=bookings,
                           brands=brands,
                           status=status,
-                          session_date=session_date)
+                          session_date=session_date,
+                          selected_class=selected_class,
+                          class_session_id=class_session_id)
 
 
 @bookings_bp.route('/create', methods=['GET', 'POST'])

@@ -17,10 +17,25 @@
     </div>
 </div>
 
+{% if selected_class %}
+<div class="alert alert-info mb-4">
+    <i class="bi bi-filter"></i>
+    <strong>حجوزات الحصة:</strong> {{ selected_class.name }} 
+    {% if selected_class.service_type %}- {{ selected_class.service_type.name }}{% endif %}
+    ({{ selected_class.day_name_arabic }} {{ selected_class.time_range }})
+    <a href="{{ url_for('bookings.index') }}" class="btn btn-sm btn-outline-secondary float-start">
+        <i class="bi bi-x"></i> إزالة الفلتر
+    </a>
+</div>
+{% endif %}
+
 <!-- Filters -->
 <div class="card mb-4">
     <div class="card-body">
         <form method="GET" class="row g-3">
+            {% if class_session_id %}
+            <input type="hidden" name="class_session_id" value="{{ class_session_id }}">
+            {% endif %}
             {% if current_user.can_view_all_brands and brands %}
             <div class="col-md-3">
                 <label class="form-label">البراند</label>
