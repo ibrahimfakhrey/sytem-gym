@@ -78,7 +78,7 @@
                 </p>
                 <p class="mb-2">
                     <i class="bi bi-people"></i>
-                    الطاقة: {{ session.capacity }}
+                    الأماكن المتاحة اليوم: <strong>{{ session.today_available_spots }}</strong>/{{ session.capacity }}
                 </p>
                 {% if session.trainer_id %}
                 <p class="mb-0">

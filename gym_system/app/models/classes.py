@@ -75,6 +75,19 @@ class GymClass(db.Model):
         ).count()
         return max(0, self.capacity - booked)
 
+    @property
+    def today_available_spots(self):
+        """Get available spots for today"""
+        return self.get_available_spots(date.today())
+
+    @property
+    def today_booked_count(self):
+        """Get booked count for today"""
+        return self.bookings.filter(
+            ClassBooking.booking_date == date.today(),
+            ClassBooking.status.in_(['booked', 'attended'])
+        ).count()
+
     def is_full(self, booking_date):
         """Check if class is full for a specific date"""
         return self.get_available_spots(booking_date) <= 0
