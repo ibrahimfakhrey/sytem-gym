@@ -37,10 +37,10 @@
                         </div>
 
                         <div class="col-md-6 mb-3">
-                            {{ form.session_type.label(class="form-label") }}
-                            {{ form.session_type(class="form-select") }}
-                            {% if form.session_type.errors %}
-                                <div class="text-danger">{{ form.session_type.errors[0] }}</div>
+                            {{ form.service_type_id.label(class="form-label") }}
+                            {{ form.service_type_id(class="form-select") }}
+                            {% if form.service_type_id.errors %}
+                                <div class="text-danger">{{ form.service_type_id.errors[0] }}</div>
                             {% endif %}
                         </div>
                     </div>
@@ -73,19 +73,19 @@
 
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            {{ form.max_capacity.label(class="form-label") }}
-                            {{ form.max_capacity(class="form-control", type="number", min="1", max="100", value="20") }}
-                            {% if form.max_capacity.errors %}
-                                <div class="text-danger">{{ form.max_capacity.errors[0] }}</div>
+                            {{ form.capacity.label(class="form-label") }}
+                            {{ form.capacity(class="form-control", type="number", min="1", max="100", value="20") }}
+                            {% if form.capacity.errors %}
+                                <div class="text-danger">{{ form.capacity.errors[0] }}</div>
                             {% endif %}
                             <small class="text-muted">الحد الأقصى للمشاركين في الحصة</small>
                         </div>
 
                         <div class="col-md-6 mb-3">
-                            {{ form.instructor_id.label(class="form-label") }}
-                            {{ form.instructor_id(class="form-select") }}
-                            {% if form.instructor_id.errors %}
-                                <div class="text-danger">{{ form.instructor_id.errors[0] }}</div>
+                            {{ form.trainer_id.label(class="form-label") }}
+                            {{ form.trainer_id(class="form-select") }}
+                            {% if form.trainer_id.errors %}
+                                <div class="text-danger">{{ form.trainer_id.errors[0] }}</div>
                             {% endif %}
                             <small class="text-muted">اختياري</small>
                         </div>

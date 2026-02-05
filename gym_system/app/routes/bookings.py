@@ -9,6 +9,7 @@ from app import db
 from app.models.company import Brand
 from app.models.member import Member
 from app.models.schedule import ClassSession, Booking
+from app.models.service import ServiceType
 from app.utils.decorators import members_required
 from app.utils.helpers import pagination_args
 
@@ -18,26 +19,20 @@ bookings_bp = Blueprint('bookings', __name__)
 class ClassSessionForm(FlaskForm):
     """Class/Session form"""
     name = StringField('اسم الحصة', validators=[DataRequired()])
-    session_type = SelectField('نوع الحصة', choices=[
-        ('gym_class', 'كلاس جيم'),
-        ('swimming_education', 'سباحة - تعليم'),
-        ('swimming_recreation', 'سباحة - ترفيه'),
-        ('karate', 'كاراتيه'),
-        ('other', 'أخرى')
-    ], validators=[DataRequired()])
+    service_type_id = SelectField('نوع الخدمة', coerce=int, validators=[DataRequired()])
     day_of_week = SelectField('اليوم', choices=[
-        (0, 'الإثنين'),
-        (1, 'الثلاثاء'),
-        (2, 'الأربعاء'),
-        (3, 'الخميس'),
-        (4, 'الجمعة'),
-        (5, 'السبت'),
-        (6, 'الأحد')
+        (0, 'السبت'),
+        (1, 'الأحد'),
+        (2, 'الإثنين'),
+        (3, 'الثلاثاء'),
+        (4, 'الأربعاء'),
+        (5, 'الخميس'),
+        (6, 'الجمعة')
     ], coerce=int, validators=[DataRequired()])
     start_time = TimeField('وقت البداية', validators=[DataRequired()])
     end_time = TimeField('وقت النهاية', validators=[DataRequired()])
-    max_capacity = IntegerField('الطاقة الاستيعابية', validators=[DataRequired(), NumberRange(min=1, max=100)])
-    instructor_id = SelectField('المدرب', coerce=int, validators=[Optional()])
+    capacity = IntegerField('الطاقة الاستيعابية', validators=[DataRequired(), NumberRange(min=1, max=100)])
+    trainer_id = SelectField('المدرب', coerce=int, validators=[Optional()])
 
 
 class BookingForm(FlaskForm):
@@ -109,34 +104,43 @@ def create_session():
 
     form = ClassSessionForm()
 
-    # Get instructors for dropdown - always set default choice first
-    form.instructor_id.choices = [(0, 'بدون مدرب')]
+    # Get service types for dropdown
+    if current_user.can_view_all_brands:
+        service_types = ServiceType.query.filter_by(is_active=True).all()
+    else:
+        service_types = ServiceType.query.filter_by(
+            brand_id=current_user.brand_id,
+            is_active=True
+        ).all()
+    form.service_type_id.choices = [(s.id, s.name) for s in service_types]
+
+    # Get trainers for dropdown - always set default choice first
+    form.trainer_id.choices = [(0, 'بدون مدرب')]
     
     from app.models.user import User, Role
-    instructor_role = Role.query.filter_by(name_en='coach').first()
-    if instructor_role:
+    trainer_role = Role.query.filter_by(name_en='coach').first()
+    if trainer_role:
         if current_user.can_view_all_brands:
-            instructors = User.query.filter_by(role_id=instructor_role.id, is_active=True).all()
+            trainers = User.query.filter_by(role_id=trainer_role.id, is_active=True).all()
         else:
-            instructors = User.query.filter_by(
-                role_id=instructor_role.id,
+            trainers = User.query.filter_by(
+                role_id=trainer_role.id,
                 brand_id=current_user.brand_id,
                 is_active=True
             ).all()
-        form.instructor_id.choices += [(i.id, i.name) for i in instructors]
+        form.trainer_id.choices += [(t.id, t.name) for t in trainers]
 
     if form.validate_on_submit():
         session = ClassSession(
             brand_id=current_user.brand_id,
             branch_id=current_user.branch_id,
+            service_type_id=form.service_type_id.data,
             name=form.name.data,
-            session_type=form.session_type.data,
             day_of_week=form.day_of_week.data,
             start_time=form.start_time.data,
             end_time=form.end_time.data,
-            max_capacity=form.max_capacity.data,
-            instructor_id=form.instructor_id.data if form.instructor_id.data != 0 else None,
-            created_by=current_user.id
+            capacity=form.capacity.data,
+            trainer_id=form.trainer_id.data if form.trainer_id.data != 0 else None
         )
         db.session.add(session)
         db.session.commit()
