@@ -88,7 +88,7 @@
                 {% endif %}
             </div>
             <div class="card-footer">
-                <a href="{{ url_for('bookings.index', class_session_id=session.id) }}" class="btn btn-sm btn-info">
+                <a href="{{ url_for('bookings.class_bookings', class_id=session.id) }}" class="btn btn-sm btn-info">
                     <i class="bi bi-eye"></i>
                     عرض الحجوزات
                 </a>

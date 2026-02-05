@@ -151,6 +151,61 @@ def create_session():
     return render_template('bookings/session_form.html', form=form)
 
 
+# ==================== Class Bookings View ====================
+
+@bookings_bp.route('/class/<int:class_id>')
+@login_required
+@members_required
+def class_bookings(class_id):
+    """View bookings for a specific class"""
+    gym_class = ClassSession.query.get_or_404(class_id)
+    
+    # Check access
+    if not current_user.can_view_all_brands and gym_class.brand_id != current_user.brand_id:
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('bookings.sessions_list'))
+    
+    page, per_page = pagination_args(request)
+    status = request.args.get('status', '')
+    session_date = request.args.get('date', '')
+    
+    # Base query
+    query = Booking.query.filter(Booking.class_id == class_id)
+    
+    # Date filter
+    if session_date:
+        try:
+            filter_date = date.fromisoformat(session_date)
+            query = query.filter(Booking.booking_date == filter_date)
+        except:
+            pass
+    
+    # Status filter
+    if status:
+        query = query.filter(Booking.status == status)
+    
+    # Get stats
+    total_bookings = Booking.query.filter(Booking.class_id == class_id).count()
+    attended_count = Booking.query.filter(Booking.class_id == class_id, Booking.status == 'attended').count()
+    booked_count = Booking.query.filter(Booking.class_id == class_id, Booking.status == 'booked').count()
+    cancelled_count = Booking.query.filter(Booking.class_id == class_id, Booking.status == 'cancelled').count()
+    
+    # Pagination
+    bookings = query.order_by(Booking.booking_date.desc(), Booking.created_at.desc()).paginate(
+        page=page, per_page=per_page, error_out=False
+    )
+    
+    return render_template('bookings/class_bookings.html',
+                          gym_class=gym_class,
+                          bookings=bookings,
+                          status=status,
+                          session_date=session_date,
+                          total_bookings=total_bookings,
+                          attended_count=attended_count,
+                          booked_count=booked_count,
+                          cancelled_count=cancelled_count)
+
+
 # ==================== Member Search API ====================
 
 @bookings_bp.route('/api/search-members')

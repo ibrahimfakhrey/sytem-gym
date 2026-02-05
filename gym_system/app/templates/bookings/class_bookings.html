@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+
+{% block title %}حجوزات {{ gym_class.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-calendar-check"></i> حجوزات الحصة</h1>
+    <div>
+        <a href="{{ url_for('bookings.sessions_list') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-right"></i>
+            رجوع للحصص
+        </a>
+        <a href="{{ url_for('bookings.create') }}" class="btn btn-primary">
+            <i class="bi bi-plus"></i>
+            حجز جديد
+        </a>
+    </div>
+</div>
+
+<!-- Class Info Card -->
+<div class="card mb-4 border-primary">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-info-circle"></i>
+            {{ gym_class.name }}
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-3">
+                <strong><i class="bi bi-tag"></i> النوع:</strong>
+                <span>{{ gym_class.service_type.name if gym_class.service_type else '-' }}</span>
+            </div>
+            <div class="col-md-3">
+                <strong><i class="bi bi-calendar"></i> اليوم:</strong>
+                <span>{{ gym_class.day_name_arabic }}</span>
+            </div>
+            <div class="col-md-3">
+                <strong><i class="bi bi-clock"></i> الوقت:</strong>
+                <span>{{ gym_class.time_range }}</span>
+            </div>
+            <div class="col-md-3">
+                <strong><i class="bi bi-people"></i> الطاقة:</strong>
+                <span>{{ gym_class.capacity }}</span>
+            </div>
+        </div>
+        {% if gym_class.trainer %}
+        <div class="mt-2">
+            <strong><i class="bi bi-person-badge"></i> المدرب:</strong>
+            <span>{{ gym_class.trainer.name }}</span>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            <input type="hidden" name="class_session_id" value="{{ gym_class.id }}">
+            
+            <div class="col-md-4">
+                <label class="form-label">التاريخ</label>
+                <input type="date" name="date" class="form-control" value="{{ session_date or '' }}">
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label">الحالة</label>
+                <select name="status" class="form-select">
+                    <option value="">الكل</option>
+                    <option value="booked" {% if status == 'booked' %}selected{% endif %}>محجوز</option>
+                    <option value="attended" {% if status == 'attended' %}selected{% endif %}>حضر</option>
+                    <option value="cancelled" {% if status == 'cancelled' %}selected{% endif %}>ملغي</option>
+                    <option value="no_show" {% if status == 'no_show' %}selected{% endif %}>لم يحضر</option>
+                </select>
+            </div>
+
+            <div class="col-md-4 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="bi bi-search"></i>
+                    بحث
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Stats -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3 class="text-primary">{{ total_bookings }}</h3>
+                <small>إجمالي الحجوزات</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3 class="text-success">{{ attended_count }}</h3>
+                <small>حضروا</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3 class="text-info">{{ booked_count }}</h3>
+                <small>محجوز</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3 class="text-danger">{{ cancelled_count }}</h3>
+                <small>ملغي</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bookings List -->
+<div class="card">
+    <div class="card-header">
+        <i class="bi bi-list"></i>
+        قائمة الحجوزات
+    </div>
+    <div class="card-body">
+        {% if bookings.items %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>#</th>
+                        <th>العضو</th>
+                        <th>رقم التليفون</th>
+                        <th>تاريخ الحجز</th>
+                        <th>الحالة</th>
+                        <th>وقت الحضور</th>
+                        <th>الإجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for booking in bookings.items %}
+                    <tr>
+                        <td>{{ loop.index + (bookings.page - 1) * bookings.per_page }}</td>
+                        <td>
+                            <a href="{{ url_for('members.view', member_id=booking.member.id) }}">
+                                <strong>{{ booking.member.name }}</strong>
+                            </a>
+                        </td>
+                        <td>{{ booking.member.phone }}</td>
+                        <td>{{ booking.booking_date.strftime('%Y-%m-%d') }}</td>
+                        <td>
+                            {% if booking.status == 'booked' %}
+                            <span class="badge bg-info">محجوز</span>
+                            {% elif booking.status == 'attended' %}
+                            <span class="badge bg-success">حضر</span>
+                            {% elif booking.status == 'cancelled' %}
+                            <span class="badge bg-secondary">ملغي</span>
+                            {% elif booking.status == 'no_show' %}
+                            <span class="badge bg-danger">لم يحضر</span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ booking.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if booking.check_in_time %}
+                            {{ booking.check_in_time.strftime('%H:%M') }}
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if booking.status == 'booked' %}
+                            <form method="POST" action="{{ url_for('bookings.cancel', booking_id=booking.id) }}" style="display:inline;">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('هل أنت متأكد من إلغاء الحجز?')">
+                                    <i class="bi bi-x-circle"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if bookings.pages > 1 %}
+        <nav>
+            <ul class="pagination justify-content-center mt-3">
+                {% if bookings.has_prev %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('bookings.class_bookings', class_id=gym_class.id, page=bookings.prev_num, date=session_date, status=status) }}">السابق</a>
+                </li>
+                {% endif %}
+
+                {% for page_num in bookings.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
+                    {% if page_num %}
+                        <li class="page-item {% if page_num == bookings.page %}active{% endif %}">
+                            <a class="page-link" href="{{ url_for('bookings.class_bookings', class_id=gym_class.id, page=page_num, date=session_date, status=status) }}">{{ page_num }}</a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if bookings.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('bookings.class_bookings', class_id=gym_class.id, page=bookings.next_num, date=session_date, status=status) }}">التالي</a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+
+        {% else %}
+        <div class="text-center py-4">
+            <i class="bi bi-calendar-x text-muted" style="font-size: 3rem;"></i>
+            <p class="text-muted mt-2">لا توجد حجوزات</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
