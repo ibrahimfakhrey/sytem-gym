@@ -48,7 +48,9 @@
                     <tr>
                         <td>{{ user.id }}</td>
                         <td>
-                            <strong>{{ user.name }}</strong>
+                            <a href="{{ url_for('admin.users_edit', user_id=user.id) }}" class="text-decoration-none">
+                                <strong>{{ user.name }}</strong>
+                            </a>
                             {% if user.phone %}
                             <br><small class="text-muted">{{ user.phone }}</small>
                             {% endif %}
