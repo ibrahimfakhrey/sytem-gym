@@ -1,303 +1,347 @@
-from flask import Blueprint, render_template, request, make_response
+from flask import Blueprint, render_template, request, redirect, url_for
 from flask_login import login_required, current_user
 from datetime import date, timedelta
-from io import BytesIO
+from sqlalchemy import func, case
 
 from app import db
-from app.models.company import Brand
+from app.models.company import Brand, Branch
+from app.models.user import User
 from app.models.member import Member
 from app.models.subscription import Subscription
-from app.models.attendance import MemberAttendance
 from app.models.finance import Income, Expense
-from app.utils.decorators import role_required
-from app.utils.helpers import get_date_range
+from app.models.service import ServiceType
+from app.models.giftcard import GiftCard
+from app.models.offer import PromotionalOffer
 
 reports_bp = Blueprint('reports', __name__)
 
 
-@reports_bp.route('/')
+@reports_bp.route('/staff-performance')
 @login_required
-def index():
-    """Reports dashboard"""
-    if not current_user.can_view_reports:
+def staff_performance():
+    """Staff performance report - shows revenue and subscriptions by employee"""
+    if not current_user.is_owner and not current_user.can_view_all_brands:
         return redirect(url_for('dashboard.index'))
-
-    return render_template('reports/index.html')
+    
+    # Get filters
+    brand_id = request.args.get('brand_id', type=int)
+    branch_id = request.args.get('branch_id', type=int)
+    period = request.args.get('period', 'month')  # week, month, quarter, year
+    
+    today = date.today()
+    
+    # Calculate date range based on period
+    if period == 'week':
+        start_date = today - timedelta(days=7)
+    elif period == 'month':
+        start_date = today.replace(day=1)
+    elif period == 'quarter':
+        quarter_month = ((today.month - 1) // 3) * 3 + 1
+        start_date = today.replace(month=quarter_month, day=1)
+    elif period == 'year':
+        start_date = today.replace(month=1, day=1)
+    else:
+        start_date = today.replace(day=1)
+    
+    # Base query for employees
+    emp_query = User.query.filter(User.is_active == True)
+    
+    if brand_id:
+        emp_query = emp_query.filter(User.brand_id == brand_id)
+    if branch_id:
+        emp_query = emp_query.filter(User.branch_id == branch_id)
+    
+    employees = emp_query.all()
+    
+    # Get performance data for each employee
+    staff_data = []
+    for emp in employees:
+        # Subscriptions created by this employee
+        subs_created = Subscription.query.filter(
+            Subscription.created_by == emp.id,
+            Subscription.created_at >= start_date
+        ).count()
+        
+        # Revenue from subscriptions created by this employee
+        revenue = db.session.query(func.sum(Subscription.total_amount)).filter(
+            Subscription.created_by == emp.id,
+            Subscription.created_at >= start_date
+        ).scalar() or 0
+        
+        # Renewals (subscriptions where member already had a previous subscription)
+        renewals = db.session.query(Subscription).filter(
+            Subscription.created_by == emp.id,
+            Subscription.created_at >= start_date,
+            Subscription.member_id.in_(
+                db.session.query(Subscription.member_id).group_by(
+                    Subscription.member_id
+                ).having(func.count(Subscription.id) > 1)
+            )
+        ).count()
+        
+        # New members (first subscription)
+        new_members = subs_created - renewals
+        
+        # Renewal rate
+        renewal_rate = round((renewals / subs_created * 100) if subs_created > 0 else 0, 1)
+        
+        # Average subscription value
+        avg_value = round(float(revenue) / subs_created if subs_created > 0 else 0, 0)
+        
+        staff_data.append({
+            'id': emp.id,
+            'name': emp.name,
+            'role': emp.role.name if emp.role else '-',
+            'brand': emp.brand.name if emp.brand else '-',
+            'branch': emp.branch.name if emp.branch else '-',
+            'subscriptions': subs_created,
+            'new_members': new_members,
+            'renewals': renewals,
+            'renewal_rate': renewal_rate,
+            'revenue': float(revenue),
+            'avg_value': avg_value
+        })
+    
+    # Sort by revenue (descending)
+    staff_data = sorted(staff_data, key=lambda x: x['revenue'], reverse=True)
+    
+    # Add ranking
+    for i, emp in enumerate(staff_data):
+        emp['rank'] = i + 1
+    
+    # Get top and bottom performers
+    top_performers = staff_data[:5] if len(staff_data) >= 5 else staff_data
+    bottom_performers = staff_data[-5:][::-1] if len(staff_data) >= 5 else []
+    
+    # Get brands and branches for filters
+    brands = Brand.query.filter_by(is_active=True).all()
+    branches = []
+    if brand_id:
+        branches = Branch.query.filter_by(brand_id=brand_id, is_active=True).all()
+    
+    # Calculate totals
+    totals = {
+        'subscriptions': sum(e['subscriptions'] for e in staff_data),
+        'revenue': sum(e['revenue'] for e in staff_data),
+        'renewals': sum(e['renewals'] for e in staff_data),
+        'new_members': sum(e['new_members'] for e in staff_data)
+    }
+    
+    return render_template('reports/staff_performance.html',
+                          staff_data=staff_data,
+                          top_performers=top_performers,
+                          bottom_performers=bottom_performers,
+                          brands=brands,
+                          branches=branches,
+                          totals=totals,
+                          selected_brand=brand_id,
+                          selected_branch=branch_id,
+                          period=period,
+                          start_date=start_date,
+                          today=today)
 
 
 @reports_bp.route('/financial')
 @login_required
 def financial():
-    """Financial report"""
-    if not current_user.can_view_reports:
+    """Financial intelligence report - Gift cards, offers, payment methods analysis"""
+    if not current_user.is_owner and not current_user.can_view_all_brands:
         return redirect(url_for('dashboard.index'))
-
-    # Date range
+    
+    brand_id = request.args.get('brand_id', type=int)
     period = request.args.get('period', 'month')
-    start_date, end_date = get_date_range(period)
-
-    # Custom date range
-    if request.args.get('start_date'):
-        try:
-            start_date = date.fromisoformat(request.args.get('start_date'))
-            end_date = date.fromisoformat(request.args.get('end_date'))
-        except:
-            pass
-
-    # Get brands to report on
-    if current_user.can_view_all_brands:
-        brand_id = request.args.get('brand_id', type=int)
-        if brand_id:
-            brands = [Brand.query.get(brand_id)]
-        else:
-            brands = Brand.query.filter_by(is_active=True).all()
+    
+    today = date.today()
+    
+    # Calculate date range
+    if period == 'week':
+        start_date = today - timedelta(days=7)
+    elif period == 'month':
+        start_date = today.replace(day=1)
+    elif period == 'quarter':
+        quarter_month = ((today.month - 1) // 3) * 3 + 1
+        start_date = today.replace(month=quarter_month, day=1)
+    elif period == 'year':
+        start_date = today.replace(month=1, day=1)
     else:
-        brands = [current_user.brand]
-
-    # Branch comparison flag
-    compare_branches = request.args.get('compare_branches', type=int, default=0)
-
-    # Calculate stats for each brand
-    report_data = []
-    totals = {'income': 0, 'expenses': 0, 'profit': 0}
-
-    for brand in brands:
-        income = Income.get_total_for_period(brand.id, start_date, end_date)
-        expenses = Expense.get_total_for_period(brand.id, start_date, end_date)
-        profit = income - expenses
-
-        # Income breakdown by payment method
-        income_by_payment = Income.get_by_payment_method(brand.id, start_date, end_date)
-
-        # Income breakdown by service type
-        income_by_service = db.session.query(
-            Income.service_type_id,
-            db.func.sum(Income.amount).label('total')
-        ).filter(
-            Income.brand_id == brand.id,
-            Income.date >= start_date,
-            Income.date <= end_date
-        ).group_by(Income.service_type_id).all()
-
-        # Expense breakdown
-        expense_breakdown = Expense.get_by_category(brand.id, start_date, end_date)
-
-        # Branch comparison if requested
-        branch_breakdown = []
-        if compare_branches and brand.branches:
-            from app.models.company import Branch
-            for branch in brand.branches:
-                branch_income = db.session.query(db.func.sum(Income.amount)).filter(
-                    Income.branch_id == branch.id,
-                    Income.date >= start_date,
-                    Income.date <= end_date
-                ).scalar() or 0
-
-                branch_expenses = db.session.query(db.func.sum(Expense.amount)).filter(
-                    Expense.branch_id == branch.id,
-                    Expense.date >= start_date,
-                    Expense.date <= end_date
-                ).scalar() or 0
-
-                branch_breakdown.append({
-                    'branch': branch,
-                    'income': float(branch_income),
-                    'expenses': float(branch_expenses),
-                    'profit': float(branch_income) - float(branch_expenses)
-                })
-
-        report_data.append({
-            'brand': brand,
-            'income': income,
-            'expenses': expenses,
-            'profit': profit,
-            'income_by_payment': income_by_payment,
-            'income_by_service': income_by_service,
-            'expense_breakdown': expense_breakdown,
-            'branch_breakdown': branch_breakdown
-        })
-
-        totals['income'] += income
-        totals['expenses'] += expenses
-        totals['profit'] += profit
-
-    # All brands for filter
-    all_brands = None
-    if current_user.can_view_all_brands:
-        all_brands = Brand.query.filter_by(is_active=True).all()
-
-    return render_template('reports/financial.html',
-                          report_data=report_data,
-                          totals=totals,
-                          brands=all_brands,
-                          start_date=start_date,
-                          end_date=end_date,
-                          period=period,
-                          compare_branches=compare_branches)
-
-
-@reports_bp.route('/members')
-@login_required
-def members():
-    """Members report"""
-    if not current_user.can_view_reports:
-        return redirect(url_for('dashboard.index'))
-
-    # Get brands
-    if current_user.can_view_all_brands:
-        brand_id = request.args.get('brand_id', type=int)
-        if brand_id:
-            brands = [Brand.query.get(brand_id)]
-        else:
-            brands = Brand.query.filter_by(is_active=True).all()
-    else:
-        brands = [current_user.brand]
-
-    report_data = []
-
-    for brand in brands:
-        total_members = Member.query.filter_by(brand_id=brand.id).count()
-        active_members = Member.query.filter_by(brand_id=brand.id, is_active=True).count()
-
-        # Active subscriptions
-        today = date.today()
-        active_subs = Subscription.query.filter(
-            Subscription.brand_id == brand.id,
-            Subscription.status == 'active',
-            Subscription.end_date >= today
-        ).count()
-
-        # Expiring soon (7 days)
-        expiring_soon = Subscription.query.filter(
-            Subscription.brand_id == brand.id,
-            Subscription.status == 'active',
-            Subscription.end_date <= today + timedelta(days=7),
-            Subscription.end_date >= today
-        ).count()
-
-        # Expired
-        expired = Subscription.query.filter(
-            Subscription.brand_id == brand.id,
-            Subscription.status.in_(['active', 'expired']),
-            Subscription.end_date < today
-        ).count()
-
-        report_data.append({
-            'brand': brand,
-            'total_members': total_members,
-            'active_members': active_members,
-            'active_subscriptions': active_subs,
-            'expiring_soon': expiring_soon,
-            'expired': expired
-        })
-
-    # All brands for filter
-    all_brands = None
-    if current_user.can_view_all_brands:
-        all_brands = Brand.query.filter_by(is_active=True).all()
-
-    return render_template('reports/members.html',
-                          report_data=report_data,
-                          brands=all_brands)
-
-
-@reports_bp.route('/attendance')
-@login_required
-def attendance():
-    """Attendance report"""
-    if not current_user.can_view_reports:
-        return redirect(url_for('dashboard.index'))
-
-    # Date range
-    period = request.args.get('period', 'month')
-    start_date, end_date = get_date_range(period)
-
-    if request.args.get('start_date'):
-        try:
-            start_date = date.fromisoformat(request.args.get('start_date'))
-            end_date = date.fromisoformat(request.args.get('end_date'))
-        except:
-            pass
-
-    # Get brands
-    if current_user.can_view_all_brands:
-        brand_id = request.args.get('brand_id', type=int)
-        if brand_id:
-            brands = [Brand.query.get(brand_id)]
-        else:
-            brands = Brand.query.filter_by(is_active=True).all()
-    else:
-        brands = [current_user.brand]
-
-    report_data = []
-
-    for brand in brands:
-        total_attendance = MemberAttendance.get_date_range_count(
-            brand.id, start_date, end_date
+        start_date = today.replace(day=1)
+    
+    # Build base filter
+    income_filter = [Income.date >= start_date, Income.date <= today]
+    sub_filter = [Subscription.created_at >= start_date]
+    gc_filter = [func.date(GiftCard.created_at) >= start_date]
+    
+    if brand_id:
+        income_filter.append(Income.brand_id == brand_id)
+        sub_filter.append(Subscription.brand_id == brand_id)
+        gc_filter.append(GiftCard.brand_id == brand_id)
+    
+    # === PAYMENT METHOD ANALYSIS ===
+    payment_breakdown = db.session.query(
+        Income.payment_method,
+        func.sum(Income.amount).label('amount'),
+        func.count(Income.id).label('transactions')
+    ).filter(*income_filter).group_by(Income.payment_method).all()
+    
+    payment_stats = {
+        'cash': {'amount': 0, 'transactions': 0},
+        'card': {'amount': 0, 'transactions': 0},
+        'transfer': {'amount': 0, 'transactions': 0}
+    }
+    total_income = 0
+    for method, amount, transactions in payment_breakdown:
+        if method in payment_stats:
+            payment_stats[method] = {
+                'amount': float(amount or 0),
+                'transactions': transactions
+            }
+            total_income += float(amount or 0)
+    
+    # Calculate percentages
+    for method in payment_stats:
+        payment_stats[method]['percentage'] = round(
+            (payment_stats[method]['amount'] / total_income * 100) if total_income > 0 else 0, 1
         )
-
-        # Daily average
-        days = (end_date - start_date).days + 1
-        daily_avg = total_attendance / days if days > 0 else 0
-
-        # Peak hours (simplified)
-        report_data.append({
-            'brand': brand,
-            'total_attendance': total_attendance,
-            'daily_average': round(daily_avg, 1),
-            'days': days
+    
+    # === GIFT CARD ANALYTICS ===
+    # Gift cards sold
+    gc_sold_query = db.session.query(
+        func.count(GiftCard.id).label('count'),
+        func.sum(GiftCard.original_amount).label('total')
+    ).filter(*gc_filter)
+    gc_sold = gc_sold_query.first()
+    
+    # Gift cards redeemed
+    gc_redeemed_filter = gc_filter + [GiftCard.status == 'redeemed']
+    gc_redeemed = db.session.query(
+        func.count(GiftCard.id).label('count'),
+        func.sum(GiftCard.original_amount).label('total')
+    ).filter(*gc_redeemed_filter).first()
+    
+    # Outstanding liability (active gift cards)
+    if brand_id:
+        outstanding = db.session.query(
+            func.sum(GiftCard.remaining_amount)
+        ).filter(
+            GiftCard.brand_id == brand_id,
+            GiftCard.status.in_(['active', 'partially_used'])
+        ).scalar() or 0
+    else:
+        outstanding = db.session.query(
+            func.sum(GiftCard.remaining_amount)
+        ).filter(
+            GiftCard.status.in_(['active', 'partially_used'])
+        ).scalar() or 0
+    
+    gift_card_stats = {
+        'sold_count': gc_sold.count or 0,
+        'sold_amount': float(gc_sold.total or 0),
+        'redeemed_count': gc_redeemed.count or 0,
+        'redeemed_amount': float(gc_redeemed.total or 0),
+        'outstanding': float(outstanding),
+        'redemption_rate': round((gc_redeemed.count / gc_sold.count * 100) if gc_sold.count else 0, 1)
+    }
+    
+    # === PROMOTIONAL VS NON-PROMOTIONAL REVENUE ===
+    # Revenue with offers
+    promo_revenue = db.session.query(
+        func.sum(Subscription.total_amount).label('revenue'),
+        func.count(Subscription.id).label('count'),
+        func.sum(Subscription.offer_discount).label('discount')
+    ).filter(
+        *sub_filter,
+        Subscription.offer_id.isnot(None)
+    ).first()
+    
+    # Revenue without offers
+    non_promo_revenue = db.session.query(
+        func.sum(Subscription.total_amount).label('revenue'),
+        func.count(Subscription.id).label('count')
+    ).filter(
+        *sub_filter,
+        Subscription.offer_id.is_(None)
+    ).first()
+    
+    promo_stats = {
+        'with_offer': {
+            'revenue': float(promo_revenue.revenue or 0),
+            'count': promo_revenue.count or 0,
+            'discount_given': float(promo_revenue.discount or 0)
+        },
+        'without_offer': {
+            'revenue': float(non_promo_revenue.revenue or 0),
+            'count': non_promo_revenue.count or 0
+        }
+    }
+    
+    total_subs = promo_stats['with_offer']['count'] + promo_stats['without_offer']['count']
+    promo_stats['with_offer']['percentage'] = round(
+        (promo_stats['with_offer']['count'] / total_subs * 100) if total_subs > 0 else 0, 1
+    )
+    promo_stats['without_offer']['percentage'] = round(
+        (promo_stats['without_offer']['count'] / total_subs * 100) if total_subs > 0 else 0, 1
+    )
+    
+    # === TOP OFFERS BY USAGE ===
+    top_offers = db.session.query(
+        PromotionalOffer.name,
+        PromotionalOffer.discount_type,
+        PromotionalOffer.discount_value,
+        func.count(Subscription.id).label('usage_count'),
+        func.sum(Subscription.total_amount).label('revenue'),
+        func.sum(Subscription.offer_discount).label('discount_given')
+    ).join(
+        Subscription, Subscription.offer_id == PromotionalOffer.id
+    ).filter(
+        Subscription.created_at >= start_date
+    ).group_by(
+        PromotionalOffer.id, PromotionalOffer.name, 
+        PromotionalOffer.discount_type, PromotionalOffer.discount_value
+    ).order_by(func.count(Subscription.id).desc()).limit(10).all()
+    
+    offers_data = []
+    for offer in top_offers:
+        offers_data.append({
+            'name': offer.name,
+            'discount': f"{offer.discount_value}{'%' if offer.discount_type == 'percentage' else ' ر.س'}",
+            'usage': offer.usage_count,
+            'revenue': float(offer.revenue or 0),
+            'discount_given': float(offer.discount_given or 0)
         })
-
-    # All brands for filter
-    all_brands = None
-    if current_user.can_view_all_brands:
-        all_brands = Brand.query.filter_by(is_active=True).all()
-
-    return render_template('reports/attendance.html',
-                          report_data=report_data,
-                          brands=all_brands,
+    
+    # === REVENUE BY SERVICE TYPE ===
+    service_revenue = db.session.query(
+        ServiceType.name,
+        ServiceType.category,
+        func.sum(Income.amount).label('revenue'),
+        func.count(Income.id).label('transactions')
+    ).join(
+        Income, Income.service_type_id == ServiceType.id
+    ).filter(*income_filter).group_by(
+        ServiceType.id, ServiceType.name, ServiceType.category
+    ).order_by(func.sum(Income.amount).desc()).all()
+    
+    service_data = []
+    for svc in service_revenue:
+        service_data.append({
+            'name': svc.name,
+            'category': svc.category,
+            'revenue': float(svc.revenue or 0),
+            'transactions': svc.transactions
+        })
+    
+    # Get brands for filter
+    brands = Brand.query.filter_by(is_active=True).all()
+    
+    return render_template('reports/financial.html',
+                          payment_stats=payment_stats,
+                          total_income=total_income,
+                          gift_card_stats=gift_card_stats,
+                          promo_stats=promo_stats,
+                          offers_data=offers_data,
+                          service_data=service_data,
+                          brands=brands,
+                          selected_brand=brand_id,
+                          period=period,
                           start_date=start_date,
-                          end_date=end_date,
-                          period=period)
-
-
-@reports_bp.route('/export/<report_type>')
-@login_required
-def export(report_type):
-    """Export report to Excel"""
-    if not current_user.can_export_reports:
-        return redirect(url_for('reports.index'))
-
-    from app.utils.export import export_financial_report, export_members_report
-
-    # Get date range
-    start_date = request.args.get('start_date', date.today().replace(day=1).isoformat())
-    end_date = request.args.get('end_date', date.today().isoformat())
-
-    try:
-        start_date = date.fromisoformat(start_date)
-        end_date = date.fromisoformat(end_date)
-    except:
-        start_date = date.today().replace(day=1)
-        end_date = date.today()
-
-    # Get brand
-    if current_user.can_view_all_brands:
-        brand_id = request.args.get('brand_id', type=int)
-    else:
-        brand_id = current_user.brand_id
-
-    if report_type == 'financial':
-        output = export_financial_report(brand_id, start_date, end_date)
-        filename = f'financial_report_{start_date}_{end_date}.xlsx'
-    elif report_type == 'members':
-        output = export_members_report(brand_id)
-        filename = f'members_report_{date.today()}.xlsx'
-    else:
-        return redirect(url_for('reports.index'))
-
-    response = make_response(output.read())
-    response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    response.headers['Content-Disposition'] = f'attachment; filename={filename}'
-
-    return response
+                          today=today)
