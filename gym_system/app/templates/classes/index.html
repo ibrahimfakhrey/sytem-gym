@@ -19,9 +19,16 @@
     <div class="card-body">
         <form method="get" class="row g-3 align-items-end">
             {% if brands %}
-            <input type="hidden" name="brand_id" value="{{ brand.id }}">
+            <div class="col-md-3">
+                <label class="form-label">البراند</label>
+                <select name="brand_id" class="form-select" onchange="this.form.submit()">
+                    {% for b in brands %}
+                    <option value="{{ b.id }}" {% if brand.id == b.id %}selected{% endif %}>{{ b.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
             {% endif %}
-            <div class="col-md-4">
+            <div class="col-md-{% if brands %}3{% else %}4{% endif %}"">
                 <label class="form-label">اليوم</label>
                 <select name="day" class="form-select">
                     <option value="">كل الأيام</option>
@@ -34,7 +41,7 @@
                     <option value="6" {% if day_filter == 6 %}selected{% endif %}>الجمعة</option>
                 </select>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-{% if brands %}3{% else %}4{% endif %}">
                 <label class="form-label">نوع الخدمة</label>
                 <select name="service" class="form-select">
                     <option value="">الكل</option>
@@ -43,7 +50,7 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3"
                 <button type="submit" class="btn btn-outline-primary">
                     <i class="bi bi-funnel"></i>
                     تصفية
