@@ -14,6 +14,21 @@
     </a>
 </div>
 
+{% set filter_type = request.args.get('filter', '') %}
+{% if filter_type == 'lease_expiring' %}
+<div class="alert alert-warning mb-4">
+    <i class="bi bi-exclamation-triangle"></i>
+    <strong>تصفية:</strong> الفروع التي ينتهي عقد إيجارها خلال 30 يوم
+    <a href="{{ url_for('admin.branches_list', brand_id=brand.id) }}" class="btn btn-sm btn-outline-secondary float-start">إزالة الفلتر</a>
+</div>
+{% elif filter_type == 'registration_expiring' %}
+<div class="alert alert-danger mb-4">
+    <i class="bi bi-exclamation-triangle"></i>
+    <strong>تصفية:</strong> الفروع التي ينتهي سجلها التجاري خلال 30 يوم
+    <a href="{{ url_for('admin.branches_list', brand_id=brand.id) }}" class="btn btn-sm btn-outline-secondary float-start">إزالة الفلتر</a>
+</div>
+{% endif %}
+
 <div class="card">
     <div class="card-body">
         {% if branches %}
@@ -24,16 +39,58 @@
                         <th>الاسم</th>
                         <th>العنوان</th>
                         <th>الهاتف</th>
+                        <th>عقد الإيجار</th>
+                        <th>السجل التجاري</th>
                         <th>الحالة</th>
                         <th>الإجراءات</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for branch in branches %}
-                    <tr>
-                        <td>{{ branch.name }}</td>
+                    <tr class="{% if (branch.lease_expiry_date and branch.lease_expiry_date <= warning_date and branch.lease_expiry_date >= today) or (branch.commercial_registration_expiry and branch.commercial_registration_expiry <= warning_date and branch.commercial_registration_expiry >= today) %}table-warning{% endif %}">
+                        <td>
+                            <strong>{{ branch.name }}</strong>
+                        </td>
                         <td>{{ branch.address or '-' }}</td>
                         <td>{{ branch.phone or '-' }}</td>
+                        <td>
+                            {% if branch.lease_expiry_date %}
+                                {% if branch.lease_expiry_date < today %}
+                                <span class="badge bg-danger">
+                                    <i class="bi bi-exclamation-circle"></i>
+                                    منتهي
+                                </span>
+                                {% elif branch.lease_expiry_date <= warning_date %}
+                                <span class="badge bg-warning text-dark">
+                                    <i class="bi bi-clock"></i>
+                                    {{ branch.lease_expiry_date.strftime('%Y-%m-%d') }}
+                                </span>
+                                {% else %}
+                                <span class="text-success">{{ branch.lease_expiry_date.strftime('%Y-%m-%d') }}</span>
+                                {% endif %}
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if branch.commercial_registration_expiry %}
+                                {% if branch.commercial_registration_expiry < today %}
+                                <span class="badge bg-danger">
+                                    <i class="bi bi-exclamation-circle"></i>
+                                    منتهي
+                                </span>
+                                {% elif branch.commercial_registration_expiry <= warning_date %}
+                                <span class="badge bg-warning text-dark">
+                                    <i class="bi bi-clock"></i>
+                                    {{ branch.commercial_registration_expiry.strftime('%Y-%m-%d') }}
+                                </span>
+                                {% else %}
+                                <span class="text-success">{{ branch.commercial_registration_expiry.strftime('%Y-%m-%d') }}</span>
+                                {% endif %}
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
                         <td>
                             {% if branch.is_active %}
                             <span class="badge bg-success">مفعل</span>

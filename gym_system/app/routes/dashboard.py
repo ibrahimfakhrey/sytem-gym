@@ -128,11 +128,13 @@ def owner():
         branch_names = ', '.join([b.name for b in expiring_leases[:3]])
         if len(expiring_leases) > 3:
             branch_names += f' و {len(expiring_leases) - 3} آخرين'
+        # Link to first branch's brand branches list
+        first_branch = expiring_leases[0]
         alerts.append({
             'type': 'warning',
             'icon': 'building',
             'title': f'{len(expiring_leases)} عقد إيجار ينتهي خلال 30 يوم - {branch_names}',
-            'link': None
+            'link': url_for('admin.branches_list', brand_id=first_branch.brand_id) + '?filter=lease_expiring'
         })
 
     # Commercial registration expirations (30 days)
@@ -145,11 +147,12 @@ def owner():
         branch_names = ', '.join([b.name for b in expiring_registrations[:3]])
         if len(expiring_registrations) > 3:
             branch_names += f' و {len(expiring_registrations) - 3} آخرين'
+        first_branch = expiring_registrations[0]
         alerts.append({
             'type': 'danger',
             'icon': 'file-earmark-text',
             'title': f'{len(expiring_registrations)} سجل تجاري ينتهي خلال 30 يوم - {branch_names}',
-            'link': None
+            'link': url_for('admin.branches_list', brand_id=first_branch.brand_id) + '?filter=registration_expiring'
         })
 
     # 5. Pending expense approvals

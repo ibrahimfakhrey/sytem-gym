@@ -171,6 +171,8 @@ def brands_edit(brand_id):
 @login_required
 def branches_list(brand_id):
     """List branches for brand"""
+    from datetime import date, timedelta
+    
     brand = Brand.query.get_or_404(brand_id)
 
     if not current_user.can_access_brand(brand_id):
@@ -178,7 +180,16 @@ def branches_list(brand_id):
         return redirect(url_for('dashboard.index'))
 
     branches = Branch.query.filter_by(brand_id=brand_id).all()
-    return render_template('admin/branches/list.html', brand=brand, branches=branches)
+    
+    # Pass dates for template calculations
+    today = date.today()
+    warning_date = today + timedelta(days=30)
+    
+    return render_template('admin/branches/list.html', 
+                          brand=brand, 
+                          branches=branches,
+                          today=today,
+                          warning_date=warning_date)
 
 
 @admin_bp.route('/brands/<int:brand_id>/branches/create', methods=['GET', 'POST'])
