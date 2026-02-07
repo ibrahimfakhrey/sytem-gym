@@ -321,6 +321,45 @@ def owner():
         payment_stats[method]['percentage'] = round(
             (payment_stats[method]['amount'] / total_payment * 100) if total_payment > 0 else 0, 1
         )
+    
+    # === SUBSCRIPTION STATUS ANALYTICS ===
+    # New subscriptions this month (first subscription for member)
+    new_subs_this_month = db.session.query(Subscription).filter(
+        Subscription.created_at >= month_start,
+        ~Subscription.member_id.in_(
+            db.session.query(Subscription.member_id).filter(
+                Subscription.created_at < month_start
+            ).distinct()
+        )
+    ).count()
+    
+    # Renewals this month (member already had subscription before)
+    renewals_this_month = db.session.query(Subscription).filter(
+        Subscription.created_at >= month_start,
+        Subscription.member_id.in_(
+            db.session.query(Subscription.member_id).filter(
+                Subscription.created_at < month_start
+            ).distinct()
+        )
+    ).count()
+    
+    # Suspended/Stopped subscriptions
+    suspended_subs = Subscription.query.filter(
+        Subscription.status == 'stopped'
+    ).order_by(Subscription.stopped_at.desc()).limit(10).all()
+    
+    suspended_count = Subscription.query.filter(
+        Subscription.status == 'stopped'
+    ).count()
+    
+    # Subscription analytics summary
+    subscription_analytics = {
+        'new_this_month': new_subs_this_month,
+        'renewals_this_month': renewals_this_month,
+        'total_this_month': new_subs_this_month + renewals_this_month,
+        'suspended_count': suspended_count,
+        'renewal_rate': round((renewals_this_month / (new_subs_this_month + renewals_this_month) * 100) if (new_subs_this_month + renewals_this_month) > 0 else 0, 1)
+    }
 
     return render_template('dashboard/owner.html',
                           stats=stats,
@@ -332,7 +371,9 @@ def owner():
                           top_services=top_services,
                           bottom_services=bottom_services,
                           payment_stats=payment_stats,
-                          total_payment=total_payment)
+                          total_payment=total_payment,
+                          subscription_analytics=subscription_analytics,
+                          suspended_subs=suspended_subs)
 
 
 @dashboard_bp.route('/branch/<int:branch_id>')

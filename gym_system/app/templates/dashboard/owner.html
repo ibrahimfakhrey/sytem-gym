@@ -127,6 +127,81 @@
     </div>
 </div>
 
+<!-- Subscription Analytics -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-pie-chart"></i> تحليل الاشتراكات (هذا الشهر)
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-3">
+                        <div class="border rounded p-3 border-success">
+                            <i class="bi bi-person-plus fs-2 text-success"></i>
+                            <h3 class="mt-2 mb-0 text-success">{{ subscription_analytics.new_this_month }}</h3>
+                            <p class="text-muted mb-0">اشتراكات جديدة</p>
+                            <small class="text-muted">عملاء جدد</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="border rounded p-3 border-primary">
+                            <i class="bi bi-arrow-repeat fs-2 text-primary"></i>
+                            <h3 class="mt-2 mb-0 text-primary">{{ subscription_analytics.renewals_this_month }}</h3>
+                            <p class="text-muted mb-0">تجديدات</p>
+                            <small class="text-muted">عملاء قدامى</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="border rounded p-3 border-warning">
+                            <i class="bi bi-percent fs-2 text-warning"></i>
+                            <h3 class="mt-2 mb-0 text-warning">{{ subscription_analytics.renewal_rate }}%</h3>
+                            <p class="text-muted mb-0">نسبة التجديد</p>
+                            <small class="text-muted">معدل الاحتفاظ</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="border rounded p-3 border-danger">
+                            <i class="bi bi-pause-circle fs-2 text-danger"></i>
+                            <h3 class="mt-2 mb-0 text-danger">{{ subscription_analytics.suspended_count }}</h3>
+                            <p class="text-muted mb-0">اشتراكات موقوفة</p>
+                            <small class="text-muted">إجمالي</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-pause-circle text-danger"></i> الاشتراكات الموقوفة</span>
+                <span class="badge bg-danger">{{ subscription_analytics.suspended_count }}</span>
+            </div>
+            <div class="card-body" style="max-height: 250px; overflow-y: auto;">
+                {% if suspended_subs %}
+                <ul class="list-group list-group-flush">
+                    {% for sub in suspended_subs %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center p-2">
+                        <div>
+                            <a href="{{ url_for('members.view', member_id=sub.member.id) }}">
+                                <strong>{{ sub.member.name }}</strong>
+                            </a>
+                            <br>
+                            <small class="text-muted">{{ sub.stop_reason or 'بدون سبب' }}</small>
+                        </div>
+                        <small class="text-muted">{{ sub.stopped_at.strftime('%m/%d') if sub.stopped_at else '-' }}</small>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted text-center mb-0">لا توجد اشتراكات موقوفة 🎉</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Brands Performance -->
 <div class="row g-4 mb-4">
     <div class="col-lg-8">
