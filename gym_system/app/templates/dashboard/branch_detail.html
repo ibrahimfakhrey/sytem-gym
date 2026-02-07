@@ -138,6 +138,167 @@
     </div>
 </div>
 
+<!-- Revenue by Service Type & Attendance Stats -->
+<div class="row g-4 mb-4">
+    <!-- Revenue by Service Type -->
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-pie-chart text-success"></i>
+                تفصيل الدخل حسب الخدمة (هذا الشهر)
+            </div>
+            <div class="card-body">
+                {% if service_revenue %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>الخدمة</th>
+                                <th>الإيراد</th>
+                                <th>عدد المعاملات</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for service in service_revenue %}
+                            <tr>
+                                <td>
+                                    {% if service.category == 'gym' %}🏋️{% elif service.category == 'swimming' %}🏊{% elif service.category == 'karate' %}🥋{% elif service.category == 'salon' %}💇{% else %}📌{% endif %}
+                                    {{ service.name }}
+                                </td>
+                                <td class="text-success">{{ "{:,.0f}".format(service.revenue) }} ر.س</td>
+                                <td>{{ service.transactions }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted text-center mb-0">لا توجد إيرادات هذا الشهر</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Attendance Stats -->
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-fingerprint text-primary"></i>
+                إحصائيات الحضور (البصمة)
+            </div>
+            <div class="card-body">
+                <div class="row text-center mb-3">
+                    <div class="col-4">
+                        <div class="border rounded p-2">
+                            <div class="h4 text-primary mb-0">{{ attendance_stats.today }}</div>
+                            <small class="text-muted">اليوم</small>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="border rounded p-2">
+                            <div class="h4 text-info mb-0">{{ attendance_stats.week }}</div>
+                            <small class="text-muted">هذا الأسبوع</small>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="border rounded p-2">
+                            <div class="h4 text-success mb-0">{{ attendance_stats.month }}</div>
+                            <small class="text-muted">هذا الشهر</small>
+                        </div>
+                    </div>
+                </div>
+                <hr>
+                <h6><i class="bi bi-people"></i> حضور الموظفين اليوم:</h6>
+                <div class="d-flex justify-content-around text-center">
+                    <div>
+                        <span class="badge bg-success fs-6">{{ employee_attendance.present }}</span>
+                        <br><small>حاضر</small>
+                    </div>
+                    <div>
+                        <span class="badge bg-warning fs-6">{{ employee_attendance.late }}</span>
+                        <br><small>متأخر</small>
+                    </div>
+                    <div>
+                        <span class="badge bg-danger fs-6">{{ employee_attendance.absent }}</span>
+                        <br><small>غائب</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Complaints Stats & Staff Performance -->
+<div class="row g-4 mb-4">
+    <!-- Complaints Summary -->
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-exclamation-triangle text-warning"></i>
+                ملخص الشكاوى
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span>قيد الانتظار</span>
+                    <span class="badge bg-warning">{{ complaints_stats.pending }}</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span>قيد المعالجة</span>
+                    <span class="badge bg-info">{{ complaints_stats.in_progress }}</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span>تم الحل</span>
+                    <span class="badge bg-success">{{ complaints_stats.resolved }}</span>
+                </div>
+                <hr>
+                <div class="text-center">
+                    <small class="text-muted">إجمالي الشهر: <strong>{{ complaints_stats.total_month }}</strong></small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Staff Performance Ranking -->
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-trophy text-warning"></i>
+                ترتيب أداء الموظفين (هذا الشهر)
+            </div>
+            <div class="card-body">
+                {% if staff_ranking %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>الموظف</th>
+                                <th>الاشتراكات</th>
+                                <th>الإيرادات</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for emp in staff_ranking %}
+                            <tr class="{% if loop.index == 1 %}table-success{% elif loop.index == staff_ranking|length and staff_ranking|length > 2 %}table-warning{% endif %}">
+                                <td>
+                                    {% if loop.index == 1 %}🥇{% elif loop.index == 2 %}🥈{% elif loop.index == 3 %}🥉{% else %}{{ loop.index }}{% endif %}
+                                </td>
+                                <td>{{ emp.name }}</td>
+                                <td>{{ emp.subscriptions }}</td>
+                                <td class="text-success">{{ "{:,.0f}".format(emp.revenue) }} ر.س</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted text-center mb-0">لا توجد بيانات أداء</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="row g-4">
     <!-- Expiring Subscriptions -->
     <div class="col-lg-6">

@@ -130,9 +130,19 @@ def index():
     if status:
         query = query.filter_by(status=status)
     
-    # Service type filter
+    # Service type filter - filter by service type name (not ID) to work across brands
     if service_type_id:
-        query = query.filter_by(service_type_id=service_type_id)
+        # Get the service type name first
+        selected_service = ServiceType.query.get(service_type_id)
+        if selected_service:
+            # Find all service type IDs with the same name across all brands
+            matching_service_ids = db.session.query(ServiceType.id).filter(
+                ServiceType.name == selected_service.name,
+                ServiceType.is_active == True
+            ).all()
+            matching_ids = [s.id for s in matching_service_ids]
+            if matching_ids:
+                query = query.filter(Subscription.service_type_id.in_(matching_ids))
     
     # Expiring filter (subscriptions expiring within X days)
     if expiring:
@@ -154,11 +164,25 @@ def index():
     if current_user.can_view_all_brands:
         brands = Brand.query.filter_by(is_active=True).all()
     
-    # Get service types for filter
+    # Get service types for filter (unique by name to avoid duplicates across brands)
     if current_user.can_view_all_brands:
-        service_types = ServiceType.query.filter_by(is_active=True).all()
+        # Get unique service types by name
+        service_types_query = db.session.query(
+            ServiceType.id,
+            ServiceType.name
+        ).filter_by(is_active=True).distinct(ServiceType.name).all()
+        service_types = [{'id': st.id, 'name': st.name} for st in service_types_query]
+        # Remove duplicates by name
+        seen_names = set()
+        unique_service_types = []
+        for st in service_types:
+            if st['name'] not in seen_names:
+                seen_names.add(st['name'])
+                unique_service_types.append(st)
+        service_types = unique_service_types
     else:
         service_types = ServiceType.query.filter_by(brand_id=current_user.brand_id, is_active=True).all()
+        service_types = [{'id': st.id, 'name': st.name} for st in service_types]
 
     return render_template('subscriptions/index.html',
                           subscriptions=subscriptions,

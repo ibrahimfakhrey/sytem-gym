@@ -372,6 +372,108 @@ def branch_detail(branch_id):
     
     warning_date = today + timedelta(days=30)
     
+    # === REVENUE BY SERVICE TYPE ===
+    revenue_by_service = db.session.query(
+        ServiceType.name,
+        ServiceType.category,
+        func.sum(Income.amount).label('revenue'),
+        func.count(Income.id).label('transactions')
+    ).join(
+        Income, Income.service_type_id == ServiceType.id
+    ).filter(
+        Income.branch_id == branch_id,
+        Income.date >= month_start,
+        Income.date <= today
+    ).group_by(
+        ServiceType.id, ServiceType.name, ServiceType.category
+    ).order_by(func.sum(Income.amount).desc()).all()
+    
+    service_revenue = []
+    for item in revenue_by_service:
+        service_revenue.append({
+            'name': item.name,
+            'category': item.category,
+            'revenue': float(item.revenue or 0),
+            'transactions': item.transactions
+        })
+    
+    # === ATTENDANCE/FINGERPRINT STATS ===
+    week_start = today - timedelta(days=7)
+    
+    attendance_stats = {
+        'today': MemberAttendance.query.filter(
+            MemberAttendance.branch_id == branch_id,
+            func.date(MemberAttendance.check_in) == today
+        ).count(),
+        'week': MemberAttendance.query.filter(
+            MemberAttendance.branch_id == branch_id,
+            func.date(MemberAttendance.check_in) >= week_start
+        ).count(),
+        'month': MemberAttendance.query.filter(
+            MemberAttendance.branch_id == branch_id,
+            func.date(MemberAttendance.check_in) >= month_start
+        ).count()
+    }
+    
+    # Employee attendance stats
+    employee_attendance = {
+        'present': EmployeeAttendance.query.filter(
+            EmployeeAttendance.date == today,
+            EmployeeAttendance.status == 'present',
+            EmployeeAttendance.employee.has(branch_id=branch_id)
+        ).count(),
+        'late': EmployeeAttendance.query.filter(
+            EmployeeAttendance.date == today,
+            EmployeeAttendance.status == 'late',
+            EmployeeAttendance.employee.has(branch_id=branch_id)
+        ).count(),
+        'absent': EmployeeAttendance.query.filter(
+            EmployeeAttendance.date == today,
+            EmployeeAttendance.status == 'absent',
+            EmployeeAttendance.employee.has(branch_id=branch_id)
+        ).count()
+    }
+    
+    # === COMPLAINTS SUMMARY ===
+    complaints_stats = {
+        'pending': Complaint.query.filter_by(branch_id=branch_id, status='pending').count(),
+        'in_progress': Complaint.query.filter_by(branch_id=branch_id, status='in_progress').count(),
+        'resolved': Complaint.query.filter_by(branch_id=branch_id, status='resolved').count(),
+        'total_month': Complaint.query.filter(
+            Complaint.branch_id == branch_id,
+            func.date(Complaint.created_at) >= month_start
+        ).count()
+    }
+    
+    # === EMPLOYEE PERFORMANCE RANKING ===
+    # Rank employees by subscriptions created and renewals
+    employee_performance = db.session.query(
+        User.id,
+        User.name,
+        func.count(Subscription.id).label('subscriptions_created'),
+        func.sum(Subscription.total_amount).label('revenue_generated')
+    ).outerjoin(
+        Subscription, 
+        db.and_(
+            Subscription.created_by == User.id,
+            Subscription.created_at >= month_start
+        )
+    ).filter(
+        User.branch_id == branch_id,
+        User.is_active == True
+    ).group_by(
+        User.id, User.name
+    ).order_by(func.sum(Subscription.total_amount).desc()).all()
+    
+    staff_ranking = []
+    for emp in employee_performance:
+        staff_ranking.append({
+            'id': emp.id,
+            'name': emp.name,
+            'subscriptions': emp.subscriptions_created or 0,
+            'revenue': float(emp.revenue_generated or 0)
+        })
+    
     return render_template('dashboard/branch_detail.html',
                           branch=branch,
                           brand=brand,
@@ -381,7 +483,12 @@ def branch_detail(branch_id):
                           expiring_soon=expiring_soon,
                           recent_complaints=recent_complaints,
                           today_sessions=today_sessions,
-                          warning_date=warning_date)
+                          warning_date=warning_date,
+                          service_revenue=service_revenue,
+                          attendance_stats=attendance_stats,
+                          employee_attendance=employee_attendance,
+                          complaints_stats=complaints_stats,
+                          staff_ranking=staff_ranking)
 
 
 @dashboard_bp.route('/brand-manager')

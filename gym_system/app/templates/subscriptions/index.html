@@ -23,8 +23,8 @@
                 <select name="service_type_id" class="form-select">
                     <option value="">جميع الخدمات</option>
                     {% for service in service_types %}
-                    <option value="{{ service.id }}" {{ 'selected' if request.args.get('service_type_id')|int == service.id }}>
-                        {{ service.name }}
+                    <option value="{{ service.id if service.id is defined else service['id'] }}" {{ 'selected' if request.args.get('service_type_id')|int == (service.id if service.id is defined else service['id']) }}>
+                        {{ service.name if service.name is defined else service['name'] }}
                     </option>
                     {% endfor %}
                 </select>
