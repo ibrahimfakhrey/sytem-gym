@@ -39,3 +39,7 @@ uploads/
 
 # Compiled files
 *.pyc
+
+# Large files
+*.pkg
+*.zip
