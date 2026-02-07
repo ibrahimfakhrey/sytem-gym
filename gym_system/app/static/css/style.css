@@ -1466,3 +1466,36 @@ main {
         padding: 0.5rem 1rem;
     }
 }
+
+/* Notifications Dropdown */
+.notifications-dropdown {
+    padding: 0;
+}
+
+.notifications-dropdown .dropdown-header {
+    padding: 0.75rem 1rem;
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.notifications-dropdown .dropdown-item {
+    white-space: normal;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.notifications-dropdown .dropdown-item:last-child {
+    border-bottom: none;
+}
+
+.notifications-dropdown .dropdown-item:hover {
+    background-color: #e9ecef !important;
+}
+
+#notificationBadge {
+    font-size: 0.65rem;
+    padding: 0.25rem 0.45rem;
+}
+
+.navbar .nav-link .bi-bell {
+    font-size: 1.25rem;
+}

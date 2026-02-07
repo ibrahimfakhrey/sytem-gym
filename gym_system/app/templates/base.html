@@ -46,6 +46,33 @@
                 </ul>
 
                 <ul class="navbar-nav">
+                    <!-- Notifications Bell -->
+                    <li class="nav-item dropdown me-2">
+                        <a class="nav-link position-relative" href="#" id="notificationsDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-bell fs-5"></i>
+                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none" id="notificationBadge">
+                                0
+                            </span>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end notifications-dropdown" aria-labelledby="notificationsDropdown" style="width: 350px; max-height: 400px; overflow-y: auto;">
+                            <li class="dropdown-header d-flex justify-content-between align-items-center">
+                                <strong><i class="bi bi-bell"></i> التنبيهات</strong>
+                                <a href="{{ url_for('dashboard.index') }}" class="text-decoration-none small">عرض الكل</a>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li id="notificationsLoading" class="text-center py-3">
+                                <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                    <span class="visually-hidden">جاري التحميل...</span>
+                                </div>
+                            </li>
+                            <li id="notificationsEmpty" class="text-center py-3 d-none">
+                                <i class="bi bi-check-circle text-success fs-3"></i>
+                                <p class="text-muted mb-0 small">لا توجد تنبيهات جديدة</p>
+                            </li>
+                            <div id="notificationsList"></div>
+                        </ul>
+                    </li>
+
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
                             <i class="bi bi-person-circle"></i>
@@ -344,6 +371,89 @@
 
     <!-- Custom JS -->
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+
+    {% if current_user.is_authenticated %}
+    <!-- Notifications JS -->
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const notificationBadge = document.getElementById('notificationBadge');
+        const notificationsLoading = document.getElementById('notificationsLoading');
+        const notificationsEmpty = document.getElementById('notificationsEmpty');
+        const notificationsList = document.getElementById('notificationsList');
+        const notificationsDropdown = document.getElementById('notificationsDropdown');
+
+        function getAlertClass(type) {
+            switch(type) {
+                case 'danger': return 'text-danger';
+                case 'warning': return 'text-warning';
+                case 'info': return 'text-info';
+                case 'success': return 'text-success';
+                default: return 'text-secondary';
+            }
+        }
+
+        function getAlertBgClass(type) {
+            switch(type) {
+                case 'danger': return 'bg-danger-subtle';
+                case 'warning': return 'bg-warning-subtle';
+                case 'info': return 'bg-info-subtle';
+                case 'success': return 'bg-success-subtle';
+                default: return 'bg-light';
+            }
+        }
+
+        function loadNotifications() {
+            fetch('/api/alerts')
+                .then(response => response.json())
+                .then(data => {
+                    notificationsLoading.classList.add('d-none');
+                    
+                    if (data.count > 0) {
+                        // Show badge
+                        notificationBadge.textContent = data.count;
+                        notificationBadge.classList.remove('d-none');
+                        notificationsEmpty.classList.add('d-none');
+                        
+                        // Render notifications
+                        notificationsList.innerHTML = data.alerts.map(alert => `
+                            <li>
+                                <a class="dropdown-item py-2 ${getAlertBgClass(alert.type)}" href="${alert.link}">
+                                    <div class="d-flex align-items-start">
+                                        <i class="bi bi-${alert.icon} ${getAlertClass(alert.type)} me-2 mt-1"></i>
+                                        <div class="small">${alert.title}</div>
+                                    </div>
+                                </a>
+                            </li>
+                        `).join('');
+                    } else {
+                        // No notifications
+                        notificationBadge.classList.add('d-none');
+                        notificationsEmpty.classList.remove('d-none');
+                        notificationsList.innerHTML = '';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading notifications:', error);
+                    notificationsLoading.classList.add('d-none');
+                    notificationsEmpty.classList.remove('d-none');
+                });
+        }
+
+        // Load notifications when dropdown is shown
+        if (notificationsDropdown) {
+            notificationsDropdown.addEventListener('click', function() {
+                loadNotifications();
+            });
+        }
+
+        // Initial load
+        loadNotifications();
+
+        // Refresh every 5 minutes
+        setInterval(loadNotifications, 5 * 60 * 1000);
+    });
+    </script>
+    {% endif %}
 
     {% block extra_js %}{% endblock %}
 </body>

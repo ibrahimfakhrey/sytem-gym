@@ -188,11 +188,11 @@
             <div class="card-body">
                 <div class="row text-center">
                     <div class="col-6">
-                        <div class="h4 text-primary">{{ member.attendance.count() }}</div>
+                        <div class="h4 text-primary">{{ member.attendance|length }}</div>
                         <small class="text-muted">إجمالي الحضور</small>
                     </div>
                     <div class="col-6">
-                        <div class="h4 text-success">{{ member.subscriptions.count() }}</div>
+                        <div class="h4 text-success">{{ member.subscriptions|length }}</div>
                         <small class="text-muted">الاشتراكات</small>
                     </div>
                 </div>

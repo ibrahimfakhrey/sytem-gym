@@ -143,7 +143,7 @@
                 إحصائيات
             </div>
             <div class="card-body">
-                <p class="mb-1"><strong>إجمالي الحجوزات:</strong> {{ gym_class.bookings.count() }}</p>
+                <p class="mb-1"><strong>إجمالي الحجوزات:</strong> {{ gym_class.bookings|length }}</p>
                 <p class="mb-0"><strong>السعة:</strong> {{ gym_class.capacity }} شخص</p>
             </div>
         </div>

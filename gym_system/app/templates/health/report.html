@@ -241,7 +241,7 @@
                     {% endfor %}
                 </ul>
             </div>
-            {% if member.health_reports.count() > 5 %}
+            {% if member.health_reports|length > 5 %}
             <div class="card-footer">
                 <a href="{{ url_for('health.report_history', member_id=member.id) }}" class="btn btn-sm btn-outline-primary w-100">
                     عرض الكل

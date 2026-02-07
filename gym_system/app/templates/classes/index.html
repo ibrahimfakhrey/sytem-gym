@@ -21,16 +21,16 @@
             {% if brands %}
             <div class="col-md-3">
                 <label class="form-label">البراند</label>
-                <select name="brand_id" class="form-select" onchange="this.form.submit()">
+                <select name="brand_id" class="form-select border-danger" style="border-color: #dc3545 !important; border-width: 2px;" onchange="this.form.submit()">
                     {% for b in brands %}
                     <option value="{{ b.id }}" {% if brand.id == b.id %}selected{% endif %}>{{ b.name }}</option>
                     {% endfor %}
                 </select>
             </div>
             {% endif %}
-            <div class="col-md-{% if brands %}3{% else %}4{% endif %}"">
+            <div class="col-md-{% if brands %}3{% else %}4{% endif %}">
                 <label class="form-label">اليوم</label>
-                <select name="day" class="form-select">
+                <select name="day" class="form-select border-danger" style="border-color: #dc3545 !important; border-width: 2px;" onchange="this.form.submit()">
                     <option value="">كل الأيام</option>
                     <option value="0" {% if day_filter == 0 %}selected{% endif %}>السبت</option>
                     <option value="1" {% if day_filter == 1 %}selected{% endif %}>الأحد</option>
@@ -43,14 +43,14 @@
             </div>
             <div class="col-md-{% if brands %}3{% else %}4{% endif %}">
                 <label class="form-label">نوع الخدمة</label>
-                <select name="service" class="form-select">
+                <select name="service" class="form-select border-danger" style="border-color: #dc3545 !important; border-width: 2px;" onchange="this.form.submit()">
                     <option value="">الكل</option>
                     {% for st in service_types %}
                     <option value="{{ st.id }}" {% if service_filter == st.id %}selected{% endif %}>{{ st.name }}</option>
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-3"
+            <div class="col-md-3">
                 <button type="submit" class="btn btn-outline-primary">
                     <i class="bi bi-funnel"></i>
                     تصفية

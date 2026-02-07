@@ -388,7 +388,8 @@ def attendance():
             if form.check_in.data and settings.work_start_time:
                 check_in_mins = form.check_in.data.hour * 60 + form.check_in.data.minute
                 start_mins = settings.work_start_time.hour * 60 + settings.work_start_time.minute
-                if check_in_mins > start_mins + settings.late_threshold_minutes:
+                threshold = settings.late_threshold_minutes or 0
+                if check_in_mins > start_mins + threshold:
                     late_minutes = check_in_mins - start_mins
                     if status == 'present':
                         status = 'late'
@@ -408,7 +409,7 @@ def attendance():
             db.session.add(attendance)
 
             # Auto deduction for lateness
-            if status == 'late' and settings.auto_deduction_enabled and settings.auto_deduction_amount > 0:
+            if status == 'late' and settings.auto_deduction_enabled and (settings.auto_deduction_amount or 0) > 0:
                 deduction = EmployeeDeduction(
                     user_id=form.user_id.data,
                     brand_id=brand_id,

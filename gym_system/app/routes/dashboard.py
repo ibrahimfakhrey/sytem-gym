@@ -1057,3 +1057,137 @@ def get_brand_stats(brand_id, start_date, end_date):
             'outstanding_liability': float(outstanding_liability)
         }
     }
+
+
+@dashboard_bp.route('/api/alerts')
+@login_required
+def api_alerts():
+    """API endpoint to get alerts for notification bell"""
+    from flask import jsonify
+    
+    today = date.today()
+    alerts = []
+    
+    # Get brands based on user role
+    if current_user.is_owner:
+        brands = Brand.query.filter_by(is_active=True).all()
+    else:
+        brands = [current_user.brand] if current_user.brand else []
+    
+    if not brands:
+        return jsonify({'alerts': [], 'count': 0})
+    
+    # 1. Urgent expiring subscriptions (48 hours)
+    expiring_48h = Subscription.query.filter(
+        Subscription.status == 'active',
+        Subscription.end_date > today,
+        Subscription.end_date <= today + timedelta(days=2)
+    ).count()
+    if expiring_48h > 0:
+        alerts.append({
+            'type': 'warning',
+            'icon': 'clock-history',
+            'title': f'{expiring_48h} اشتراكات تنتهي خلال 48 ساعة',
+            'link': url_for('subscriptions.expiring')
+        })
+
+    # 2. Open complaints
+    open_complaints = Complaint.query.filter(
+        Complaint.status.in_(['pending', 'in_progress'])
+    ).count()
+    if open_complaints > 0:
+        alerts.append({
+            'type': 'danger',
+            'icon': 'exclamation-triangle',
+            'title': f'{open_complaints} شكوى مفتوحة تحتاج متابعة',
+            'link': url_for('complaints.index')
+        })
+
+    # 3. Pending daily closings
+    yesterday = today - timedelta(days=1)
+    pending_closings = []
+    for brand in brands:
+        closing = DailyClosing.query.filter_by(
+            brand_id=brand.id,
+            closing_date=yesterday
+        ).first()
+        if not closing:
+            pending_closings.append(brand.name)
+    if pending_closings:
+        alerts.append({
+            'type': 'info',
+            'icon': 'cash-stack',
+            'title': f'{len(pending_closings)} فرع بدون إقفال يومي لأمس',
+            'link': url_for('daily_closing.index')
+        })
+
+    # 4. Contract/Lease expirations (30 days)
+    expiring_leases = Branch.query.filter(
+        Branch.is_active == True,
+        Branch.lease_expiry_date <= today + timedelta(days=30),
+        Branch.lease_expiry_date >= today
+    ).all()
+    if expiring_leases:
+        first_branch = expiring_leases[0]
+        alerts.append({
+            'type': 'warning',
+            'icon': 'building',
+            'title': f'{len(expiring_leases)} عقد إيجار ينتهي خلال 30 يوم',
+            'link': url_for('admin.branches_list', brand_id=first_branch.brand_id)
+        })
+
+    # 5. Commercial registration expirations (30 days)
+    expiring_registrations = Branch.query.filter(
+        Branch.is_active == True,
+        Branch.commercial_registration_expiry <= today + timedelta(days=30),
+        Branch.commercial_registration_expiry >= today
+    ).all()
+    if expiring_registrations:
+        first_branch = expiring_registrations[0]
+        alerts.append({
+            'type': 'danger',
+            'icon': 'file-earmark-text',
+            'title': f'{len(expiring_registrations)} سجل تجاري ينتهي خلال 30 يوم',
+            'link': url_for('admin.branches_list', brand_id=first_branch.brand_id)
+        })
+
+    # 6. Pending expense approvals
+    pending_expenses = Expense.query.filter_by(status='pending').count()
+    if pending_expenses > 0:
+        alerts.append({
+            'type': 'info',
+            'icon': 'receipt',
+            'title': f'{pending_expenses} مصروف بانتظار الموافقة',
+            'link': url_for('finance.expenses')
+        })
+
+    # 7. Late employees today
+    late_employees = EmployeeAttendance.query.filter(
+        EmployeeAttendance.date == today,
+        EmployeeAttendance.status == 'late'
+    ).count()
+    if late_employees > 0:
+        alerts.append({
+            'type': 'warning',
+            'icon': 'person-exclamation',
+            'title': f'{late_employees} موظف متأخر اليوم',
+            'link': url_for('employees.attendance')
+        })
+
+    # 8. Absent employees today
+    absent_employees = EmployeeAttendance.query.filter(
+        EmployeeAttendance.date == today,
+        EmployeeAttendance.status == 'absent'
+    ).count()
+    if absent_employees > 0:
+        alerts.append({
+            'type': 'danger',
+            'icon': 'person-x',
+            'title': f'{absent_employees} موظف غائب اليوم',
+            'link': url_for('employees.attendance')
+        })
+
+    return jsonify({
+        'alerts': alerts,
+        'count': len(alerts)
+    })
