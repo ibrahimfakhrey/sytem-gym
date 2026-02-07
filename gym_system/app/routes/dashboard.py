@@ -261,6 +261,87 @@ def owner():
                           recent_complaints=recent_complaints)
 
 
+@dashboard_bp.route('/branch/<int:branch_id>')
+@login_required
+def branch_detail(branch_id):
+    """Branch detail dashboard for owner"""
+    if not current_user.is_owner and not current_user.can_manage_users:
+        return redirect(url_for('dashboard.index'))
+    
+    branch = Branch.query.get_or_404(branch_id)
+    brand = branch.brand
+    
+    today = date.today()
+    month_start = today.replace(day=1)
+    
+    # Branch-specific stats
+    stats = {
+        'members': Member.query.filter_by(branch_id=branch_id, is_active=True).count(),
+        'active_subscriptions': Subscription.query.filter(
+            Subscription.branch_id == branch_id,
+            Subscription.status == 'active',
+            Subscription.end_date >= today
+        ).count(),
+        'today_attendance': MemberAttendance.query.filter(
+            MemberAttendance.branch_id == branch_id,
+            func.date(MemberAttendance.check_in) == today
+        ).count(),
+        'income': db.session.query(func.sum(Income.amount)).filter(
+            Income.branch_id == branch_id,
+            Income.date >= month_start,
+            Income.date <= today
+        ).scalar() or 0,
+        'expenses': db.session.query(func.sum(Expense.amount)).filter(
+            Expense.branch_id == branch_id,
+            Expense.date >= month_start,
+            Expense.date <= today
+        ).scalar() or 0
+    }
+    stats['profit'] = stats['income'] - stats['expenses']
+    
+    # Branch employees
+    employees = User.query.filter_by(branch_id=branch_id, is_active=True).all()
+    
+    # Recent subscriptions for this branch
+    recent_subscriptions = Subscription.query.filter_by(
+        branch_id=branch_id
+    ).order_by(Subscription.created_at.desc()).limit(10).all()
+    
+    # Expiring subscriptions
+    expiring_soon = Subscription.query.filter(
+        Subscription.branch_id == branch_id,
+        Subscription.status == 'active',
+        Subscription.end_date > today,
+        Subscription.end_date <= today + timedelta(days=7)
+    ).order_by(Subscription.end_date).limit(10).all()
+    
+    # Recent complaints
+    recent_complaints = Complaint.query.filter_by(
+        branch_id=branch_id
+    ).order_by(Complaint.created_at.desc()).limit(5).all()
+    
+    # Today's sessions
+    today_day_of_week = today.weekday()
+    today_sessions = GymClass.query.filter(
+        GymClass.branch_id == branch_id,
+        GymClass.is_active == True,
+        GymClass.day_of_week == today_day_of_week
+    ).order_by(GymClass.start_time).all()
+    
+    warning_date = today + timedelta(days=30)
+    
+    return render_template('dashboard/branch_detail.html',
+                          branch=branch,
+                          brand=brand,
+                          stats=stats,
+                          employees=employees,
+                          recent_subscriptions=recent_subscriptions,
+                          expiring_soon=expiring_soon,
+                          recent_complaints=recent_complaints,
+                          today_sessions=today_sessions,
+                          warning_date=warning_date)
+
+
 @dashboard_bp.route('/brand-manager')
 @login_required
 def brand_manager():

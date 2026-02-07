@@ -49,7 +49,9 @@
                     {% for branch in branches %}
                     <tr class="{% if (branch.lease_expiry_date and branch.lease_expiry_date <= warning_date and branch.lease_expiry_date >= today) or (branch.commercial_registration_expiry and branch.commercial_registration_expiry <= warning_date and branch.commercial_registration_expiry >= today) %}table-warning{% endif %}">
                         <td>
-                            <strong>{{ branch.name }}</strong>
+                            <a href="{{ url_for('dashboard.branch_detail', branch_id=branch.id) }}" class="text-decoration-none">
+                                <strong>{{ branch.name }}</strong>
+                            </a>
                         </td>
                         <td>{{ branch.address or '-' }}</td>
                         <td>{{ branch.phone or '-' }}</td>
