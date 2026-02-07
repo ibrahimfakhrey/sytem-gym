@@ -18,9 +18,16 @@
                     {{ form.hidden_tag() }}
 
                     {% if brand %}
-                    <div class="mb-3">
-                        <label class="form-label">البراند</label>
-                        <input type="text" class="form-control" value="{{ brand.name }}" disabled>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">البراند</label>
+                            <input type="text" class="form-control" value="{{ brand.name }}" disabled>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">الفرع</label>
+                            {{ form.branch_id(class="form-select") }}
+                            <small class="text-muted">اختر فرع معين أو "جميع الفروع"</small>
+                        </div>
                     </div>
                     {% endif %}
 

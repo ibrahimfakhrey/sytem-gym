@@ -15,6 +15,7 @@ classes_bp = Blueprint('classes', __name__, url_prefix='/classes')
 class GymClassForm(FlaskForm):
     """Form for creating/editing gym classes"""
     name = StringField('اسم الكلاس', validators=[DataRequired()])
+    branch_id = SelectField('الفرع', coerce=int, validators=[Optional()])
     service_type_id = SelectField('نوع الخدمة', coerce=int, validators=[DataRequired()])
     trainer_id = SelectField('المدرب', coerce=int, validators=[Optional()])
     description = TextAreaField('الوصف', validators=[Optional()])
@@ -110,6 +111,10 @@ def create():
         brand = current_user.brand
 
     # Populate choices
+    # Branches for this brand (owner can select any branch)
+    branches = Branch.query.filter_by(brand_id=brand_id, is_active=True).all()
+    form.branch_id.choices = [(0, '-- جميع الفروع --')] + [(b.id, b.name) for b in branches]
+    
     service_types = ServiceType.query.filter_by(brand_id=brand_id, is_active=True).all()
     form.service_type_id.choices = [(st.id, st.name) for st in service_types]
 
@@ -119,6 +124,7 @@ def create():
     if form.validate_on_submit():
         gym_class = GymClass(
             brand_id=brand_id,
+            branch_id=form.branch_id.data if form.branch_id.data else None,
             name=form.name.data,
             service_type_id=form.service_type_id.data,
             trainer_id=form.trainer_id.data if form.trainer_id.data else None,
@@ -135,7 +141,7 @@ def create():
         flash('تم إنشاء الكلاس بنجاح', 'success')
         return redirect(url_for('classes.index'))
 
-    return render_template('classes/form.html', form=form, brand=brand)
+    return render_template('classes/form.html', form=form, brand=brand, branches=branches)
 
 
 @classes_bp.route('/<int:class_id>/edit', methods=['GET', 'POST'])
@@ -156,6 +162,9 @@ def edit(class_id):
     form = GymClassForm(obj=gym_class)
 
     # Populate choices
+    branches = Branch.query.filter_by(brand_id=gym_class.brand_id, is_active=True).all()
+    form.branch_id.choices = [(0, '-- جميع الفروع --')] + [(b.id, b.name) for b in branches]
+    
     service_types = ServiceType.query.filter_by(brand_id=gym_class.brand_id, is_active=True).all()
     form.service_type_id.choices = [(st.id, st.name) for st in service_types]
 
@@ -164,6 +173,7 @@ def edit(class_id):
 
     if form.validate_on_submit():
         gym_class.name = form.name.data
+        gym_class.branch_id = form.branch_id.data if form.branch_id.data else None
         gym_class.service_type_id = form.service_type_id.data
         gym_class.trainer_id = form.trainer_id.data if form.trainer_id.data else None
         gym_class.description = form.description.data

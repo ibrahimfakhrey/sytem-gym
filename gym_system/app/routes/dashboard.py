@@ -291,6 +291,36 @@ def owner():
     bottom_services = [s for s in top_services if s['subscription_count'] > 0]
     bottom_services = sorted(bottom_services, key=lambda x: x['subscription_count'])[:3]
     top_services = top_services[:5]  # Top 5 services
+    
+    # === PAYMENT METHOD BREAKDOWN (ALL BRANCHES) ===
+    payment_breakdown = db.session.query(
+        Income.payment_method,
+        func.sum(Income.amount).label('amount'),
+        func.count(Income.id).label('transactions')
+    ).filter(
+        Income.date >= month_start,
+        Income.date <= today
+    ).group_by(Income.payment_method).all()
+    
+    payment_stats = {
+        'cash': {'amount': 0, 'transactions': 0, 'percentage': 0},
+        'card': {'amount': 0, 'transactions': 0, 'percentage': 0},
+        'transfer': {'amount': 0, 'transactions': 0, 'percentage': 0}
+    }
+    total_payment = 0
+    for method, amount, transactions in payment_breakdown:
+        if method in payment_stats:
+            payment_stats[method] = {
+                'amount': float(amount or 0),
+                'transactions': transactions
+            }
+            total_payment += float(amount or 0)
+    
+    # Calculate percentages
+    for method in payment_stats:
+        payment_stats[method]['percentage'] = round(
+            (payment_stats[method]['amount'] / total_payment * 100) if total_payment > 0 else 0, 1
+        )
 
     return render_template('dashboard/owner.html',
                           stats=stats,
@@ -300,7 +330,9 @@ def owner():
                           recent_subscriptions=recent_subscriptions,
                           recent_complaints=recent_complaints,
                           top_services=top_services,
-                          bottom_services=bottom_services)
+                          bottom_services=bottom_services,
+                          payment_stats=payment_stats,
+                          total_payment=total_payment)
 
 
 @dashboard_bp.route('/branch/<int:branch_id>')
