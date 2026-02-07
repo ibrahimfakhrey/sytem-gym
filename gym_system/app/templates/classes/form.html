@@ -17,7 +17,23 @@
                 <form method="POST">
                     {{ form.hidden_tag() }}
 
-                    {% if brand %}
+                    {% if brands %}
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">البراند *</label>
+                            <select name="brand_id" class="form-select" onchange="this.form.submit()" required>
+                                {% for b in brands %}
+                                <option value="{{ b.id }}" {% if brand and brand.id == b.id %}selected{% endif %}>{{ b.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">الفرع</label>
+                            {{ form.branch_id(class="form-select") }}
+                            <small class="text-muted">اختر فرع معين أو "جميع الفروع"</small>
+                        </div>
+                    </div>
+                    {% elif brand %}
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label class="form-label">البراند</label>

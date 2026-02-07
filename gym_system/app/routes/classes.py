@@ -98,17 +98,26 @@ def create():
         return redirect(url_for('classes.index'))
 
     form = GymClassForm()
-
-    # Get brand
+    
+    # Get all brands for owner
+    brands = []
     if current_user.is_owner:
-        brand_id = request.args.get('brand_id', type=int)
-        if not brand_id:
-            flash('يرجى اختيار البراند', 'warning')
-            return redirect(url_for('admin.brands_list'))
-        brand = Brand.query.get_or_404(brand_id)
+        brands = Brand.query.filter_by(is_active=True).all()
+
+    # Get brand from form or URL
+    if current_user.is_owner:
+        # Check form first (POST), then URL (GET)
+        brand_id = request.form.get('brand_id', type=int) or request.args.get('brand_id', type=int)
+        if not brand_id and brands:
+            brand_id = brands[0].id  # Default to first brand
+        brand = Brand.query.get(brand_id) if brand_id else None
     else:
         brand_id = current_user.brand_id
         brand = current_user.brand
+
+    if not brand:
+        flash('يرجى اختيار البراند', 'warning')
+        return redirect(url_for('classes.index'))
 
     # Populate choices
     # Branches for this brand (owner can select any branch)
@@ -139,9 +148,9 @@ def create():
         db.session.commit()
 
         flash('تم إنشاء الكلاس بنجاح', 'success')
-        return redirect(url_for('classes.index'))
+        return redirect(url_for('classes.index', brand_id=brand_id))
 
-    return render_template('classes/form.html', form=form, brand=brand, branches=branches)
+    return render_template('classes/form.html', form=form, brand=brand, brands=brands, branches=branches)
 
 
 @classes_bp.route('/<int:class_id>/edit', methods=['GET', 'POST'])
