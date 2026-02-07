@@ -41,6 +41,7 @@ class UserForm(FlaskForm):
     password = PasswordField('كلمة المرور')
     salary_type = SelectField('نوع الراتب', choices=[('', 'اختر'), ('fixed', 'ثابت'), ('daily', 'يومي')], validators=[Optional()])
     salary_amount = DecimalField('مبلغ الراتب', validators=[Optional()])
+    is_trainer = BooleanField('مدرب (يمكن إسناد كلاسات له)', default=False)
     is_active = BooleanField('مفعل', default=True)
 
 
@@ -324,6 +325,7 @@ def users_create():
             branch_id=form.branch_id.data if form.branch_id.data != 0 else None,
             salary_type=form.salary_type.data if form.salary_type.data else None,
             salary_amount=form.salary_amount.data,
+            is_trainer=form.is_trainer.data,
             is_active=form.is_active.data
         )
         user.set_password(form.password.data)
@@ -391,6 +393,7 @@ def users_edit(user_id):
         user.branch_id = form.branch_id.data if form.branch_id.data != 0 else None
         user.salary_type = form.salary_type.data if form.salary_type.data else None
         user.salary_amount = form.salary_amount.data
+        user.is_trainer = form.is_trainer.data
         user.is_active = form.is_active.data
 
         # Update password only if provided
@@ -639,3 +642,15 @@ def service_types_seed(brand_id):
     ServiceType.seed_defaults(brand_id)
     flash('تم إضافة أنواع الخدمات الافتراضية بنجاح', 'success')
     return redirect(url_for('admin.service_types_list'))
+
+
+@admin_bp.route('/api/branches/<int:brand_id>')
+@login_required
+def api_branches(brand_id):
+    """API endpoint to get branches for a brand"""
+    from flask import jsonify
+    branches = Branch.query.filter_by(brand_id=brand_id, is_active=True).all()
+    return jsonify([{
+        'id': b.id,
+        'name': b.name
+    } for b in branches])

@@ -84,12 +84,24 @@
                         </div>
                     </div>
 
-                    <div class="mb-3">
-                        <div class="form-check">
-                            {{ form.is_active(class="form-check-input", id="is_active") }}
-                            <label class="form-check-label" for="is_active">
-                                المستخدم نشط
-                            </label>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check">
+                                {{ form.is_trainer(class="form-check-input", id="is_trainer") }}
+                                <label class="form-check-label" for="is_trainer">
+                                    <i class="bi bi-person-badge text-primary"></i>
+                                    مدرب (يمكن إسناد كلاسات له)
+                                </label>
+                            </div>
+                            <small class="text-muted">فعّل هذا الخيار إذا كان الموظف مدرب ويمكن إضافته للكلاسات</small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check">
+                                {{ form.is_active(class="form-check-input", id="is_active") }}
+                                <label class="form-check-label" for="is_active">
+                                    المستخدم نشط
+                                </label>
+                            </div>
                         </div>
                     </div>
 
@@ -142,8 +154,60 @@
                         <br>صلاحيات محدودة
                     </li>
                 </ul>
+                <hr>
+                <div class="alert alert-info mb-0 small">
+                    <i class="bi bi-info-circle"></i>
+                    <strong>المدربين:</strong><br>
+                    لإضافة مدرب للكلاسات، فعّل خيار "مدرب" في النموذج. سيظهر الموظف في قائمة المدربين عند إنشاء كلاس جديد.
+                </div>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const brandSelect = document.getElementById('brand_id');
+    const branchSelect = document.getElementById('branch_id');
+    
+    if (brandSelect && branchSelect) {
+        // Store current branch value for edit mode
+        const currentBranchId = {{ user.branch_id if user and user.branch_id else 'null' }};
+        
+        function loadBranches(brandId, selectedBranchId) {
+            // Clear current options except first
+            branchSelect.innerHTML = '<option value="0">-- بدون فرع --</option>';
+            
+            if (!brandId || brandId == 0) return;
+            
+            fetch(`/admin/api/branches/${brandId}`)
+                .then(response => response.json())
+                .then(branches => {
+                    branches.forEach(branch => {
+                        const option = document.createElement('option');
+                        option.value = branch.id;
+                        option.textContent = branch.name;
+                        if (selectedBranchId && branch.id == selectedBranchId) {
+                            option.selected = true;
+                        }
+                        branchSelect.appendChild(option);
+                    });
+                })
+                .catch(error => console.error('Error loading branches:', error));
+        }
+        
+        // Load branches when brand changes
+        brandSelect.addEventListener('change', function() {
+            loadBranches(this.value, null);
+        });
+        
+        // Load branches on page load if brand is selected
+        if (brandSelect.value && brandSelect.value != 0) {
+            loadBranches(brandSelect.value, currentBranchId);
+        }
+    }
+});
+</script>
 {% endblock %}
