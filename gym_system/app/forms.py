@@ -56,6 +56,9 @@ class UserForm(FlaskForm):
     confirm_password = PasswordField('تأكيد كلمة المرور', validators=[Optional()])
     role_id = SelectField('الدور', coerce=int, validators=[DataRequired()])
     brand_id = SelectField('البراند', coerce=int, validators=[Optional()])
+    branch_id = SelectField('الفرع', coerce=int, validators=[Optional()])
+    salary_type = SelectField('نوع الراتب', choices=[('', '-'), ('monthly', 'شهري'), ('hourly', 'بالساعة')], validators=[Optional()])
+    salary_amount = DecimalField('مبلغ الراتب', validators=[Optional()])
     is_active = BooleanField('نشط', default=True)
 
 
