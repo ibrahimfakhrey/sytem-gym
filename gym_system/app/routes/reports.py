@@ -16,6 +16,15 @@ from app.models.offer import PromotionalOffer
 reports_bp = Blueprint('reports', __name__)
 
 
+@reports_bp.route('/')
+@login_required
+def index():
+    """Reports index - redirect to staff performance or show menu"""
+    if current_user.is_owner or current_user.can_view_all_brands:
+        return redirect(url_for('reports.staff_performance'))
+    return redirect(url_for('dashboard.index'))
+
+
 @reports_bp.route('/staff-performance')
 @login_required
 def staff_performance():
