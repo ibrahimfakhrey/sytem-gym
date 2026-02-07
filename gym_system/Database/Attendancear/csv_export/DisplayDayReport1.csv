@@ -1,0 +1,6 @@
+Id,Display,Name,Visible,FileName,Length,DispFormat
+1,1,"User ID                       ",1,"User ID                       ",10,"0#                            "
+2,2,"Date                          ",1,"Date                          ",,"MM/dd/yyyy                    "
+3,3,"Time                          ",1,"Time                          ",,"hh:mm:ss                      "
+4,4,"Device No                     ",1,"Device No                     ",3,"0#                            "
+5,5,"In Out                        ",0,"In Out                        ",,

@@ -14,6 +14,7 @@ from app.models.complaint import Complaint
 from app.models.daily_closing import DailyClosing
 from app.models.user import User
 from app.models.classes import GymClass
+from app.models.service import ServiceType
 
 dashboard_bp = Blueprint('dashboard', __name__)
 
@@ -251,6 +252,45 @@ def owner():
     recent_complaints = Complaint.query.order_by(
         Complaint.created_at.desc()
     ).limit(5).all()
+    
+    # === SERVICE ANALYTICS ===
+    # Top services by subscription count (this month)
+    service_analytics = db.session.query(
+        ServiceType.id,
+        ServiceType.name,
+        ServiceType.category,
+        func.count(Subscription.id).label('subscription_count'),
+        func.sum(Subscription.total_amount).label('revenue')
+    ).outerjoin(
+        Subscription, 
+        db.and_(
+            Subscription.service_type_id == ServiceType.id,
+            Subscription.created_at >= month_start
+        )
+    ).filter(
+        ServiceType.is_active == True
+    ).group_by(
+        ServiceType.id, ServiceType.name, ServiceType.category
+    ).order_by(func.count(Subscription.id).desc()).all()
+    
+    # Format service analytics
+    top_services = []
+    bottom_services = []
+    for service in service_analytics:
+        service_data = {
+            'id': service.id,
+            'name': service.name,
+            'category': service.category,
+            'subscription_count': service.subscription_count or 0,
+            'revenue': float(service.revenue or 0)
+        }
+        if service.subscription_count and service.subscription_count > 0:
+            top_services.append(service_data)
+    
+    # Get bottom services (services with least demand but still active)
+    bottom_services = [s for s in top_services if s['subscription_count'] > 0]
+    bottom_services = sorted(bottom_services, key=lambda x: x['subscription_count'])[:3]
+    top_services = top_services[:5]  # Top 5 services
 
     return render_template('dashboard/owner.html',
                           stats=stats,
@@ -258,7 +298,9 @@ def owner():
                           alerts=alerts,
                           expiring_soon=expiring_soon,
                           recent_subscriptions=recent_subscriptions,
-                          recent_complaints=recent_complaints)
+                          recent_complaints=recent_complaints,
+                          top_services=top_services,
+                          bottom_services=bottom_services)
 
 
 @dashboard_bp.route('/branch/<int:branch_id>')

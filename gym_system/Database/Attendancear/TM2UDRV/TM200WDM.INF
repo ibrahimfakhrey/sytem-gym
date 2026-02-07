@@ -1,0 +1,154 @@
+; TM200WDM.INF
+; Driver for CH372/TM200/CH376 (USB chip) V2.5
+; WDM/DLL for Windows 98/Me/2000/XP/Vista/64bit XP/64bit Vista
+; Copyright (C) W.ch 2001-2009
+;
+
+[Version]
+Signature = "$Chicago$"
+Class     = WCH
+ClassGuid = {77989ADF-06DB-4025-92E8-40D902C03B0A}
+Provider  = %WinChipHead%
+DriverVer = 01/12/2010, 2.5.2010.01
+
+[ControlFlags]
+ExcludeFromSelect = USB\VID_4348&PID_5537, USB\VID_4348&PID_55E0, USB\VID_1A86&PID_5537, USB\VID_1A86&PID_5576
+
+[ClassInstall32]
+Addreg = WCHReg
+
+[ClassInstall]
+Addreg = WCHReg
+
+[WCHReg]
+HKR, , , 0, %ClassName%
+HKR, , Icon, , -5
+HKR, , NoInstallClass, , 1
+
+[Manufacturer]
+%WinChipHead% = WinChipHead
+%WinChipHead% = WinChipHead,NTamd64
+%WinChipHead% = WinChipHead,NTia64
+
+[WinChipHead]
+%TM200.DeviceDesc% = TM200.Install, USB\VID_4348&PID_5537
+%TM200.DeviceDesc% = TM200.Install, USB\VID_1A86&PID_5537
+%CH376.DeviceDesc% = TM200.Install, USB\VID_1A86&PID_5576
+%CH37XICP.DeviceDesc% = TM200.Install, USB\VID_4348&PID_55E0
+
+[WinChipHead.NTamd64]
+%TM200.DeviceDesc% = TM200.Install.NTamd64, USB\VID_4348&PID_5537
+%TM200.DeviceDesc% = TM200.Install.NTamd64, USB\VID_1A86&PID_5537
+%CH376.DeviceDesc% = TM200.Install.NTamd64, USB\VID_1A86&PID_5576
+%CH37XICP.DeviceDesc% = TM200.Install.NTamd64, USB\VID_4348&PID_55E0
+
+[WinChipHead.NTia64]
+%TM200.DeviceDesc% = TM200.Install.NTia64, USB\VID_4348&PID_5537
+%TM200.DeviceDesc% = TM200.Install.NTia64, USB\VID_1A86&PID_5537
+%CH376.DeviceDesc% = TM200.Install.NTia64, USB\VID_1A86&PID_5576
+%CH37XICP.DeviceDesc% = TM200.Install.NTia64, USB\VID_4348&PID_55E0
+
+[TM200.Install]
+CopyFiles = TM200.CopyFiles.SYS, TM200.CopyFiles.DLL
+AddReg    = TM200.9X.AddReg, TM200.AddReg
+
+[TM200.Install.NT]
+CopyFiles = TM200.CopyFiles.SYS, TM200.CopyFiles.DLL
+AddReg    = TM200.NT.AddReg, TM200.AddReg
+
+[TM200.Install.NTamd64]
+CopyFiles = TM200.CopyFiles.S64, TM200.CopyFiles.DLL
+AddReg    = TM200.NT.AddReg, TM200.AddReg
+
+[TM200.Install.NTia64]
+CopyFiles = TM200.CopyFiles.I64, TM200.CopyFiles.DLL
+AddReg    = TM200.NT.AddReg, TM200.AddReg
+
+[TM200.CopyFiles.SYS]
+TM200WDM.SYS, , , 2
+
+[TM200.CopyFiles.S64]
+TM200W64.SYS, , , 2
+
+[TM200.CopyFiles.I64]
+TM200I64.SYS, , , 2
+
+[TM200.CopyFiles.DLL]
+TM200DLL.DLL, , , 2
+
+[TM200.9X.AddReg]
+HKR, , DevLoader, , *NTKERN
+HKR, , NTMPDriver, , TM200WDM.SYS
+
+[TM200.NT.AddReg]
+
+[TM200.AddReg]
+HKLM, SOFTWARE\WinChipHead\IC\TM200, WDM, 0x00010001, 0x00000025
+HKLM, SOFTWARE\WinChipHead\IC\TM200, DLL, 0x00010001, 0x00000022
+HKLM, SOFTWARE\WinChipHead\IC\TM200, Function, , "USB slave"
+
+[TM200.Install.NT.Services]
+AddService = TM200, 2, TM200.Service
+
+[TM200.Install.NTamd64.Services]
+AddService = TM200, 2, TM200.ServiceA64
+
+[TM200.Install.NTia64.Services]
+AddService = TM200, 2, TM200.ServiceI64
+
+[TM200.Service]
+DisplayName   = "TM200WDM"
+ServiceType   = 1
+StartType     = 3
+ErrorControl  = 1
+ServiceBinary = %10%\System32\Drivers\TM200WDM.SYS
+
+[TM200.ServiceA64]
+DisplayName   = "TM200WDM"
+ServiceType   = 1
+StartType     = 3
+ErrorControl  = 1
+ServiceBinary = %10%\System32\Drivers\TM200W64.SYS
+
+[TM200.ServiceI64]
+DisplayName   = "TM200WDM"
+ServiceType   = 1
+StartType     = 3
+ErrorControl  = 1
+ServiceBinary = %10%\System32\Drivers\TM200I64.SYS
+
+[DestinationDirs]
+DefaultDestDir      = 10, System32\Drivers
+TM200.CopyFiles.SYS = 10, System32\Drivers
+TM200.CopyFiles.DLL = 11
+TM200.CopyFiles.S64 = 10, System32\Drivers
+TM200.CopyFiles.I64 = 10, System32\Drivers
+
+[SourceDisksFiles]
+TM200WDM.SYS  = 1
+TM200DLL.DLL  = 1
+TM200W64.SYS  = 1
+TM200I64.SYS  = 1
+
+[SourceDisksNames]
+1 = "TM200 Installation Disk", TM200WDM.SYS, ,
+
+[SourceDisksNames.NTamd64]
+1 = "TM200 Installation Disk", TM200W64.SYS, ,
+
+[SourceDisksNames.NTia64]
+1 = "TM200 Installation Disk", TM200I64.SYS, ,
+
+[Strings]
+ClassName        = "Interface"
+WinChipHead      = "UBM"
+TM200.DeviceDesc = "USB UBM-U200"
+CH376.DeviceDesc = "USB CH376"
+CH37XICP.DeviceDesc = "USB Module"
+
+[Strings.0804]
+ClassName        = "¿¼ÇÚ»ú½Ó¿Ú"
+WinChipHead      = "UBM"
+TM200.DeviceDesc = "USB UBM-U200"
+CH376.DeviceDesc = "USB CH376"
+CH37XICP.DeviceDesc = "USB Module"

@@ -169,6 +169,80 @@
     </div>
 </div>
 
+<!-- Service Analytics -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-trophy text-success"></i>
+                أعلى الخدمات طلباً (هذا الشهر)
+            </div>
+            <div class="card-body">
+                {% if top_services %}
+                <ul class="list-group list-group-flush">
+                    {% for service in top_services %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ service.name }}</strong>
+                            <br>
+                            <small class="text-muted">
+                                {% if service.category == 'gym' %}🏋️{% elif service.category == 'swimming' %}🏊{% elif service.category == 'karate' %}🥋{% elif service.category == 'salon' %}💇{% else %}📌{% endif %}
+                                {{ service.category or 'عام' }}
+                            </small>
+                        </div>
+                        <div class="text-end">
+                            <span class="badge bg-success">{{ service.subscription_count }} اشتراك</span>
+                            <br>
+                            <small class="text-success">{{ "{:,.0f}".format(service.revenue) }} ر.س</small>
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted text-center mb-0">لا توجد بيانات كافية</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-arrow-down-circle text-warning"></i>
+                أقل الخدمات طلباً (تحتاج تسويق)
+            </div>
+            <div class="card-body">
+                {% if bottom_services %}
+                <ul class="list-group list-group-flush">
+                    {% for service in bottom_services %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ service.name }}</strong>
+                            <br>
+                            <small class="text-muted">
+                                {% if service.category == 'gym' %}🏋️{% elif service.category == 'swimming' %}🏊{% elif service.category == 'karate' %}🥋{% elif service.category == 'salon' %}💇{% else %}📌{% endif %}
+                                {{ service.category or 'عام' }}
+                            </small>
+                        </div>
+                        <div class="text-end">
+                            <span class="badge bg-warning text-dark">{{ service.subscription_count }} اشتراك</span>
+                            <br>
+                            <small class="text-warning">{{ "{:,.0f}".format(service.revenue) }} ر.س</small>
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+                <div class="text-center mt-2">
+                    <small class="text-muted"><i class="bi bi-lightbulb"></i> اقتراح: عروض ترويجية لهذه الخدمات</small>
+                </div>
+                {% else %}
+                <p class="text-muted text-center mb-0">جميع الخدمات تحقق أداءً جيداً 🎉</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Recent Activity -->
 <div class="row g-4 mb-4">
     <div class="col-lg-6">

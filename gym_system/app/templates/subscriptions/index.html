@@ -11,7 +11,7 @@
 <div class="card mb-4">
     <div class="card-body">
         <form method="GET" class="row g-3">
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <select name="status" class="form-select">
                     <option value="">جميع الحالات</option>
                     <option value="active" {{ 'selected' if request.args.get('status') == 'active' }}>نشط</option>
@@ -19,7 +19,17 @@
                     <option value="expired" {{ 'selected' if request.args.get('status') == 'expired' }}>منتهي</option>
                 </select>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
+                <select name="service_type_id" class="form-select">
+                    <option value="">جميع الخدمات</option>
+                    {% for service in service_types %}
+                    <option value="{{ service.id }}" {{ 'selected' if request.args.get('service_type_id')|int == service.id }}>
+                        {{ service.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
                 <select name="expiring" class="form-select">
                     <option value="">الكل</option>
                     <option value="7" {{ 'selected' if request.args.get('expiring') == '7' }}>ينتهي خلال 7 أيام</option>
@@ -38,7 +48,7 @@
                 </select>
             </div>
             {% endif %}
-            <div class="col-md-3">
+            <div class="col-md-{% if current_user.role.can_view_all_brands %}3{% else %}6{% endif %}">
                 <button type="submit" class="btn btn-secondary w-100">
                     <i class="bi bi-funnel"></i> تصفية
                 </button>

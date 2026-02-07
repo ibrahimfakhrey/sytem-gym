@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>فاتورة اشتراك - {{ subscription.member.name }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css" rel="stylesheet">
+    <style>
+        @media print {
+            .no-print { display: none; }
+            body { background: white; }
+        }
+        .invoice-box {
+            max-width: 800px;
+            margin: auto;
+            padding: 30px;
+            border: 1px solid #eee;
+            background: white;
+        }
+        .invoice-header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #333;
+            padding-bottom: 20px;
+        }
+        .invoice-details { margin-bottom: 30px; }
+        .invoice-table th { background: #f8f9fa; }
+    </style>
+</head>
+<body>
+    <div class="container my-4">
+        <div class="invoice-box">
+            <!-- Header -->
+            <div class="invoice-header">
+                <h2>{{ subscription.brand.name }}</h2>
+                <p class="mb-0">فاتورة اشتراك رقم: {{ subscription.id }}</p>
+                <small>التاريخ: {{ subscription.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
+            </div>
+
+            <!-- Member Info -->
+            <div class="invoice-details row">
+                <div class="col-6">
+                    <h5>بيانات العضو:</h5>
+                    <p class="mb-1"><strong>{{ subscription.member.name }}</strong></p>
+                    <p class="mb-1">الهاتف: {{ subscription.member.phone }}</p>
+                    {% if subscription.member.email %}
+                    <p class="mb-1">البريد: {{ subscription.member.email }}</p>
+                    {% endif %}
+                </div>
+                <div class="col-6 text-end">
+                    <h5>بيانات الاشتراك:</h5>
+                    <p class="mb-1">الباقة: {{ subscription.plan.name }}</p>
+                    <p class="mb-1">المدة: {{ subscription.plan.duration_days }} يوم</p>
+                    <p class="mb-1">من {{ subscription.start_date }} إلى {{ subscription.end_date }}</p>
+                    {% if subscription.service_type %}
+                    <p class="mb-1">نوع الخدمة: {{ subscription.service_type.name }}</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Payment Details Table -->
+            <table class="table invoice-table">
+                <thead>
+                    <tr>
+                        <th>البند</th>
+                        <th class="text-end">المبلغ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>سعر الباقة</td>
+                        <td class="text-end">{{ "{:,.0f}".format(subscription.plan.price) }} ر.س</td>
+                    </tr>
+                    {% if subscription.discount > 0 %}
+                    <tr>
+                        <td>الخصم</td>
+                        <td class="text-end text-danger">- {{ "{:,.0f}".format(subscription.discount) }} ر.س</td>
+                    </tr>
+                    {% endif %}
+                    {% if subscription.offer_discount > 0 %}
+                    <tr>
+                        <td>خصم العرض</td>
+                        <td class="text-end text-danger">- {{ "{:,.0f}".format(subscription.offer_discount) }} ر.س</td>
+                    </tr>
+                    {% endif %}
+                    {% if subscription.gift_card_amount > 0 %}
+                    <tr>
+                        <td>كرت الإهداء</td>
+                        <td class="text-end text-danger">- {{ "{:,.0f}".format(subscription.gift_card_amount) }} ر.س</td>
+                    </tr>
+                    {% endif %}
+                    <tr class="fw-bold">
+                        <td>الإجمالي</td>
+                        <td class="text-end">{{ "{:,.0f}".format(subscription.total_amount) }} ر.س</td>
+                    </tr>
+                    <tr class="text-success fw-bold">
+                        <td>المدفوع</td>
+                        <td class="text-end">{{ "{:,.0f}".format(subscription.paid_amount) }} ر.س</td>
+                    </tr>
+                    {% if subscription.remaining_amount > 0 %}
+                    <tr class="text-danger fw-bold">
+                        <td>المتبقي</td>
+                        <td class="text-end">{{ "{:,.0f}".format(subscription.remaining_amount) }} ر.س</td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+
+            <!-- Payment Records -->
+            {% if income_records %}
+            <div class="mt-4">
+                <h6>سجل المدفوعات:</h6>
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>التاريخ</th>
+                            <th>المبلغ</th>
+                            <th>طريقة الدفع</th>
+                            <th>النوع</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for income in income_records %}
+                        <tr>
+                            <td>{{ income.date }}</td>
+                            <td>{{ "{:,.0f}".format(income.amount) }} ر.س</td>
+                            <td>{{ income.payment_method_text }}</td>
+                            <td>{{ income.type_text }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+
+            <!-- Footer -->
+            <div class="text-center mt-5 pt-3 border-top">
+                <p class="mb-1">شكراً لثقتكم بنا</p>
+                <small class="text-muted">تم الإصدار بواسطة: {{ current_user.name }}</small>
+            </div>
+
+            <!-- Print Button -->
+            <div class="text-center mt-4 no-print">
+                <button onclick="window.print()" class="btn btn-primary">
+                    <i class="bi bi-printer"></i> طباعة
+                </button>
+                <a href="{{ url_for('subscriptions.view', subscription_id=subscription.id) }}" class="btn btn-secondary">
+                    <i class="bi bi-arrow-right"></i> رجوع
+                </a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

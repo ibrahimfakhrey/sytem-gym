@@ -1,0 +1,6 @@
+GroupID,GroupName,TimeZone1,TimeZone2,TimeZone3
+1,,1,0,0
+2,,0,0,0
+3,,0,0,0
+4,"报警时组",0,0,0
+5,"考勤时组",0,0,0

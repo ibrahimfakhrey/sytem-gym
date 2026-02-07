@@ -1,0 +1,12 @@
+regsvr32 "FOW565ZH.ocx"
+regsvr32 "FK524PXN.ocx"
+regsvr32 "FKAttend.ocx"
+regsvr32 "TM200PC.ocx"
+regsvr32 "RealSvrOcxTcp.ocx"
+regsvr32 "AxImage.ocx"
+regsvr32 "AxImage.ocx"
+regsvr32 "SBXPC.ocx"
+regsvr32 "FPCLOCK_Svr.ocx"
+regsvr32 "Fpreader.ocx"
+regsvr32 "RealSvrOcxTcp.ocx"
+

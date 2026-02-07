@@ -1,0 +1,99 @@
+
+[Version]
+Signature="$CHICAGO$"
+Class=Ports
+ClassGuid={4D36E978-E325-11CE-BFC1-08002BE10318}
+Provider=%PEFIS%
+LayoutFile=layout.inf
+DriverVer = 01/07/2010, 5.1.2600.0
+
+[SourceDisksNames]
+1="FKUSBCom Installation Disk",,0
+
+[SourceDisksFiles]
+usbser.sys = 1
+
+[Manufacturer]
+%MfgName%=FKUSBMfg,NTx86, NTamd64
+
+[FKUSBMfg]
+%USB\VID_601A&PID_0725.DeviceDesc%=FKUSBCom4720.Dev, USB\VID_601A&PID_0725
+%USB\VID_0624&PID_2188.DeviceDesc%=FKUSBCom9260.Dev, USB\VID_0624&PID_2188
+%USB\VID_0525&PID_A4A7.DeviceDesc%=FKUSBCom2440.Dev, USB\VID_0525&PID_A4A7
+
+[FKUSBMfg.NTx86]
+%USB\VID_601A&PID_0725.DeviceDesc%=FKUSBCom4720.Dev, USB\VID_601A&PID_0725
+%USB\VID_0624&PID_2188.DeviceDesc%=FKUSBCom9260.Dev, USB\VID_0624&PID_2188
+%USB\VID_0525&PID_A4A7.DeviceDesc%=FKUSBCom2440.Dev, USB\VID_0525&PID_A4A7
+
+[FKUSBMfg.NTamd64]
+%USB\VID_601A&PID_0725.DeviceDesc%=FKUSBCom4720.Dev, USB\VID_601A&PID_0725
+%USB\VID_0624&PID_2188.DeviceDesc%=FKUSBCom9260.Dev, USB\VID_0624&PID_2188
+%USB\VID_0525&PID_A4A7.DeviceDesc%=FKUSBCom2440.Dev, USB\VID_0525&PID_A4A7
+
+[PreCopySection]
+HKR,,NoSetupUI,,1
+
+[DestinationDirs]
+FKUSBCom.Files.Ext = 10,System32\Drivers
+FKUSBCom.Files.Inf = 10,INF
+
+[FKUSBCom4720.Dev]
+CopyFiles=FKUSBCom.Files.Ext,
+AddReg=FKUSBCom.AddReg
+
+[FKUSBCom9260.Dev]
+CopyFiles=FKUSBCom.Files.Ext
+AddReg=FKUSBCom.AddReg
+
+[FKUSBCom2440.Dev]
+CopyFiles=FKUSBCom.Files.Ext
+AddReg=FKUSBCom.AddReg
+
+[FKUSBCom4720.Dev.NT]
+CopyFiles=FKUSBCom.Files.Ext
+AddReg=FKUSBCom.AddReg
+
+[FKUSBCom9260.Dev.NT]
+CopyFiles=FKUSBCom.Files.Ext
+AddReg=FKUSBCom.AddReg
+
+[FKUSBCom2440.Dev.NT]
+CopyFiles=FKUSBCom.Files.Ext
+AddReg=FKUSBCom.AddReg
+
+[FKUSBCom4720.Dev.NT.Services]
+AddService=usbser,0x00000002,FKUSBCom.AddService
+
+[FKUSBCom9260.Dev.NT.Services]
+AddService=usbser,0x00000002,FKUSBCom.AddService
+
+[FKUSBCom2440.Dev.NT.Services]
+AddService=usbser,0x00000002,FKUSBCom.AddService
+
+[FKUSBCom.AddService]
+DisplayName    = %FKUSBCom.SvcDesc%
+ServiceType    = 1                  ; SERVICE_KERNEL_DRIVER
+StartType      = 3                  ; SERVICE_AUTO_START
+ErrorControl   = 1                  ; SERVICE_ERROR_NORMAL
+ServiceBinary  = %10%\System32\Drivers\usbser.sys
+
+[FKUSBCom.AddReg]
+HKR,,DevLoader,,*ntkern                                         ;
+HKR,,NTMPDriver,,usbser.sys
+HKR,,EnumPropPages32,,"MsPorts.dll,SerialPortPropPageProvider"
+
+[FKUSBCom.Files.Ext]
+usbser.sys
+
+
+;---------------------------------------------------------------;
+
+[Strings]
+PEFIS="PEFIS Co.,Ltd."
+MfgName="PEFIS Co.,Ltd."
+USB\VID_601A&PID_0725.DeviceDesc="FingerKeeper(USB Serial) Device"
+USB\VID_0624&PID_2188.DeviceDesc="FingerKeeper(USB Serial) Device"
+USB\VID_0525&PID_A4A7.DeviceDesc="FingerKeeper(USB Serial) Device"
+FKUSBCom.SvcDesc="FingerKeeper series USB Driver (usbser.sys)"
+

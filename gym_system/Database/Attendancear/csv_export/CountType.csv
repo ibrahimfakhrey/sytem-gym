@@ -1,0 +1,2 @@
+TypeId,CountType,TypeName,CountUnit,Start,Tune,GInteger,WorkRate,OverTimeRate,AbsenceRate,LeaveRate,OtType
+"A011",1,"الوقت الإضافي",1,"30","15","30",1,1,1,1,1

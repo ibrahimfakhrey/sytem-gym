@@ -114,6 +114,7 @@ def index():
     page, per_page = pagination_args(request)
     status = request.args.get('status', '')
     expiring = request.args.get('expiring', type=int)
+    service_type_id = request.args.get('service_type_id', type=int)
 
     # Base query
     if current_user.can_view_all_brands:
@@ -128,6 +129,10 @@ def index():
     # Status filter
     if status:
         query = query.filter_by(status=status)
+    
+    # Service type filter
+    if service_type_id:
+        query = query.filter_by(service_type_id=service_type_id)
     
     # Expiring filter (subscriptions expiring within X days)
     if expiring:
@@ -148,10 +153,17 @@ def index():
     brands = None
     if current_user.can_view_all_brands:
         brands = Brand.query.filter_by(is_active=True).all()
+    
+    # Get service types for filter
+    if current_user.can_view_all_brands:
+        service_types = ServiceType.query.filter_by(is_active=True).all()
+    else:
+        service_types = ServiceType.query.filter_by(brand_id=current_user.brand_id, is_active=True).all()
 
     return render_template('subscriptions/index.html',
                           subscriptions=subscriptions,
                           brands=brands,
+                          service_types=service_types,
                           status=status)
 
 
