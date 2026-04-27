@@ -176,7 +176,7 @@
             <div class="col-md-3 mb-3">
                 <div class="p-3 border rounded text-center">
                     <i class="{{ cat.icon }} fs-3 text-primary"></i>
-                    <h5 class="mt-2">{{ cat.complaints|length }}</h5>
+                    <h5 class="mt-2">{{ cat.complaints.count() }}</h5>
                     <small class="text-muted">{{ cat.name }}</small>
                 </div>
             </div>

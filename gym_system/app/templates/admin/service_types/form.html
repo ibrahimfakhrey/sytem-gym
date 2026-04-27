@@ -132,7 +132,8 @@
             </div>
         </div>
 
-        {% if service_type and service_type.plans|length > 0 %}
+        {% set plans_count = service_type.plans|list|length if service_type else 0 %}
+        {% if service_type and plans_count > 0 %}
         <div class="card mt-4 border-info">
             <div class="card-header bg-info text-white">
                 <i class="bi bi-info-circle"></i>
@@ -140,7 +141,7 @@
             </div>
             <div class="card-body">
                 <p class="text-muted mb-2">
-                    يوجد {{ service_type.plans|length }} باقة مرتبطة بنوع الخدمة هذا:
+                    يوجد {{ plans_count }} باقة مرتبطة بنوع الخدمة هذا:
                 </p>
                 <ul class="list-unstyled small mb-0">
                     {% for plan in service_type.plans[:5] %}
@@ -149,8 +150,8 @@
                         {{ plan.name }}
                     </li>
                     {% endfor %}
-                    {% if service_type.plans|length > 5 %}
-                    <li class="text-muted">و {{ service_type.plans|length - 5 }} باقات أخرى...</li>
+                    {% if plans_count > 5 %}
+                    <li class="text-muted">و {{ plans_count - 5 }} باقات أخرى...</li>
                     {% endif %}
                 </ul>
             </div>

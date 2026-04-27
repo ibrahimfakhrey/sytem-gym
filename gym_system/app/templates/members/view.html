@@ -314,7 +314,7 @@
         <div class="card mt-3">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <span><i class="bi bi-calendar-check"></i> آخر الحضور</span>
-                <span class="badge bg-primary">{{ member.attendance|length }} إجمالي</span>
+                <span class="badge bg-primary">{{ member.attendance.count() }} إجمالي</span>
             </div>
             <div class="card-body">
                 {% if attendance %}

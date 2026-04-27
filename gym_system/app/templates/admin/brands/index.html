@@ -44,8 +44,8 @@
                             <span class="badge bg-secondary">غير مفعل</span>
                             {% endif %}
                         </td>
-                        <td>{{ brand.branches|length if brand.branches else 0 }}</td>
-                        <td>{{ brand.members|length if brand.members else 0 }}</td>
+                        <td>{{ brand.branches.count() }}</td>
+                        <td>{{ brand.members.count() }}</td>
                         <td>
                             {% if brand.is_active %}
                             <span class="badge bg-success">نشط</span>

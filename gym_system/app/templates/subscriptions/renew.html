@@ -122,7 +122,7 @@
                 سجل الاشتراكات
             </div>
             <div class="card-body">
-                {% if subscription.member.subscriptions|length > 0 %}
+                {% if subscription.member.subscriptions.count() > 0 %}
                 <ul class="list-group list-group-flush">
                     {% for sub in subscription.member.subscriptions.limit(5).all() %}
                     <li class="list-group-item px-0">

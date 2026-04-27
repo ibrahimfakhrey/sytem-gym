@@ -151,6 +151,7 @@ class Expense(db.Model):
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
 
     # Relationships
+    brand = db.relationship('Brand', backref='expenses', foreign_keys=[brand_id])
     approver = db.relationship('User', foreign_keys=[approved_by], backref='approved_expenses')
     creator = db.relationship('User', foreign_keys=[created_by], backref='created_expenses')
 
