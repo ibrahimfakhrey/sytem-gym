@@ -55,10 +55,14 @@ def load_config():
         'database_path': '',
         'database_password': '',  # Password for .mdb file
         'backup_database_path': '',
+        'att2000_db_path': '',  # ZKTeco device database (CHECKINOUT)
         'sync_interval': SYNC_INTERVAL,
         'auto_start': False,
         'minimize_to_tray': True,
-        'first_setup_done': False
+        'first_setup_done': False,
+        'access_control_enabled': False,
+        'class_access_window_minutes': 15,
+        'employee_shift_tracking_enabled': False
     }
 
 

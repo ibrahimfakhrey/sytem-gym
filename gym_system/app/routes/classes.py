@@ -8,6 +8,7 @@ from datetime import datetime, date, timedelta
 
 from app import db
 from app.models import Brand, Branch, Member, User, ServiceType, GymClass, ClassBooking
+from app.utils.helpers import apply_branch_filter, check_entity_access
 
 classes_bp = Blueprint('classes', __name__, url_prefix='/classes')
 
@@ -64,7 +65,7 @@ def index():
         return redirect(url_for('dashboard.index'))
 
     # Build query
-    query = GymClass.query.filter_by(brand_id=brand.id)
+    query = apply_branch_filter(GymClass.query.filter_by(brand_id=brand.id), GymClass)
     if day_filter is not None:
         query = query.filter_by(day_of_week=day_filter)
     if service_filter:
@@ -164,7 +165,7 @@ def edit(class_id):
     gym_class = GymClass.query.get_or_404(class_id)
 
     # Check access
-    if not current_user.is_owner and current_user.brand_id != gym_class.brand_id:
+    if not check_entity_access(gym_class):
         flash('ليس لديك صلاحية', 'danger')
         return redirect(url_for('classes.index'))
 
@@ -210,7 +211,7 @@ def delete(class_id):
     gym_class = GymClass.query.get_or_404(class_id)
 
     # Check access
-    if not current_user.is_owner and current_user.brand_id != gym_class.brand_id:
+    if not check_entity_access(gym_class):
         flash('ليس لديك صلاحية', 'danger')
         return redirect(url_for('classes.index'))
 
@@ -237,7 +238,7 @@ def bookings(class_id):
     gym_class = GymClass.query.get_or_404(class_id)
 
     # Check access
-    if not current_user.is_owner and current_user.brand_id != gym_class.brand_id:
+    if not check_entity_access(gym_class):
         flash('ليس لديك صلاحية', 'danger')
         return redirect(url_for('classes.index'))
 
@@ -264,7 +265,7 @@ def book(class_id):
     gym_class = GymClass.query.get_or_404(class_id)
 
     # Check access
-    if not current_user.is_owner and current_user.brand_id != gym_class.brand_id:
+    if not check_entity_access(gym_class):
         flash('ليس لديك صلاحية', 'danger')
         return redirect(url_for('classes.index'))
 
@@ -301,7 +302,7 @@ def checkin(booking_id):
     booking = ClassBooking.query.get_or_404(booking_id)
 
     # Check access
-    if not current_user.is_owner and current_user.brand_id != booking.gym_class.brand_id:
+    if not check_entity_access(booking.gym_class):
         flash('ليس لديك صلاحية', 'danger')
         return redirect(url_for('classes.index'))
 
@@ -320,7 +321,7 @@ def cancel_booking(booking_id):
     booking = ClassBooking.query.get_or_404(booking_id)
 
     # Check access
-    if not current_user.is_owner and current_user.brand_id != booking.gym_class.brand_id:
+    if not check_entity_access(booking.gym_class):
         flash('ليس لديك صلاحية', 'danger')
         return redirect(url_for('classes.index'))
 

@@ -134,10 +134,10 @@ def register_cli_commands(app):
         from .models.user import User, Role
         from .models.company import Company
 
-        # Check if owner already exists
-        owner_role = Role.query.filter_by(name_en='owner').first()
+        # Check if admin already exists
+        owner_role = Role.query.filter_by(name_en='admin').first()
         if owner_role and User.query.filter_by(role_id=owner_role.id).first():
-            click.echo('Owner already exists!')
+            click.echo('Admin already exists!')
             return
 
         # Create default company if not exists
@@ -173,26 +173,50 @@ def register_cli_commands(app):
         # Create roles if not exist
         # Format: (name_en, name_ar, description, permissions_dict)
         roles_data = [
-            ('owner', 'المالك', 'صلاحية كاملة على جميع البراندات', {
-                'is_owner': True, 'can_view_all_brands': True, 'can_manage_members': True,
-                'can_manage_subscriptions': True, 'can_view_finance': True, 'can_manage_finance': True,
-                'can_view_reports': True, 'can_manage_attendance': True
+            ('admin', 'أدمن', 'مدير النظام - صلاحية كاملة على جميع البراندات', {
+                'is_owner': True, 'can_view_all_brands': True,
+                'can_manage_members': True, 'can_manage_subscriptions': True,
+                'can_view_finance': True, 'can_manage_finance': True,
+                'can_view_reports': True, 'can_manage_attendance': True,
+                'can_view_complaints': True, 'can_manage_complaints': True,
+                'can_view_daily_closing': True, 'can_manage_daily_closing': True,
+                'can_manage_classes': True, 'can_approve_expenses': True,
+                'can_manage_offers': True, 'can_manage_gift_cards': True,
             }),
-            ('brand_manager', 'مدير البراند', 'تحكم كامل في براند واحد', {
-                'can_manage_members': True, 'can_manage_subscriptions': True, 'can_view_finance': True,
-                'can_manage_finance': True, 'can_view_reports': True, 'can_manage_attendance': True
+            ('owner', 'المالك', 'مالك البراند - تحكم كامل في براند واحد', {
+                'can_manage_members': True, 'can_manage_subscriptions': True,
+                'can_view_finance': True, 'can_manage_finance': True,
+                'can_view_reports': True, 'can_manage_attendance': True,
+                'can_view_complaints': True, 'can_manage_complaints': True,
+                'can_view_daily_closing': True, 'can_manage_daily_closing': True,
+                'can_manage_classes': True, 'can_approve_expenses': True,
+                'can_manage_offers': True, 'can_manage_gift_cards': True,
             }),
-            ('receptionist', 'موظف استقبال', 'إدارة العملاء والاشتراكات', {
-                'can_manage_members': True, 'can_manage_subscriptions': True, 'can_manage_attendance': True
+            ('branch_manager', 'مدير الفرع', 'مدير فرع - تحكم كامل في فرع واحد', {
+                'can_manage_members': True, 'can_manage_subscriptions': True,
+                'can_view_finance': True, 'can_manage_finance': True,
+                'can_view_reports': True, 'can_manage_attendance': True,
+                'can_view_complaints': True, 'can_manage_complaints': True,
+                'can_view_daily_closing': True, 'can_manage_daily_closing': True,
+                'can_manage_classes': True, 'can_approve_expenses': True,
+                'can_manage_offers': True, 'can_manage_gift_cards': True,
             }),
-            ('finance', 'مالية براند', 'إدارة مالية براند واحد', {
-                'can_view_finance': True, 'can_manage_finance': True, 'can_view_reports': True
+            ('branch_receptionist', 'استقبال فرع', 'موظف استقبال على مستوى الفرع', {
+                'can_manage_members': True, 'can_manage_subscriptions': True,
+                'can_manage_attendance': True, 'can_view_complaints': True,
+                'can_manage_classes': True,
+            }),
+            ('branch_finance', 'مالية فرع', 'مالية على مستوى فرع واحد', {
+                'can_view_finance': True, 'can_manage_finance': True,
+                'can_view_reports': True,
+                'can_view_daily_closing': True, 'can_manage_daily_closing': True,
             }),
             ('finance_admin', 'مالية عامة', 'الاطلاع على مالية جميع البراندات', {
-                'can_view_all_brands': True, 'can_view_finance': True, 'can_view_reports': True
+                'can_view_all_brands': True, 'can_view_finance': True,
+                'can_view_reports': True, 'can_view_daily_closing': True,
             }),
-            ('coach', 'مدرب', 'الاطلاع على بيانات شخصية فقط', {
-                'can_manage_attendance': True
+            ('employee', 'موظف', 'موظف على مستوى الفرع', {
+                'can_manage_attendance': True,
             }),
         ]
 

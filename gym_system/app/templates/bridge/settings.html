@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+
+{% block title %}إعدادات جسر البصمة{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-fingerprint"></i>
+        إعدادات جسر البصمة
+    </h1>
+    <a href="{{ url_for('bridge.index') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-right"></i>
+        حالة الجسر
+    </a>
+</div>
+
+<!-- Brand Selector -->
+{% if brands|length > 1 %}
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label">اختر البراند</label>
+                <select name="brand_id" class="form-select" onchange="this.form.submit()">
+                    {% for b in brands %}
+                    <option value="{{ b.id }}" {% if brand and b.id == brand.id %}selected{% endif %}>
+                        {{ b.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-sliders"></i>
+                إعدادات {{ brand.name if brand else '' }}
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+
+                    <h5 class="mb-3"><i class="bi bi-door-open"></i> التحكم بدخول الكلاسات</h5>
+                    <div class="row mb-4">
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check form-switch">
+                                {{ form.class_access_control_enabled(class="form-check-input") }}
+                                <label class="form-check-label">تفعيل التحكم بدخول الكلاسات</label>
+                            </div>
+                            <small class="text-muted">عند التفعيل، العضو يدخل فقط وقت الكلاس المحجوز</small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">نافذة الدخول (بالدقائق)</label>
+                            {{ form.class_access_window_minutes(class="form-control", type="number", min="1", max="120") }}
+                            <small class="text-muted">كم دقيقة قبل بداية الكلاس يُسمح بالدخول</small>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <h5 class="mb-3"><i class="bi bi-people"></i> تتبع الموظفين</h5>
+                    <div class="row mb-4">
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check form-switch">
+                                {{ form.employee_shift_tracking_enabled(class="form-check-input") }}
+                                <label class="form-check-label">تفعيل تتبع مناوبات الموظفين</label>
+                            </div>
+                            <small class="text-muted">تسجيل التأخير تلقائياً عند بصمة الموظف</small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check form-switch">
+                                {{ form.auto_block_expired(class="form-check-input") }}
+                                <label class="form-check-label">حظر تلقائي عند انتهاء الاشتراك</label>
+                            </div>
+                            <small class="text-muted">حظر العضو تلقائياً من البصمة عند انتهاء اشتراكه</small>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <h5 class="mb-3"><i class="bi bi-arrow-repeat"></i> فواصل المزامنة</h5>
+                    <div class="row mb-4">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">فاصل مزامنة الحضور (بالثواني)</label>
+                            {{ form.attendance_sync_interval(class="form-control", type="number", min="10", max="300") }}
+                            <small class="text-muted">كل كم ثانية يتم قراءة بيانات البصمة</small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">فاصل تحديث صلاحيات الدخول (بالثواني)</label>
+                            {{ form.access_control_interval(class="form-control", type="number", min="10", max="300") }}
+                            <small class="text-muted">كل كم ثانية يتم تحديث صلاحيات الأعضاء</small>
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg"></i>
+                            حفظ الإعدادات
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <!-- Connection Status -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <i class="bi bi-wifi"></i>
+                حالة الاتصال
+            </div>
+            <div class="card-body">
+                {% if bridge_status %}
+                <div class="text-center mb-3">
+                    <span class="badge bg-{{ bridge_status.status_class }} fs-6">
+                        {{ bridge_status.status_text }}
+                    </span>
+                </div>
+                <ul class="list-unstyled small mb-0">
+                    <li class="mb-1"><strong>الجهاز:</strong> {{ bridge_status.computer_name or '-' }}</li>
+                    <li class="mb-1"><strong>IP:</strong> {{ bridge_status.ip_address or '-' }}</li>
+                    <li class="mb-1"><strong>النظام:</strong> {{ bridge_status.os_info or '-' }}</li>
+                    <li class="mb-1"><strong>قاعدة البيانات:</strong>
+                        {% if bridge_status.database_found %}
+                        <span class="text-success"><i class="bi bi-check-circle"></i> موجودة</span>
+                        {% else %}
+                        <span class="text-danger"><i class="bi bi-x-circle"></i> غير موجودة</span>
+                        {% endif %}
+                    </li>
+                    <li class="mb-1"><strong>آخر اتصال:</strong>
+                        {{ bridge_status.last_heartbeat.strftime('%Y-%m-%d %H:%M') if bridge_status.last_heartbeat else '-' }}
+                    </li>
+                    <li class="mb-1"><strong>عمليات المزامنة:</strong> {{ bridge_status.total_syncs or 0 }}</li>
+                    {% if bridge_status.last_error %}
+                    <li class="mt-2 text-danger"><strong>آخر خطأ:</strong> {{ bridge_status.last_error[:100] }}</li>
+                    {% endif %}
+                </ul>
+                {% else %}
+                <div class="text-center text-muted py-3">
+                    <i class="bi bi-wifi-off fs-1"></i>
+                    <p class="mt-2 mb-0">لم يتم الاتصال بعد</p>
+                    <small>شغّل برنامج الجسر على جهاز النادي</small>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Database Paths -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <i class="bi bi-database"></i>
+                ملفات قاعدة البيانات
+            </div>
+            <div class="card-body small">
+                <p class="mb-1"><strong>att2000.mdb:</strong></p>
+                <p class="text-muted mb-2">{{ bridge_settings.att2000_mdb_path or 'لم يتم الكشف بعد' }}</p>
+                <p class="mb-1"><strong>backup.mdb:</strong></p>
+                <p class="text-muted mb-0">{{ bridge_settings.backup_mdb_path or 'لم يتم الكشف بعد' }}</p>
+            </div>
+        </div>
+
+        <!-- Help Notes -->
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-info-circle"></i>
+                ملاحظات
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled small mb-0">
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle text-success"></i>
+                        نافذة الدخول: العضو يُسمح له بالدخول قبل بداية الكلاس بهذه المدة
+                    </li>
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle text-success"></i>
+                        الأعضاء بدون كلاس (جيم فقط) يدخلون حسب تاريخ انتهاء اشتراكهم
+                    </li>
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle text-success"></i>
+                        يتم كشف ملفات قاعدة البيانات تلقائياً عند تشغيل الجسر
+                    </li>
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle text-success"></i>
+                        تقليل فواصل المزامنة يزيد الدقة لكن يزيد الحمل على الجهاز
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

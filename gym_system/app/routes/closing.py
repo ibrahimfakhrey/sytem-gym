@@ -11,7 +11,7 @@ from app.models.schedule import DailyClosing
 from app.models.subscription import Subscription, SubscriptionPayment
 from app.models.finance import Income
 from app.utils.decorators import members_required, finance_required
-from app.utils.helpers import pagination_args
+from app.utils.helpers import pagination_args, apply_branch_filter, check_entity_access
 from app.models.company import Branch
 
 closing_bp = Blueprint('closing', __name__)
@@ -107,15 +107,8 @@ def index():
     """List all daily closings"""
     page, per_page = pagination_args(request)
 
-    # Base query - filter by brand access
-    if current_user.can_view_all_brands:
-        brand_id = request.args.get('brand_id', type=int)
-        if brand_id:
-            query = DailyClosing.query.filter_by(brand_id=brand_id)
-        else:
-            query = DailyClosing.query
-    else:
-        query = DailyClosing.query.filter_by(brand_id=current_user.brand_id)
+    # Base query - filter by brand/branch access
+    query = apply_branch_filter(DailyClosing.query, DailyClosing)
 
     # Pagination
     closings = query.order_by(DailyClosing.closing_date.desc()).paginate(
@@ -240,7 +233,7 @@ def view_closing(closing_id):
     """View closing details"""
     closing = DailyClosing.query.get_or_404(closing_id)
 
-    if not current_user.can_access_brand(closing.brand_id):
+    if not check_entity_access(closing):
         flash('ليس لديك صلاحية', 'danger')
         return redirect(url_for('closing.index'))
 

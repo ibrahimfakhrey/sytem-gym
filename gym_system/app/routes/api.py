@@ -9,7 +9,8 @@ from app.models.member import Member
 from app.models.user import User, Role
 from app.models.subscription import Subscription, Plan
 from app.models.attendance import MemberAttendance, EmployeeAttendance
-from app.models.fingerprint import FingerprintSyncLog, BridgeStatus, DeviceCommand
+from app.models.fingerprint import FingerprintSyncLog, BridgeStatus, DeviceCommand, BridgeSettings
+from app.models.employee import EmployeeSettings, EmployeeShift, EmployeeDeduction
 from app.models.service import ServiceType
 from app.models.health import HealthReport
 from app.models.complaint import Complaint, ComplaintCategory
@@ -121,14 +122,79 @@ def sync_attendance():
                     if existing:
                         continue
 
+                # Check if attendance record already exists for today (check-out scenario)
+                attendance_date = timestamp.date()
+                existing_today = EmployeeAttendance.query.filter_by(
+                    user_id=staff_user.id,
+                    date=attendance_date
+                ).first()
+
+                if existing_today:
+                    # Second scan = check-out, update existing record
+                    existing_today.check_out = timestamp.time()
+                    if log_id:
+                        existing_today.fingerprint_log_id = log_id
+                    staff_synced += 1
+                    synced += 1
+                    continue
+
+                # First scan = check-in. Calculate lateness using shift or brand settings.
+                check_in_time = timestamp.time()
+                expected_start = None
+                late_threshold = 15  # default
+                status = 'present'
+                late_minutes = 0
+
+                # 1. Check per-employee shift first
+                day_of_week = (attendance_date.weekday() + 2) % 7  # Arabic week
+                shift = EmployeeShift.get_active_shift(staff_user.id, day_of_week)
+
+                if shift:
+                    expected_start = shift.work_start_time
+                    brand_settings = EmployeeSettings.get_or_create(brand_id)
+                    late_threshold = shift.get_late_threshold(brand_settings)
+                else:
+                    # 2. Fall back to brand-level settings
+                    brand_settings = EmployeeSettings.get_or_create(brand_id)
+                    expected_start = brand_settings.work_start_time
+                    late_threshold = brand_settings.late_threshold_minutes or 15
+
+                # Calculate lateness
+                if expected_start:
+                    check_in_mins = check_in_time.hour * 60 + check_in_time.minute
+                    start_mins = expected_start.hour * 60 + expected_start.minute
+
+                    if check_in_mins > start_mins + late_threshold:
+                        late_minutes = check_in_mins - start_mins
+                        status = 'late'
+
                 attendance = EmployeeAttendance(
                     user_id=staff_user.id,
                     brand_id=brand_id,
-                    check_in=timestamp,
+                    date=attendance_date,
+                    check_in=check_in_time,
+                    expected_check_in=expected_start,
+                    late_minutes=late_minutes,
+                    status=status,
                     source='fingerprint',
                     fingerprint_log_id=log_id
                 )
                 db.session.add(attendance)
+
+                # Auto-create deduction if late and auto_deduction enabled
+                if status == 'late' and brand_settings and brand_settings.auto_deduction_enabled:
+                    if brand_settings.auto_deduction_amount and float(brand_settings.auto_deduction_amount) > 0:
+                        deduction = EmployeeDeduction(
+                            user_id=staff_user.id,
+                            brand_id=brand_id,
+                            title='خصم تأخير',
+                            amount=brand_settings.auto_deduction_amount,
+                            reason=f'تأخير {late_minutes} دقيقة - بصمة',
+                            deduction_type='late',
+                            deduction_date=attendance_date
+                        )
+                        db.session.add(deduction)
+
                 staff_synced += 1
                 synced += 1
                 continue
@@ -1911,4 +1977,464 @@ def sync_employee_attendance():
         'success': True,
         'synced': synced,
         'errors': errors[:10]
+    })
+
+
+# =============================================================================
+# BRIDGE CLASS SCHEDULE & ACCESS CONTROL API
+# =============================================================================
+
+@api_bp.route('/bridge/class-schedule', methods=['GET'])
+@require_api_key
+def get_class_schedule():
+    """
+    Get today's class schedule with member access info for the bridge.
+    The bridge uses this to control end_date in backup.mdb.
+
+    Returns:
+    - classes with booked members (allowed during class time window)
+    - gym_members with active non-class subscriptions (allowed by subscription end_date)
+    - blocked_members (expired/cancelled/blocked - deny access)
+    """
+    brand_id = request.args.get('brand_id', type=int)
+    schedule_date = request.args.get('date')
+
+    if not brand_id:
+        return jsonify({'error': 'brand_id is required'}), 400
+
+    # Parse date or use today
+    if schedule_date:
+        try:
+            schedule_date = datetime.strptime(schedule_date, '%Y-%m-%d').date()
+        except ValueError:
+            schedule_date = date.today()
+    else:
+        schedule_date = date.today()
+
+    # Get bridge settings for access window
+    bridge_settings = BridgeSettings.get_or_create(brand_id)
+    access_window = bridge_settings.class_access_window_minutes
+
+    # Get day of week (Arabic: 0=Sat, 1=Sun, ..., 6=Fri)
+    day_of_week = (schedule_date.weekday() + 2) % 7
+
+    # --- 1. Classes with booked members ---
+    classes_data = []
+    class_member_ids = set()  # Track members who have class bookings
+
+    today_classes = GymClass.query.filter_by(
+        brand_id=brand_id,
+        day_of_week=day_of_week,
+        is_active=True
+    ).order_by(GymClass.start_time).all()
+
+    for gym_class in today_classes:
+        # Get booked members for this class today
+        bookings = ClassBooking.query.filter(
+            ClassBooking.class_id == gym_class.id,
+            ClassBooking.booking_date == schedule_date,
+            ClassBooking.status.in_(['booked', 'attended'])
+        ).all()
+
+        booked_members = []
+        for booking in bookings:
+            member = booking.member
+            if member and member.fingerprint_id:
+                emp_id = str(member.fingerprint_id).zfill(8)
+                if member.member_import_id:
+                    emp_id = member.member_import_id
+                booked_members.append({
+                    'member_id': member.id,
+                    'fingerprint_id': member.fingerprint_id,
+                    'emp_id': emp_id,
+                    'name': member.name,
+                    'booking_id': booking.id
+                })
+                class_member_ids.add(member.id)
+
+        if booked_members:
+            classes_data.append({
+                'class_id': gym_class.id,
+                'name': gym_class.name,
+                'start_time': gym_class.start_time.strftime('%H:%M') if gym_class.start_time else None,
+                'end_time': gym_class.end_time.strftime('%H:%M') if gym_class.end_time else None,
+                'trainer': gym_class.trainer.name if gym_class.trainer else None,
+                'booked_members': booked_members
+            })
+
+    # --- 2. Gym members (active subscription, no class requirement) ---
+    gym_members = []
+
+    active_subs = Subscription.query.filter(
+        Subscription.brand_id == brand_id,
+        Subscription.status == 'active',
+        Subscription.end_date >= schedule_date
+    ).all()
+
+    for sub in active_subs:
+        member = sub.member
+        if not member or not member.fingerprint_id:
+            continue
+        if not member.is_active:
+            continue
+        # Skip members already in a class booking
+        if member.id in class_member_ids:
+            continue
+        # Skip members whose plan requires class booking (they must book a class)
+        if sub.plan and sub.plan.requires_class_booking:
+            continue
+
+        emp_id = str(member.fingerprint_id).zfill(8)
+        if member.member_import_id:
+            emp_id = member.member_import_id
+
+        gym_members.append({
+            'member_id': member.id,
+            'fingerprint_id': member.fingerprint_id,
+            'emp_id': emp_id,
+            'name': member.name,
+            'subscription_end_date': sub.end_date.isoformat()
+        })
+
+    # --- 3. Blocked members (expired, cancelled, stopped, or blocked) ---
+    blocked_members = []
+
+    # Get all members with fingerprints for this brand who are NOT in active lists
+    active_member_ids = class_member_ids | {m['member_id'] for m in gym_members}
+
+    all_fp_members = Member.query.filter(
+        Member.brand_id == brand_id,
+        Member.fingerprint_id.isnot(None),
+        ~Member.id.in_(active_member_ids) if active_member_ids else True
+    ).all()
+
+    for member in all_fp_members:
+        if member.id in active_member_ids:
+            continue
+        emp_id = str(member.fingerprint_id).zfill(8)
+        if member.member_import_id:
+            emp_id = member.member_import_id
+
+        # Determine block reason
+        reason = 'لا يوجد اشتراك نشط'
+        if not member.is_active:
+            reason = 'العضوية معطلة'
+        elif member.is_blocked:
+            reason = member.block_reason or 'محظور'
+        else:
+            last_sub = member.subscriptions.order_by(Subscription.end_date.desc()).first()
+            if last_sub:
+                if last_sub.status == 'frozen':
+                    reason = 'الاشتراك مجمد'
+                elif last_sub.status == 'stopped':
+                    reason = 'الاشتراك موقوف'
+                elif last_sub.end_date < schedule_date:
+                    reason = 'الاشتراك منتهي'
+
+        blocked_members.append({
+            'member_id': member.id,
+            'fingerprint_id': member.fingerprint_id,
+            'emp_id': emp_id,
+            'name': member.name,
+            'reason': reason
+        })
+
+    return jsonify({
+        'success': True,
+        'date': schedule_date.isoformat(),
+        'access_window_minutes': access_window,
+        'classes': classes_data,
+        'gym_members': gym_members,
+        'blocked_members': blocked_members,
+        'summary': {
+            'classes_count': len(classes_data),
+            'class_members_count': len(class_member_ids),
+            'gym_members_count': len(gym_members),
+            'blocked_count': len(blocked_members)
+        }
+    })
+
+
+# =============================================================================
+# BRIDGE SETTINGS API
+# =============================================================================
+
+@api_bp.route('/bridge/settings', methods=['GET'])
+@require_api_key
+def get_bridge_settings():
+    """Get bridge settings for a brand"""
+    brand_id = request.args.get('brand_id', type=int)
+
+    if not brand_id:
+        return jsonify({'error': 'brand_id is required'}), 400
+
+    settings = BridgeSettings.get_or_create(brand_id)
+
+    return jsonify({
+        'success': True,
+        'settings': {
+            'brand_id': settings.brand_id,
+            'class_access_window_minutes': settings.class_access_window_minutes,
+            'att2000_mdb_path': settings.att2000_mdb_path,
+            'backup_mdb_path': settings.backup_mdb_path,
+            'attendance_sync_interval': settings.attendance_sync_interval,
+            'access_control_interval': settings.access_control_interval,
+            'class_access_control_enabled': settings.class_access_control_enabled,
+            'employee_shift_tracking_enabled': settings.employee_shift_tracking_enabled,
+            'auto_block_expired': settings.auto_block_expired
+        }
+    })
+
+
+@api_bp.route('/bridge/settings', methods=['POST'])
+@require_api_key
+def update_bridge_settings():
+    """Update bridge settings for a brand"""
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+
+    brand_id = data.get('brand_id')
+    if not brand_id:
+        return jsonify({'error': 'brand_id is required'}), 400
+
+    settings = BridgeSettings.get_or_create(brand_id)
+
+    # Update fields if provided
+    if 'class_access_window_minutes' in data:
+        settings.class_access_window_minutes = data['class_access_window_minutes']
+    if 'att2000_mdb_path' in data:
+        settings.att2000_mdb_path = data['att2000_mdb_path']
+    if 'backup_mdb_path' in data:
+        settings.backup_mdb_path = data['backup_mdb_path']
+    if 'attendance_sync_interval' in data:
+        settings.attendance_sync_interval = data['attendance_sync_interval']
+    if 'access_control_interval' in data:
+        settings.access_control_interval = data['access_control_interval']
+    if 'class_access_control_enabled' in data:
+        settings.class_access_control_enabled = data['class_access_control_enabled']
+    if 'employee_shift_tracking_enabled' in data:
+        settings.employee_shift_tracking_enabled = data['employee_shift_tracking_enabled']
+    if 'auto_block_expired' in data:
+        settings.auto_block_expired = data['auto_block_expired']
+
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'message': 'تم تحديث إعدادات الجسر بنجاح'
+    })
+
+
+# =============================================================================
+# MEMBER IMPORT API
+# =============================================================================
+
+@api_bp.route('/members/import-batch', methods=['POST'])
+@require_api_key
+def import_members_batch():
+    """
+    Import members from backup.mdb Employee table.
+    Used by the bridge import script to bulk-create members.
+    """
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+
+    brand_id = data.get('brand_id')
+    members_data = data.get('members', [])
+
+    if not brand_id:
+        return jsonify({'error': 'brand_id is required'}), 400
+
+    brand = Brand.query.get(brand_id)
+    if not brand:
+        return jsonify({'error': 'Brand not found'}), 404
+
+    created = 0
+    skipped = 0
+    errors = []
+
+    for m in members_data:
+        try:
+            emp_id = m.get('emp_id', '').strip()
+            if not emp_id:
+                errors.append('Missing emp_id')
+                continue
+
+            # Check if already imported
+            existing = Member.query.filter_by(
+                brand_id=brand_id,
+                member_import_id=emp_id
+            ).first()
+            if existing:
+                skipped += 1
+                continue
+
+            # Also check by fingerprint_id
+            fp_id = int(emp_id.lstrip('0') or '0')
+            if fp_id > 0:
+                existing_fp = Member.query.filter_by(
+                    brand_id=brand_id,
+                    fingerprint_id=fp_id
+                ).first()
+                if existing_fp:
+                    # Update import_id on existing record
+                    existing_fp.member_import_id = emp_id
+                    skipped += 1
+                    continue
+
+            # Create new member
+            member = Member(
+                brand_id=brand_id,
+                name=m.get('emp_name', '').strip() or f'Member {emp_id}',
+                phone=m.get('phone_code', '').strip() or '',
+                fingerprint_id=fp_id if fp_id > 0 else None,
+                fingerprint_enrolled=True if fp_id > 0 else False,
+                fingerprint_enrolled_at=datetime.utcnow() if fp_id > 0 else None,
+                member_import_id=emp_id,
+                notes=m.get('memo', ''),
+                is_active=True
+            )
+            db.session.add(member)
+            created += 1
+
+            # Commit in batches of 50
+            if created % 50 == 0:
+                db.session.commit()
+
+        except Exception as e:
+            errors.append(f'emp_id {emp_id}: {str(e)}')
+
+    # Final commit
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'created': created,
+        'skipped': skipped,
+        'errors_count': len(errors),
+        'errors': errors[:20],
+        'message': f'تم استيراد {created} عضو، تم تخطي {skipped}'
+    })
+
+
+# =============================================================================
+# EMPLOYEE SHIFT API
+# =============================================================================
+
+@api_bp.route('/employees/shifts', methods=['GET'])
+@require_api_key
+def get_employee_shifts():
+    """Get all employee shifts for a brand"""
+    brand_id = request.args.get('brand_id', type=int)
+
+    if not brand_id:
+        return jsonify({'error': 'brand_id is required'}), 400
+
+    shifts = EmployeeShift.query.filter_by(brand_id=brand_id, is_active=True).all()
+
+    return jsonify({
+        'success': True,
+        'shifts': [
+            {
+                'id': s.id,
+                'user_id': s.user_id,
+                'employee_name': s.employee.name if s.employee else None,
+                'work_start_time': s.work_start_time.strftime('%H:%M'),
+                'work_end_time': s.work_end_time.strftime('%H:%M'),
+                'applicable_days': s.applicable_days,
+                'days_arabic': s.days_arabic,
+                'late_threshold_minutes': s.late_threshold_minutes,
+                'is_active': s.is_active
+            }
+            for s in shifts
+        ]
+    })
+
+
+@api_bp.route('/employees/<int:user_id>/shift', methods=['GET'])
+@require_api_key
+def get_employee_shift(user_id):
+    """Get shift for a specific employee"""
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'Employee not found'}), 404
+
+    shift = EmployeeShift.query.filter_by(user_id=user_id, is_active=True).first()
+
+    if not shift:
+        # Fall back to brand settings
+        settings = EmployeeSettings.get_or_create(user.brand_id) if user.brand_id else None
+        return jsonify({
+            'success': True,
+            'shift': None,
+            'brand_defaults': {
+                'work_start_time': settings.work_start_time.strftime('%H:%M') if settings and settings.work_start_time else '08:00',
+                'work_end_time': settings.work_end_time.strftime('%H:%M') if settings and settings.work_end_time else '17:00',
+                'late_threshold_minutes': settings.late_threshold_minutes if settings else 15
+            } if settings else None
+        })
+
+    return jsonify({
+        'success': True,
+        'shift': {
+            'id': shift.id,
+            'user_id': shift.user_id,
+            'work_start_time': shift.work_start_time.strftime('%H:%M'),
+            'work_end_time': shift.work_end_time.strftime('%H:%M'),
+            'applicable_days': shift.applicable_days,
+            'days_arabic': shift.days_arabic,
+            'late_threshold_minutes': shift.late_threshold_minutes,
+            'is_active': shift.is_active
+        }
+    })
+
+
+@api_bp.route('/employees/<int:user_id>/shift', methods=['POST'])
+@require_api_key
+def set_employee_shift(user_id):
+    """Create or update shift for a specific employee"""
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'Employee not found'}), 404
+
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+
+    # Parse times
+    try:
+        start_time = datetime.strptime(data['work_start_time'], '%H:%M').time()
+        end_time = datetime.strptime(data['work_end_time'], '%H:%M').time()
+    except (KeyError, ValueError):
+        return jsonify({'error': 'work_start_time and work_end_time required (HH:MM format)'}), 400
+
+    # Get or create shift
+    shift = EmployeeShift.query.filter_by(user_id=user_id, is_active=True).first()
+
+    if shift:
+        shift.work_start_time = start_time
+        shift.work_end_time = end_time
+        shift.applicable_days = data.get('applicable_days', shift.applicable_days)
+        if 'late_threshold_minutes' in data:
+            shift.late_threshold_minutes = data['late_threshold_minutes']
+    else:
+        shift = EmployeeShift(
+            user_id=user_id,
+            brand_id=user.brand_id,
+            work_start_time=start_time,
+            work_end_time=end_time,
+            applicable_days=data.get('applicable_days'),
+            late_threshold_minutes=data.get('late_threshold_minutes'),
+            created_by=data.get('created_by')
+        )
+        db.session.add(shift)
+
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'shift_id': shift.id,
+        'message': 'تم حفظ المناوبة بنجاح'
     })

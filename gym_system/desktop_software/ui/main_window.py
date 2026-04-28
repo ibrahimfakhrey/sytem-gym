@@ -6,7 +6,8 @@ import customtkinter as ctk
 from .styles import COLORS, FONTS, configure_theme
 from .components import Sidebar, StatusBar
 from .pages import (
-    HomePage, AddMemberPage, MembersPage,
+    HomePage, LiveFeedPage, ClassSchedulePage,
+    AddMemberPage, MembersPage,
     SyncPage, CommandsPage, SettingsPage
 )
 
@@ -65,6 +66,8 @@ class MainWindow(ctk.CTk):
     def _create_pages(self):
         """Create all pages"""
         self.pages['home'] = HomePage(self.page_container, app=self)
+        self.pages['live_feed'] = LiveFeedPage(self.page_container, app=self)
+        self.pages['class_schedule'] = ClassSchedulePage(self.page_container, app=self)
         self.pages['members'] = MembersPage(self.page_container, app=self)
         self.pages['add_member'] = AddMemberPage(self.page_container, app=self)
         self.pages['sync'] = SyncPage(self.page_container, app=self)
@@ -208,3 +211,13 @@ class MainWindow(ctk.CTk):
         """Set commands list"""
         if 'commands' in self.pages:
             self.pages['commands'].set_commands(commands)
+
+    def add_attendance_event(self, event: dict):
+        """Add attendance event to live feed"""
+        if 'live_feed' in self.pages:
+            self.pages['live_feed'].add_event(event)
+
+    def update_class_schedule(self, schedule: dict):
+        """Update class schedule page"""
+        if 'class_schedule' in self.pages:
+            self.pages['class_schedule'].update_schedule(schedule)

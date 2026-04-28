@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 from app import db
 
 
@@ -229,3 +229,46 @@ class FingerprintSyncLog(db.Model):
             'message': f'آخر مزامنة منذ {minutes} دقيقة',
             'class': 'success'
         }
+
+
+class BridgeSettings(db.Model):
+    """Per-brand bridge configuration (access windows, sync intervals, feature flags)"""
+    __tablename__ = 'bridge_settings'
+
+    id = db.Column(db.Integer, primary_key=True)
+    brand_id = db.Column(db.Integer, db.ForeignKey('brands.id'), nullable=False, unique=True)
+
+    # Class access window - minutes before class start that member is allowed entry
+    class_access_window_minutes = db.Column(db.Integer, default=15)
+
+    # Detected database paths (stored from bridge auto-detection)
+    att2000_mdb_path = db.Column(db.String(500))
+    backup_mdb_path = db.Column(db.String(500))
+
+    # Sync intervals (seconds)
+    attendance_sync_interval = db.Column(db.Integer, default=30)
+    access_control_interval = db.Column(db.Integer, default=60)
+
+    # Feature toggles
+    class_access_control_enabled = db.Column(db.Boolean, default=True)
+    employee_shift_tracking_enabled = db.Column(db.Boolean, default=True)
+    auto_block_expired = db.Column(db.Boolean, default=True)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationship
+    brand = db.relationship('Brand', backref=db.backref('bridge_settings_config', uselist=False))
+
+    def __repr__(self):
+        return f'<BridgeSettings brand_id={self.brand_id}>'
+
+    @classmethod
+    def get_or_create(cls, brand_id):
+        """Get settings for brand, create with defaults if not exists"""
+        settings = cls.query.filter_by(brand_id=brand_id).first()
+        if not settings:
+            settings = cls(brand_id=brand_id)
+            db.session.add(settings)
+            db.session.commit()
+        return settings

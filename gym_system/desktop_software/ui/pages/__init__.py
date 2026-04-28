@@ -1,5 +1,7 @@
 # UI Pages
 from .home import HomePage
+from .live_feed import LiveFeedPage
+from .class_schedule import ClassSchedulePage
 from .add_member import AddMemberPage
 from .members import MembersPage
 from .sync import SyncPage

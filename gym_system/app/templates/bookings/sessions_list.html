@@ -6,7 +6,7 @@
 <div class="page-header">
     <h1><i class="bi bi-calendar-check"></i> الحصص والكلاسات</h1>
     <div>
-        {% if current_user.can_manage_users or current_user.is_brand_manager or (current_user.role and current_user.role.name == 'موظف استقبال') %}
+        {% if current_user.can_manage_users or current_user.is_brand_manager or (current_user.role and current_user.role.name_en == 'branch_receptionist') %}
         <a href="{{ url_for('bookings.create_session') }}" class="btn btn-primary">
             <i class="bi bi-plus"></i>
             حصة جديدة

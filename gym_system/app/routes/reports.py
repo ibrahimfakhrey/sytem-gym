@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for
+from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
 from datetime import date, timedelta
 from sqlalchemy import func, case
@@ -20,8 +20,9 @@ reports_bp = Blueprint('reports', __name__)
 @login_required
 def index():
     """Reports index - redirect to staff performance or show menu"""
-    if current_user.is_owner or current_user.can_view_all_brands:
+    if current_user.can_view_reports:
         return redirect(url_for('reports.staff_performance'))
+    flash('ليس لديك صلاحية', 'danger')
     return redirect(url_for('dashboard.index'))
 
 
@@ -29,7 +30,8 @@ def index():
 @login_required
 def staff_performance():
     """Staff performance report - shows revenue and subscriptions by employee"""
-    if not current_user.is_owner and not current_user.can_view_all_brands:
+    if not current_user.can_view_reports:
+        flash('ليس لديك صلاحية', 'danger')
         return redirect(url_for('dashboard.index'))
     
     # Get filters
@@ -154,7 +156,8 @@ def staff_performance():
 @login_required
 def financial():
     """Financial intelligence report - Gift cards, offers, payment methods analysis"""
-    if not current_user.is_owner and not current_user.can_view_all_brands:
+    if not current_user.can_view_reports:
+        flash('ليس لديك صلاحية', 'danger')
         return redirect(url_for('dashboard.index'))
     
     brand_id = request.args.get('brand_id', type=int)

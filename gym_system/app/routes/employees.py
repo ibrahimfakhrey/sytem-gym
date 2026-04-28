@@ -10,7 +10,7 @@ from sqlalchemy import func
 from app import db
 from app.models import Brand, User, Role
 from app.models.attendance import EmployeeAttendance
-from app.models.employee import EmployeeSettings, EmployeeReward, EmployeeDeduction
+from app.models.employee import EmployeeSettings, EmployeeShift, EmployeeReward, EmployeeDeduction
 from app.models.finance import Salary
 
 employees_bp = Blueprint('employees', __name__, url_prefix='/employees')
@@ -51,6 +51,21 @@ class DeductionForm(FlaskForm):
     deduction_date = DateField('تاريخ الخصم', default=date.today)
 
 
+class EmployeeShiftForm(FlaskForm):
+    """Form for per-employee shift assignment"""
+    work_start_time = TimeField('وقت بداية المناوبة', validators=[DataRequired()])
+    work_end_time = TimeField('وقت نهاية المناوبة', validators=[DataRequired()])
+    day_sat = BooleanField('السبت')
+    day_sun = BooleanField('الأحد')
+    day_mon = BooleanField('الاثنين')
+    day_tue = BooleanField('الثلاثاء')
+    day_wed = BooleanField('الأربعاء')
+    day_thu = BooleanField('الخميس')
+    day_fri = BooleanField('الجمعة')
+    late_threshold_minutes = IntegerField('فترة السماح (بالدقائق)',
+                                          validators=[Optional(), NumberRange(min=0, max=120)])
+
+
 class ManualAttendanceForm(FlaskForm):
     """Form for manual attendance entry"""
     user_id = SelectField('الموظف', coerce=int, validators=[DataRequired()])
@@ -70,17 +85,20 @@ class ManualAttendanceForm(FlaskForm):
 @employees_bp.route('/settings', methods=['GET', 'POST'])
 @login_required
 def settings():
-    """Employee settings - owner only"""
-    if not current_user.is_owner:
+    """Employee settings - admin, owner, or branch_manager"""
+    if not (current_user.is_owner or current_user.is_brand_manager or current_user.is_branch_manager):
         flash('ليس لديك صلاحية', 'danger')
         return redirect(url_for('dashboard.index'))
 
-    # Get brand
-    brand_id = request.args.get('brand_id', type=int)
-    brands = Brand.query.filter_by(is_active=True).all()
-
-    if not brand_id and brands:
-        brand_id = brands[0].id
+    # Get brand — admin sees all, owner/branch_manager sees their own
+    if current_user.is_owner:
+        brands = Brand.query.filter_by(is_active=True).all()
+        brand_id = request.args.get('brand_id', type=int)
+        if not brand_id and brands:
+            brand_id = brands[0].id
+    else:
+        brand_id = current_user.brand_id
+        brands = [current_user.brand] if current_user.brand else []
 
     brand = Brand.query.get(brand_id) if brand_id else None
     if not brand:
@@ -109,17 +127,20 @@ def settings():
 @employees_bp.route('/report')
 @login_required
 def report():
-    """Employee performance report - owner only"""
-    if not current_user.is_owner:
+    """Employee performance report"""
+    if not (current_user.is_owner or current_user.is_brand_manager or current_user.is_branch_manager):
         flash('ليس لديك صلاحية', 'danger')
         return redirect(url_for('dashboard.index'))
 
     # Get brand
-    brand_id = request.args.get('brand_id', type=int)
-    brands = Brand.query.filter_by(is_active=True).all()
-
-    if not brand_id and brands:
-        brand_id = brands[0].id
+    if current_user.is_owner:
+        brands = Brand.query.filter_by(is_active=True).all()
+        brand_id = request.args.get('brand_id', type=int)
+        if not brand_id and brands:
+            brand_id = brands[0].id
+    else:
+        brand_id = current_user.brand_id
+        brands = [current_user.brand] if current_user.brand else []
 
     brand = Brand.query.get(brand_id) if brand_id else None
 
@@ -213,11 +234,20 @@ def report():
 @login_required
 def details(user_id):
     """Employee details with attendance history"""
-    if not current_user.is_owner:
+    if not (current_user.is_owner or current_user.is_brand_manager or current_user.is_branch_manager):
         flash('ليس لديك صلاحية', 'danger')
         return redirect(url_for('dashboard.index'))
 
     employee = User.query.get_or_404(user_id)
+
+    # Check access — owner sees all, others only their brand/branch employees
+    if not current_user.is_owner:
+        if current_user.brand_id != employee.brand_id:
+            flash('ليس لديك صلاحية', 'danger')
+            return redirect(url_for('dashboard.index'))
+        if current_user.is_branch_manager and current_user.branch_id and employee.branch_id != current_user.branch_id:
+            flash('ليس لديك صلاحية', 'danger')
+            return redirect(url_for('dashboard.index'))
 
     # Date range
     end_date = date.today()
@@ -259,12 +289,15 @@ def details(user_id):
 @employees_bp.route('/<int:user_id>/reward', methods=['GET', 'POST'])
 @login_required
 def give_reward(user_id):
-    """Give reward to employee - owner only"""
-    if not current_user.is_owner:
+    """Give reward to employee"""
+    if not (current_user.is_owner or current_user.is_brand_manager or current_user.is_branch_manager):
         flash('ليس لديك صلاحية', 'danger')
         return redirect(url_for('dashboard.index'))
 
     employee = User.query.get_or_404(user_id)
+    if not current_user.is_owner and current_user.brand_id != employee.brand_id:
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('dashboard.index'))
     form = RewardForm()
 
     if form.validate_on_submit():
@@ -294,7 +327,7 @@ def give_reward(user_id):
 @login_required
 def cancel_reward(reward_id):
     """Cancel a reward"""
-    if not current_user.is_owner:
+    if not (current_user.is_owner or current_user.is_brand_manager or current_user.is_branch_manager):
         return jsonify({'success': False, 'message': 'ليس لديك صلاحية'})
 
     reward = EmployeeReward.query.get_or_404(reward_id)
@@ -310,12 +343,15 @@ def cancel_reward(reward_id):
 @employees_bp.route('/<int:user_id>/deduction', methods=['GET', 'POST'])
 @login_required
 def give_deduction(user_id):
-    """Give deduction to employee - owner only"""
-    if not current_user.is_owner:
+    """Give deduction to employee"""
+    if not (current_user.is_owner or current_user.is_brand_manager or current_user.is_branch_manager):
         flash('ليس لديك صلاحية', 'danger')
         return redirect(url_for('dashboard.index'))
 
     employee = User.query.get_or_404(user_id)
+    if not current_user.is_owner and current_user.brand_id != employee.brand_id:
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('dashboard.index'))
     form = DeductionForm()
 
     if form.validate_on_submit():
@@ -346,26 +382,32 @@ def give_deduction(user_id):
 @login_required
 def attendance():
     """Manual attendance entry"""
-    if not current_user.is_owner:
+    if not (current_user.is_owner or current_user.is_brand_manager or current_user.is_branch_manager):
         flash('ليس لديك صلاحية', 'danger')
         return redirect(url_for('dashboard.index'))
 
-    brand_id = request.args.get('brand_id', type=int)
-    brands = Brand.query.filter_by(is_active=True).all()
-
-    if not brand_id and brands:
-        brand_id = brands[0].id
+    # Get brand — admin sees all, others see their own
+    if current_user.is_owner:
+        brands = Brand.query.filter_by(is_active=True).all()
+        brand_id = request.args.get('brand_id', type=int)
+        if not brand_id and brands:
+            brand_id = brands[0].id
+    else:
+        brand_id = current_user.brand_id
+        brands = [current_user.brand] if current_user.brand else []
 
     brand = Brand.query.get(brand_id) if brand_id else None
 
-    # Get employees for form
-    staff_roles = Role.query.filter(Role.name_en != 'owner').all()
-    staff_role_ids = [r.id for r in staff_roles]
-    employees = User.query.filter(
+    # Get employees — scoped by brand, and by branch for branch_manager
+    employees_query = User.query.filter(
         User.brand_id == brand_id,
-        User.role_id.in_(staff_role_ids),
         User.is_active == True
-    ).all()
+    )
+    # Branch manager sees only their branch employees
+    if current_user.is_branch_manager and current_user.branch_id:
+        employees_query = employees_query.filter(User.branch_id == current_user.branch_id)
+
+    employees = employees_query.all()
 
     form = ManualAttendanceForm()
     form.user_id.choices = [(e.id, e.name) for e in employees]
@@ -437,3 +479,154 @@ def attendance():
                           brands=brands,
                           employees=employees,
                           recent_attendance=recent_attendance)
+
+
+# ============== EMPLOYEE SHIFTS ==============
+
+@employees_bp.route('/shifts')
+@login_required
+def shifts():
+    """List all employee shifts"""
+    if not current_user.is_owner and not current_user.is_brand_manager:
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('dashboard.index'))
+
+    # Get brands
+    if current_user.is_owner:
+        brands = Brand.query.filter_by(is_active=True).all()
+    else:
+        brands = [current_user.brand] if current_user.brand else []
+
+    brand_id = request.args.get('brand_id', type=int)
+    if not brand_id and brands:
+        brand_id = brands[0].id
+
+    brand = Brand.query.get(brand_id) if brand_id else None
+
+    # Get employees for this brand
+    employees = []
+    if brand:
+        users = User.query.filter_by(brand_id=brand_id, is_active=True).all()
+        for user in users:
+            shift = EmployeeShift.query.filter_by(user_id=user.id, is_active=True).first()
+            brand_settings = EmployeeSettings.get_or_create(brand_id)
+            employees.append({
+                'user': user,
+                'shift': shift,
+                'using_brand_default': shift is None,
+                'start_time': shift.work_start_time if shift else brand_settings.work_start_time,
+                'end_time': shift.work_end_time if shift else brand_settings.work_end_time,
+                'days': shift.days_arabic if shift else 'كل الأيام (افتراضي)',
+                'threshold': shift.get_late_threshold(brand_settings) if shift else (brand_settings.late_threshold_minutes or 15)
+            })
+
+    return render_template('employees/shifts.html',
+                           brand=brand,
+                           brands=brands,
+                           employees=employees)
+
+
+@employees_bp.route('/<int:user_id>/shift', methods=['GET', 'POST'])
+@login_required
+def edit_shift(user_id):
+    """Edit shift for a specific employee"""
+    if not current_user.is_owner and not current_user.is_brand_manager:
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('dashboard.index'))
+
+    user = User.query.get_or_404(user_id)
+
+    # Check brand access
+    if not current_user.is_owner and current_user.brand_id != user.brand_id:
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('dashboard.index'))
+
+    shift = EmployeeShift.query.filter_by(user_id=user_id, is_active=True).first()
+    brand_settings = EmployeeSettings.get_or_create(user.brand_id)
+
+    form = EmployeeShiftForm()
+
+    if request.method == 'GET':
+        if shift:
+            form.work_start_time.data = shift.work_start_time
+            form.work_end_time.data = shift.work_end_time
+            form.late_threshold_minutes.data = shift.late_threshold_minutes
+            # Set day checkboxes
+            days = shift.days_list
+            form.day_sat.data = 0 in days
+            form.day_sun.data = 1 in days
+            form.day_mon.data = 2 in days
+            form.day_tue.data = 3 in days
+            form.day_wed.data = 4 in days
+            form.day_thu.data = 5 in days
+            form.day_fri.data = 6 in days
+        else:
+            # Default to brand settings
+            form.work_start_time.data = brand_settings.work_start_time
+            form.work_end_time.data = brand_settings.work_end_time
+            form.late_threshold_minutes.data = brand_settings.late_threshold_minutes
+            # All days checked by default
+            form.day_sat.data = True
+            form.day_sun.data = True
+            form.day_mon.data = True
+            form.day_tue.data = True
+            form.day_wed.data = True
+            form.day_thu.data = True
+            form.day_fri.data = True
+
+    if form.validate_on_submit():
+        # Build applicable_days string
+        days = []
+        if form.day_sat.data: days.append('0')
+        if form.day_sun.data: days.append('1')
+        if form.day_mon.data: days.append('2')
+        if form.day_tue.data: days.append('3')
+        if form.day_wed.data: days.append('4')
+        if form.day_thu.data: days.append('5')
+        if form.day_fri.data: days.append('6')
+        applicable_days = ','.join(days) if len(days) < 7 else None  # None = all days
+
+        if shift:
+            shift.work_start_time = form.work_start_time.data
+            shift.work_end_time = form.work_end_time.data
+            shift.applicable_days = applicable_days
+            shift.late_threshold_minutes = form.late_threshold_minutes.data
+        else:
+            shift = EmployeeShift(
+                user_id=user_id,
+                brand_id=user.brand_id,
+                work_start_time=form.work_start_time.data,
+                work_end_time=form.work_end_time.data,
+                applicable_days=applicable_days,
+                late_threshold_minutes=form.late_threshold_minutes.data,
+                created_by=current_user.id
+            )
+            db.session.add(shift)
+
+        db.session.commit()
+        flash(f'تم حفظ مناوبة {user.name} بنجاح', 'success')
+        return redirect(url_for('employees.shifts', brand_id=user.brand_id))
+
+    return render_template('employees/shift_form.html',
+                           form=form,
+                           user=user,
+                           shift=shift,
+                           brand_settings=brand_settings)
+
+
+@employees_bp.route('/<int:user_id>/shift/delete', methods=['POST'])
+@login_required
+def delete_shift(user_id):
+    """Remove custom shift (revert to brand default)"""
+    if not current_user.is_owner and not current_user.is_brand_manager:
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('dashboard.index'))
+
+    shift = EmployeeShift.query.filter_by(user_id=user_id, is_active=True).first()
+    if shift:
+        shift.is_active = False
+        db.session.commit()
+        flash('تم إزالة المناوبة المخصصة، سيتم استخدام الإعداد الافتراضي', 'success')
+
+    user = User.query.get(user_id)
+    return redirect(url_for('employees.shifts', brand_id=user.brand_id if user else None))

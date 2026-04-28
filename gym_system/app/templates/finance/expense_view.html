@@ -86,7 +86,7 @@
     </div>
 
     <div class="col-lg-4">
-        {% if expense.status == 'pending' and (current_user.is_owner or current_user.role.name == 'brand_manager') %}
+        {% if expense.status == 'pending' and (current_user.is_owner or current_user.is_brand_manager) %}
         <div class="card border-warning">
             <div class="card-header bg-warning">
                 <i class="bi bi-check2-square"></i> إجراءات الموافقة

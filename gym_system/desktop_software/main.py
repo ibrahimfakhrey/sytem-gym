@@ -11,7 +11,7 @@ from datetime import datetime
 sys.path.insert(0, '.')
 
 from config import load_config, save_config, APP_NAME, APP_VERSION
-from core import FileFinder, DatabaseManager, APIClient, SyncManager
+from core import FileFinder, DatabaseManager, DeviceDatabaseManager, APIClient, SyncManager
 from ui import MainWindow
 
 
@@ -23,6 +23,7 @@ class AppController:
         self.window = None
         self.file_finder = FileFinder()
         self.db_manager = None
+        self.device_db_manager = None  # For att2000.mdb (ZKTeco CHECKINOUT)
         self.api_client = None
         self.sync_manager = None
 
@@ -53,13 +54,26 @@ class AppController:
             # Auto-detect database
             self._auto_detect_database()
 
+        # Try to connect to ZKTeco device database (att2000.mdb)
+        att2000_path = self.config.get('att2000_db_path')
+        if att2000_path:
+            self._connect_device_database(att2000_path)
+        else:
+            self._auto_detect_device_database()
+
         # Initialize sync manager
         if self.db_manager and self.api_client:
             self.sync_manager = SyncManager(
-                db_manager=self.db_manager,
+                database_manager=self.db_manager,
                 api_client=self.api_client,
-                brand_id=brand_id
+                device_db_manager=self.device_db_manager
             )
+            # Configure access control from settings
+            self.sync_manager.access_control_enabled = self.config.get('access_control_enabled', False)
+            self.sync_manager.class_access_window_minutes = self.config.get('class_access_window_minutes', 15)
+            # Set callbacks for live feed and schedule
+            self.sync_manager.on_attendance_event = self._on_attendance_event
+            self.sync_manager.on_schedule_update = self._on_schedule_update
 
         # Load settings into UI
         self.window.load_settings(self.config)
@@ -128,13 +142,79 @@ class AppController:
             # Initialize sync manager
             if self.api_client:
                 self.sync_manager = SyncManager(
-                    db_manager=self.db_manager,
+                    database_manager=self.db_manager,
                     api_client=self.api_client,
-                    brand_id=self.config.get('brand_id', 1)
+                    device_db_manager=self.device_db_manager
                 )
+                self.sync_manager.access_control_enabled = self.config.get('access_control_enabled', False)
+                self.sync_manager.class_access_window_minutes = self.config.get('class_access_window_minutes', 15)
+                self.sync_manager.on_attendance_event = self._on_attendance_event
+                self.sync_manager.on_schedule_update = self._on_schedule_update
 
             self._update_connection_status()
             self._load_initial_data()
+
+    def _connect_device_database(self, db_path: str) -> bool:
+        """Connect to ZKTeco device database (att2000.mdb)"""
+        try:
+            self.device_db_manager = DeviceDatabaseManager(db_path)
+            if self.device_db_manager.is_connected():
+                count = self.device_db_manager.get_record_count()
+                self.window.add_activity(f"تم الاتصال بقاعدة بيانات البصمة ({count} سجل)", "success")
+                return True
+            else:
+                self.window.add_activity("فشل الاتصال بقاعدة بيانات البصمة", "warning")
+                self.device_db_manager = None
+                return False
+        except Exception as e:
+            self.window.add_activity(f"خطأ في قاعدة بيانات البصمة: {e}", "error")
+            self.device_db_manager = None
+            return False
+
+    def _auto_detect_device_database(self):
+        """Auto-detect att2000.mdb among found .mdb files"""
+        def detect_thread():
+            results = self.file_finder.search_for_mdb()
+            for result in results:
+                db_path = result['path']
+                try:
+                    schema_type = DeviceDatabaseManager.detect_schema(db_path)
+                    if schema_type == 'device':
+                        self.window.after(0, lambda p=db_path: self._on_device_db_found(p))
+                        return
+                except Exception:
+                    continue
+
+        threading.Thread(target=detect_thread, daemon=True).start()
+
+    def _on_device_db_found(self, db_path: str):
+        """Handle ZKTeco device database found"""
+        if self._connect_device_database(db_path):
+            self.config['att2000_db_path'] = db_path
+            save_config(self.config)
+            # Update sync manager with device DB
+            if self.sync_manager:
+                self.sync_manager.device_db = self.device_db_manager
+
+    def _on_attendance_event(self, event: dict):
+        """Handle attendance event from sync manager (called from sync thread)"""
+        if self.window:
+            self.window.after(0, lambda: self._dispatch_attendance_event(event))
+
+    def _dispatch_attendance_event(self, event: dict):
+        """Dispatch attendance event to UI (main thread)"""
+        if hasattr(self.window, 'add_attendance_event'):
+            self.window.add_attendance_event(event)
+
+    def _on_schedule_update(self, schedule: dict):
+        """Handle schedule update from sync manager (called from sync thread)"""
+        if self.window:
+            self.window.after(0, lambda: self._dispatch_schedule_update(schedule))
+
+    def _dispatch_schedule_update(self, schedule: dict):
+        """Dispatch schedule update to UI (main thread)"""
+        if hasattr(self.window, 'update_class_schedule'):
+            self.window.update_class_schedule(schedule)
 
     def _update_connection_status(self):
         """Update connection status in UI"""
@@ -399,8 +479,12 @@ class AppController:
                 'brand_id': settings.get('brand_id'),
                 'database_path': settings.get('db_path'),
                 'database_password': settings.get('db_password', ''),
+                'att2000_db_path': settings.get('att2000_db_path'),
                 'sync_interval': settings.get('sync_interval'),
-                'auto_start': settings.get('auto_start_sync')
+                'auto_start': settings.get('auto_start_sync'),
+                'access_control_enabled': settings.get('access_control_enabled'),
+                'class_access_window_minutes': settings.get('class_access_window_minutes'),
+                'employee_shift_tracking_enabled': settings.get('employee_shift_tracking_enabled')
             }
             # Remove None values
             config_update = {k: v for k, v in config_update.items() if v is not None}
@@ -424,6 +508,19 @@ class AppController:
                 self._connect_database(new_db_path, new_db_password)
                 self._update_connection_status()
                 self._load_initial_data()
+
+            # Reconnect device database if path changed
+            new_att2000 = settings.get('att2000_db_path')
+            old_att2000 = self.config.get('att2000_db_path', '')
+            if new_att2000 and new_att2000 != old_att2000:
+                self._connect_device_database(new_att2000)
+                if self.sync_manager:
+                    self.sync_manager.device_db = self.device_db_manager
+
+            # Update access control settings on sync manager
+            if self.sync_manager:
+                self.sync_manager.access_control_enabled = self.config.get('access_control_enabled', False)
+                self.sync_manager.class_access_window_minutes = self.config.get('class_access_window_minutes', 15)
 
             self.window.add_activity("تم حفظ الإعدادات", "success")
             return True

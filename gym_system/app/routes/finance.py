@@ -11,7 +11,7 @@ from app.models.finance import Income, Expense, Salary, Refund, ExpenseCategory
 from app.models.daily_closing import DailyClosing
 from app.models.subscription import Subscription, SubscriptionPayment
 from app.utils.decorators import finance_required, brand_manager_required
-from app.utils.helpers import pagination_args, save_uploaded_file
+from app.utils.helpers import pagination_args, save_uploaded_file, apply_branch_filter, check_entity_access
 
 finance_bp = Blueprint('finance', __name__)
 
@@ -631,15 +631,7 @@ def salaries_list():
     period_end = date(year, month, monthrange(year, month)[1])
 
     # Base query
-    if current_user.can_view_all_brands:
-        brand_id = request.args.get('brand_id', type=int)
-        if brand_id:
-            query = Salary.query.filter_by(brand_id=brand_id)
-        else:
-            query = Salary.query
-    else:
-        brand_id = current_user.brand_id
-        query = Salary.query.filter_by(brand_id=current_user.brand_id)
+    query = apply_branch_filter(Salary.query, Salary)
 
     query = query.filter_by(month=month, year=year)
     salaries = query.all()
@@ -713,14 +705,7 @@ def refunds_list():
     page, per_page = pagination_args(request)
 
     # Base query
-    if current_user.can_view_all_brands:
-        brand_id = request.args.get('brand_id', type=int)
-        if brand_id:
-            query = Refund.query.filter_by(brand_id=brand_id)
-        else:
-            query = Refund.query
-    else:
-        query = Refund.query.filter_by(brand_id=current_user.brand_id)
+    query = apply_branch_filter(Refund.query, Refund)
 
     # Pagination
     refunds = query.order_by(Refund.created_at.desc()).paginate(

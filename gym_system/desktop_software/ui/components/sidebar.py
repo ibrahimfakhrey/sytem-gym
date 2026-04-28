@@ -34,6 +34,8 @@ class Sidebar(ctk.CTkFrame):
         # Navigation items
         nav_items = [
             ('home', '🏠', 'الرئيسية'),
+            ('live_feed', '📡', 'البث المباشر'),
+            ('class_schedule', '📅', 'جدول الكلاسات'),
             ('members', '👥', 'الأعضاء'),
             ('add_member', '➕', 'إضافة عضو'),
             ('sync', '🔄', 'المزامنة'),

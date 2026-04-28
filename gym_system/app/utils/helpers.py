@@ -141,3 +141,61 @@ def pagination_args(request, default_per_page=20):
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', default_per_page, type=int)
     return page, per_page
+
+
+def apply_branch_filter(query, model, user=None):
+    """
+    Apply brand/branch filtering based on current user's role.
+
+    - admin (is_owner) → no filter, sees everything
+    - owner (brand-level) → filter by brand_id only
+    - branch roles (branch_id set) → filter by brand_id AND branch_id
+
+    Includes records with NULL branch_id (legacy data).
+    """
+    from flask_login import current_user as _current_user
+    from app import db
+
+    user = user or _current_user
+
+    if user.is_owner:  # admin sees all
+        return query
+
+    # Filter by brand
+    if hasattr(model, 'brand_id') and user.brand_id:
+        query = query.filter(model.brand_id == user.brand_id)
+
+    # Filter by branch for branch-level roles
+    if user.branch_id and hasattr(model, 'branch_id'):
+        query = query.filter(
+            db.or_(model.branch_id == user.branch_id, model.branch_id.is_(None))
+        )
+
+    return query
+
+
+def check_entity_access(entity, user=None):
+    """
+    Check if the current user can access a specific entity.
+    Call after get_or_404 to enforce brand/branch access.
+
+    Returns True if allowed, False if denied.
+    """
+    from flask_login import current_user as _current_user
+
+    user = user or _current_user
+
+    if user.is_owner:  # admin sees all
+        return True
+
+    # Check brand
+    if hasattr(entity, 'brand_id') and entity.brand_id:
+        if user.brand_id and entity.brand_id != user.brand_id:
+            return False
+
+    # Check branch for branch-level roles
+    if user.branch_id and hasattr(entity, 'branch_id'):
+        if entity.branch_id and entity.branch_id != user.branch_id:
+            return False
+
+    return True

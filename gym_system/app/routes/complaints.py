@@ -8,6 +8,7 @@ from datetime import datetime
 
 from app import db, csrf
 from app.models import Brand, Branch, Member, Complaint, ComplaintCategory
+from app.utils.helpers import apply_branch_filter, check_entity_access
 
 complaints_bp = Blueprint('complaints', __name__, url_prefix='/complaints')
 
@@ -56,10 +57,7 @@ def index():
     status_filter = request.args.get('status', '')
     category_filter = request.args.get('category', type=int)
 
-    query = Complaint.query
-
-    if not current_user.is_owner:
-        query = query.filter_by(brand_id=current_user.brand_id)
+    query = apply_branch_filter(Complaint.query, Complaint)
 
     if status_filter:
         query = query.filter_by(status=status_filter)
@@ -70,10 +68,9 @@ def index():
     categories = ComplaintCategory.query.filter_by(is_active=True).all()
 
     # Stats
-    pending_count = Complaint.query.filter_by(status='pending')
-    if not current_user.is_owner:
-        pending_count = pending_count.filter_by(brand_id=current_user.brand_id)
-    pending_count = pending_count.count()
+    pending_count = apply_branch_filter(
+        Complaint.query.filter_by(status='pending'), Complaint
+    ).count()
 
     # Get brands for owner dropdown
     brands = Brand.query.filter_by(is_active=True).all() if current_user.is_owner else []
@@ -159,7 +156,7 @@ def view(complaint_id):
     complaint = Complaint.query.get_or_404(complaint_id)
 
     # Check access
-    if not current_user.is_owner and current_user.brand_id != complaint.brand_id:
+    if not check_entity_access(complaint):
         flash('ليس لديك صلاحية للوصول', 'danger')
         return redirect(url_for('complaints.index'))
 
@@ -179,7 +176,7 @@ def resolve(complaint_id):
     complaint = Complaint.query.get_or_404(complaint_id)
 
     # Check access
-    if not current_user.is_owner and current_user.brand_id != complaint.brand_id:
+    if not check_entity_access(complaint):
         flash('ليس لديك صلاحية للوصول', 'danger')
         return redirect(url_for('complaints.index'))
 
@@ -202,7 +199,7 @@ def close(complaint_id):
     complaint = Complaint.query.get_or_404(complaint_id)
 
     # Check access
-    if not current_user.is_owner and current_user.brand_id != complaint.brand_id:
+    if not check_entity_access(complaint):
         flash('ليس لديك صلاحية للوصول', 'danger')
         return redirect(url_for('complaints.index'))
 
@@ -223,7 +220,7 @@ def assign(complaint_id):
     complaint = Complaint.query.get_or_404(complaint_id)
 
     # Check access
-    if not current_user.is_owner and current_user.brand_id != complaint.brand_id:
+    if not check_entity_access(complaint):
         flash('ليس لديك صلاحية للوصول', 'danger')
         return redirect(url_for('complaints.index'))
 

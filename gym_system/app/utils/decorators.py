@@ -18,7 +18,7 @@ def role_required(*roles):
             if not current_user.is_authenticated:
                 return redirect(url_for('auth.login', next=request.url))
 
-            if current_user.role.name not in roles:
+            if current_user.role.name_en not in roles:
                 flash('ليس لديك صلاحية للوصول لهذه الصفحة', 'danger')
                 abort(403)
 
@@ -57,6 +57,21 @@ def brand_manager_required(f):
     return decorated_function
 
 
+def branch_manager_required(f):
+    """Decorator to require branch_manager, brand owner, or admin role"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return redirect(url_for('auth.login', next=request.url))
+
+        if not (current_user.is_owner or current_user.is_brand_manager or current_user.is_branch_manager):
+            flash('ليس لديك صلاحية للوصول لهذه الصفحة', 'danger')
+            abort(403)
+
+        return f(*args, **kwargs)
+    return decorated_function
+
+
 def brand_required(f):
     """
     Decorator to ensure user can only access their brand's data
@@ -84,13 +99,16 @@ def brand_required(f):
 
 
 def finance_required(f):
-    """Decorator to require finance-related roles"""
+    """Decorator to require finance-related roles (view or manage)"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not current_user.is_authenticated:
             return redirect(url_for('auth.login', next=request.url))
 
-        if not current_user.can_manage_finance:
+        has_finance = current_user.can_manage_finance
+        if not has_finance and current_user.role:
+            has_finance = current_user.role.can_view_finance
+        if not has_finance:
             flash('ليس لديك صلاحية للوصول للمالية', 'danger')
             abort(403)
 
@@ -99,13 +117,13 @@ def finance_required(f):
 
 
 def members_required(f):
-    """Decorator to require member management roles"""
+    """Decorator to require member viewing roles (members or attendance)"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not current_user.is_authenticated:
             return redirect(url_for('auth.login', next=request.url))
 
-        if not current_user.can_manage_members:
+        if not (current_user.can_manage_members or current_user.can_manage_attendance):
             flash('ليس لديك صلاحية لإدارة الأعضاء', 'danger')
             abort(403)
 

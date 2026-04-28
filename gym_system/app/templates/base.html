@@ -118,7 +118,7 @@
                             </a>
                         </li>
 
-                        {% if current_user.can_manage_members %}
+                        {% if current_user.can_manage_members or current_user.can_manage_attendance %}
                         <li class="nav-item">
                             <a class="nav-link {% if request.endpoint and 'members' in request.endpoint %}active{% endif %}"
                                href="{{ url_for('members.index') }}">
@@ -138,7 +138,7 @@
                         </li>
                         {% endif %}
 
-                        {% if current_user.can_manage_members %}
+                        {% if current_user.can_manage_attendance %}
                         <li class="nav-item">
                             <a class="nav-link {% if request.endpoint and 'attendance' in request.endpoint %}active{% endif %}"
                                href="{{ url_for('attendance.index') }}">
@@ -158,7 +158,7 @@
                         </li>
                         {% endif %}
 
-                        {% if current_user.can_manage_members or (current_user.role and current_user.role.name == 'موظف استقبال') %}
+                        {% if current_user.can_manage_members or (current_user.role and current_user.role.name_en == 'branch_receptionist') %}
                         <li class="nav-item">
                             <a class="nav-link {% if request.endpoint and 'bookings' in request.endpoint %}active{% endif %}"
                                href="{{ url_for('bookings.sessions_list') }}">
@@ -235,7 +235,7 @@
                         </li>
                         {% endif %}
 
-                        {% if current_user.is_owner %}
+                        {% if current_user.is_owner or current_user.is_brand_manager or current_user.is_branch_manager %}
                         <li class="nav-item mt-3">
                             <span class="nav-link text-muted small">إدارة الموظفين</span>
                         </li>
@@ -258,6 +258,13 @@
                                href="{{ url_for('employees.settings') }}">
                                 <i class="bi bi-sliders"></i>
                                 إعدادات الموظفين
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint and 'employees.shifts' in request.endpoint %}active{% endif %}"
+                               href="{{ url_for('employees.shifts') }}">
+                                <i class="bi bi-clock-history"></i>
+                                مناوبات الموظفين
                             </a>
                         </li>
                         {% endif %}
@@ -317,6 +324,16 @@
                                href="{{ url_for('gift_cards.index') }}">
                                 <i class="bi bi-gift"></i>
                                 كروت الإهداء
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        {% if current_user.is_owner or current_user.is_brand_manager %}
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint and 'bridge' in request.endpoint %}active{% endif %}"
+                               href="{{ url_for('bridge.settings') }}">
+                                <i class="bi bi-fingerprint"></i>
+                                إعدادات البصمة
                             </a>
                         </li>
                         {% endif %}

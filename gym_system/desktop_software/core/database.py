@@ -3,8 +3,10 @@ Database Manager - Handle .mdb (MS Access) database operations
 """
 
 import os
+import time as _time
 from typing import List, Dict, Optional
-from datetime import datetime
+from datetime import datetime, date
+from threading import Lock
 
 
 def recover_mdb_password(file_path: str) -> str:
@@ -486,6 +488,24 @@ class DatabaseManager:
             print(f"Error getting time records: {e}")
             return []
 
+    def update_employee_end_date(self, emp_id: str, end_date_value) -> bool:
+        """Efficiently update just the end_date for access control"""
+        if not self.connection:
+            if not self.connect():
+                return False
+
+        try:
+            cursor = self.connection.cursor()
+            if isinstance(end_date_value, (date, datetime)):
+                end_date_value = end_date_value.strftime('%Y-%m-%d')
+            cursor.execute("UPDATE Employee SET end_date = ? WHERE emp_id = ?",
+                           (end_date_value, emp_id))
+            self.connection.commit()
+            return True
+        except Exception as e:
+            print(f"Error updating end_date for {emp_id}: {e}")
+            return False
+
     def test_connection(self) -> tuple:
         """Test database connection and return status"""
         try:
@@ -495,3 +515,132 @@ class DatabaseManager:
             return False, "فشل الاتصال"
         except Exception as e:
             return False, str(e)
+
+
+class DeviceDatabaseManager:
+    """
+    Manages short-lived connections to the ZKTeco device database (att2000.mdb).
+    Reads CHECKINOUT attendance records. Uses retry logic for database lock handling.
+    """
+
+    MDB_CONN_TEMPLATE = "DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=%s;"
+
+    def __init__(self, mdb_path: str = None):
+        self.mdb_path = mdb_path
+        self._lock = Lock()
+        self._pyodbc = None
+
+    def _get_pyodbc(self):
+        if self._pyodbc is None:
+            import pyodbc
+            self._pyodbc = pyodbc
+        return self._pyodbc
+
+    def _connect(self, path: str = None):
+        """Create a short-lived connection."""
+        pyodbc = self._get_pyodbc()
+        target = path or self.mdb_path
+        if not target:
+            raise ValueError("No database path set")
+        return pyodbc.connect(self.MDB_CONN_TEMPLATE % target)
+
+    def execute_with_retry(self, sql: str, params=None, fetch: bool = True,
+                           max_retries: int = 3) -> any:
+        """Execute SQL with retry on lock errors."""
+        for attempt in range(max_retries):
+            try:
+                with self._lock:
+                    conn = self._connect()
+                    try:
+                        cursor = conn.cursor()
+                        if params:
+                            cursor.execute(sql, params)
+                        else:
+                            cursor.execute(sql)
+
+                        if fetch:
+                            columns = [desc[0] for desc in cursor.description] if cursor.description else []
+                            rows = cursor.fetchall()
+                            return [dict(zip(columns, row)) for row in rows]
+                        else:
+                            conn.commit()
+                            return cursor.rowcount
+                    finally:
+                        conn.close()
+            except Exception as e:
+                error_msg = str(e).lower()
+                if 'locked' in error_msg or 'in use' in error_msg:
+                    if attempt < max_retries - 1:
+                        _time.sleep(2)
+                        continue
+                raise
+        return [] if fetch else 0
+
+    def read_checkinout(self, since_time: datetime = None) -> List[Dict]:
+        """Read CHECKINOUT records from the ZKTeco database."""
+        if not self.mdb_path:
+            return []
+
+        try:
+            if since_time:
+                sql = ("SELECT USERID, CHECKTIME, CHECKTYPE, sn "
+                       "FROM CHECKINOUT WHERE CHECKTIME > ? ORDER BY CHECKTIME")
+                return self.execute_with_retry(sql, (since_time,))
+            else:
+                sql = ("SELECT USERID, CHECKTIME, CHECKTYPE, sn "
+                       "FROM CHECKINOUT ORDER BY CHECKTIME")
+                return self.execute_with_retry(sql)
+        except Exception as e:
+            print(f"Error reading CHECKINOUT: {e}")
+            return []
+
+    def is_connected(self) -> bool:
+        """Test if we can connect to the database."""
+        if not self.mdb_path or not os.path.exists(self.mdb_path):
+            return False
+        try:
+            conn = self._connect()
+            conn.close()
+            return True
+        except Exception:
+            return False
+
+    def get_record_count(self) -> int:
+        """Get total CHECKINOUT records count."""
+        try:
+            result = self.execute_with_retry("SELECT COUNT(*) AS cnt FROM CHECKINOUT")
+            return result[0]['cnt'] if result else 0
+        except Exception:
+            return 0
+
+    @staticmethod
+    def detect_schema(mdb_path: str) -> str:
+        """
+        Detect what type of database an .mdb file is by inspecting its tables.
+        Returns: 'device' (att2000.mdb), 'backup' (Attendancear), or 'unknown'
+        """
+        try:
+            import pyodbc
+            conn_str = f"DRIVER={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={mdb_path};"
+            conn = pyodbc.connect(conn_str)
+            try:
+                cursor = conn.cursor()
+                tables = [row.table_name for row in cursor.tables(tableType='TABLE')]
+
+                # Check for ZKTeco device DB
+                if 'CHECKINOUT' in tables:
+                    columns = [row.column_name for row in cursor.columns(table='CHECKINOUT')]
+                    if 'USERID' in columns and 'CHECKTIME' in columns:
+                        return 'device'
+
+                # Check for Attendancear DB
+                if 'Employee' in tables:
+                    columns = [row.column_name for row in cursor.columns(table='Employee')]
+                    if 'emp_id' in columns and 'end_date' in columns:
+                        return 'backup'
+
+                return 'unknown'
+            finally:
+                conn.close()
+        except Exception:
+            return 'unknown'

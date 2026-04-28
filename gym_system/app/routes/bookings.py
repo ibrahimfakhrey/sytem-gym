@@ -11,7 +11,7 @@ from app.models.member import Member
 from app.models.schedule import ClassSession, Booking
 from app.models.service import ServiceType
 from app.utils.decorators import members_required
-from app.utils.helpers import pagination_args
+from app.utils.helpers import pagination_args, apply_branch_filter, check_entity_access
 
 bookings_bp = Blueprint('bookings', __name__)
 
@@ -53,15 +53,8 @@ def sessions_list():
     page, per_page = pagination_args(request)
     session_type = request.args.get('type', '')
 
-    # Base query - filter by brand access
-    if current_user.can_view_all_brands:
-        brand_id = request.args.get('brand_id', type=int)
-        if brand_id:
-            query = ClassSession.query.filter_by(brand_id=brand_id)
-        else:
-            query = ClassSession.query
-    else:
-        query = ClassSession.query.filter_by(brand_id=current_user.brand_id)
+    # Base query - filter by brand/branch access
+    query = apply_branch_filter(ClassSession.query, ClassSession)
 
     # Type filter
     if session_type:
@@ -96,7 +89,7 @@ def create_session():
     can_create = (
         current_user.can_manage_users or 
         current_user.is_brand_manager or 
-        (current_user.role and current_user.role.name == 'موظف استقبال')
+        (current_user.role and current_user.role.name_en == 'branch_receptionist')
     )
     if not can_create:
         flash('ليس لديك صلاحية', 'danger')
@@ -222,9 +215,8 @@ def search_members_api():
         return jsonify([])
     
     try:
-        # Simple search - all active members in brand
-        members_query = Member.query.filter(
-            Member.brand_id == current_user.brand_id,
+        # Simple search - all active members in brand/branch
+        members_query = apply_branch_filter(Member.query, Member).filter(
             db.or_(
                 Member.name.ilike(f'%{query}%'),
                 Member.phone.ilike(f'%{query}%')

@@ -4,12 +4,15 @@
         "api_key": "fingerprint-api-key",
         "brand_id": 1
     },
-    "device": {
-        "ip": "192.168.1.224",
-        "port": 5005
+    "databases": {
+        "att2000_path": "",
+        "backup_path": "",
+        "auto_detect": true
     },
     "sync": {
-        "interval_seconds": 30
+        "attendance_interval": 30,
+        "access_control_interval": 60,
+        "heartbeat_interval": 150
     },
-    "_comment": "Change api_key to match FINGERPRINT_API_KEY on PythonAnywhere"
+    "_comment": "Change api_key to match FINGERPRINT_API_KEY on PythonAnywhere. Set database paths or leave empty for auto-detect."
 }

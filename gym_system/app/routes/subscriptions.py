@@ -16,7 +16,7 @@ from app.models.offer import PromotionalOffer
 from app.models.giftcard import GiftCard
 from app.models.fingerprint import DeviceCommand
 from app.utils.decorators import members_required
-from app.utils.helpers import pagination_args
+from app.utils.helpers import pagination_args, apply_branch_filter, check_entity_access
 
 subscriptions_bp = Blueprint('subscriptions', __name__)
 
@@ -117,14 +117,7 @@ def index():
     service_type_id = request.args.get('service_type_id', type=int)
 
     # Base query
-    if current_user.can_view_all_brands:
-        brand_id = request.args.get('brand_id', type=int)
-        if brand_id:
-            query = Subscription.query.filter_by(brand_id=brand_id)
-        else:
-            query = Subscription.query
-    else:
-        query = Subscription.query.filter_by(brand_id=current_user.brand_id)
+    query = apply_branch_filter(Subscription.query, Subscription)
 
     # Status filter
     if status:
@@ -467,7 +460,7 @@ def view(subscription_id):
     """View subscription details"""
     subscription = Subscription.query.get_or_404(subscription_id)
 
-    if not current_user.can_access_brand(subscription.brand_id):
+    if not check_entity_access(subscription):
         flash('ليس لديك صلاحية', 'danger')
         return redirect(url_for('subscriptions.index'))
 
@@ -484,7 +477,7 @@ def renew(subscription_id):
     """Renew subscription"""
     subscription = Subscription.query.get_or_404(subscription_id)
 
-    if not current_user.can_access_brand(subscription.brand_id):
+    if not check_entity_access(subscription):
         flash('ليس لديك صلاحية', 'danger')
         return redirect(url_for('subscriptions.index'))
 
@@ -630,7 +623,7 @@ def freeze(subscription_id):
     """Freeze subscription"""
     subscription = Subscription.query.get_or_404(subscription_id)
 
-    if not current_user.can_access_brand(subscription.brand_id):
+    if not check_entity_access(subscription):
         flash('ليس لديك صلاحية', 'danger')
         return redirect(url_for('subscriptions.index'))
 
@@ -695,7 +688,7 @@ def unfreeze(subscription_id):
     """Unfreeze subscription"""
     subscription = Subscription.query.get_or_404(subscription_id)
 
-    if not current_user.can_access_brand(subscription.brand_id):
+    if not check_entity_access(subscription):
         flash('ليس لديك صلاحية', 'danger')
         return redirect(url_for('subscriptions.index'))
 
@@ -731,7 +724,7 @@ def add_payment(subscription_id):
     """Add payment to subscription"""
     subscription = Subscription.query.get_or_404(subscription_id)
 
-    if not current_user.can_access_brand(subscription.brand_id):
+    if not check_entity_access(subscription):
         flash('ليس لديك صلاحية', 'danger')
         return redirect(url_for('subscriptions.index'))
 
@@ -830,14 +823,7 @@ def expiring():
     end_date = today + timedelta(days=days)
 
     # Base query
-    if current_user.can_view_all_brands:
-        brand_id = request.args.get('brand_id', type=int)
-        if brand_id:
-            query = Subscription.query.filter_by(brand_id=brand_id)
-        else:
-            query = Subscription.query
-    else:
-        query = Subscription.query.filter_by(brand_id=current_user.brand_id)
+    query = apply_branch_filter(Subscription.query, Subscription)
 
     # Filter expiring subscriptions
     query = query.filter(
@@ -866,7 +852,7 @@ def stop(subscription_id):
     """Stop subscription with reason"""
     subscription = Subscription.query.get_or_404(subscription_id)
 
-    if not current_user.can_access_brand(subscription.brand_id):
+    if not check_entity_access(subscription):
         flash('ليس لديك صلاحية', 'danger')
         return redirect(url_for('subscriptions.index'))
 
@@ -897,7 +883,7 @@ def reject_renewal(subscription_id):
     """Record renewal rejection"""
     subscription = Subscription.query.get_or_404(subscription_id)
 
-    if not current_user.can_access_brand(subscription.brand_id):
+    if not check_entity_access(subscription):
         flash('ليس لديك صلاحية', 'danger')
         return redirect(url_for('subscriptions.index'))
 
@@ -927,7 +913,7 @@ def invoice(subscription_id):
     """Generate invoice/receipt for subscription"""
     subscription = Subscription.query.get_or_404(subscription_id)
 
-    if not current_user.can_access_brand(subscription.brand_id):
+    if not check_entity_access(subscription):
         flash('ليس لديك صلاحية', 'danger')
         return redirect(url_for('subscriptions.index'))
 

@@ -39,6 +39,9 @@ class Member(db.Model):
     fingerprint_enrolled = db.Column(db.Boolean, default=False)
     fingerprint_enrolled_at = db.Column(db.DateTime)
 
+    # Import mapping (original emp_id from backup.mdb)
+    member_import_id = db.Column(db.String(20))
+
     # Status
     is_active = db.Column(db.Boolean, default=True)
     notes = db.Column(db.Text)

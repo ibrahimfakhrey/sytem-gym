@@ -1,8 +1,9 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask import Blueprint, render_template, redirect, url_for, flash, request, abort
 from flask_login import login_required, current_user
 from flask_wtf import FlaskForm
 from wtforms import StringField, SelectField, DateField, TextAreaField, BooleanField, FloatField
 from wtforms.validators import DataRequired, Email, Optional, NumberRange
+from app.utils.helpers import apply_branch_filter, check_entity_access
 
 from app import db
 from app.models.company import Brand, Branch
@@ -58,15 +59,8 @@ def index():
     search = request.args.get('search', '')
     status = request.args.get('status', '')
 
-    # Base query
-    if current_user.can_view_all_brands:
-        brand_id = request.args.get('brand_id', type=int)
-        if brand_id:
-            query = Member.query.filter_by(brand_id=brand_id)
-        else:
-            query = Member.query
-    else:
-        query = Member.query.filter_by(brand_id=current_user.brand_id)
+    # Base query with brand/branch filtering
+    query = apply_branch_filter(Member.query, Member)
 
     # Search filter
     if search:
@@ -226,7 +220,7 @@ def view(member_id):
     """View member details"""
     member = Member.query.get_or_404(member_id)
 
-    if not current_user.can_access_brand(member.brand_id):
+    if not check_entity_access(member):
         flash('ليس لديك صلاحية لعرض هذا العضو', 'danger')
         return redirect(url_for('members.index'))
 
@@ -439,7 +433,7 @@ def unblock(blocked_id):
         return redirect(url_for('members.blocked_list'))
     
     # Only owner/admin can unblock
-    if not current_user.is_owner and current_user.role.name not in ['admin', 'manager']:
+    if not current_user.is_owner and current_user.role.name_en not in ['admin', 'owner', 'branch_manager']:
         flash('فقط المدير يمكنه إلغاء الحظر', 'danger')
         return redirect(url_for('members.blocked_list'))
     

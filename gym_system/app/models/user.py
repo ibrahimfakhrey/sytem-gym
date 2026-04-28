@@ -40,8 +40,17 @@ class Role(db.Model):
         return f'<Role {self.name_en}>'
 
     @property
+    def is_admin(self):
+        return self.is_owner
+
+    @property
     def is_brand_manager(self):
-        return self.name_en == 'brand_manager'
+        """Brand owner (was brand_manager, now name_en='owner')"""
+        return self.name_en == 'owner'
+
+    @property
+    def is_branch_manager(self):
+        return self.name_en == 'branch_manager'
 
     @property
     def is_finance_admin(self):
@@ -53,7 +62,7 @@ class Role(db.Model):
 
     @property
     def can_manage_users(self):
-        return self.name_en in ['owner', 'brand_manager']
+        return self.name_en in ['admin', 'owner', 'branch_manager']
 
     @property
     def can_export_reports(self):
@@ -63,10 +72,11 @@ class Role(db.Model):
     def badge_class(self):
         """CSS badge class for role"""
         class_map = {
-            'owner': 'primary',
-            'brand_manager': 'success',
-            'receptionist': 'info',
-            'finance': 'warning',
+            'admin': 'primary',
+            'owner': 'success',
+            'branch_manager': 'info',
+            'branch_receptionist': 'info',
+            'branch_finance': 'warning',
             'finance_admin': 'secondary',
             'employee': 'dark'
         }
@@ -137,6 +147,10 @@ class User(UserMixin, db.Model):
         return self.role.is_brand_manager if self.role else False
 
     @property
+    def is_branch_manager(self):
+        return self.role.is_branch_manager if self.role else False
+
+    @property
     def can_view_all_brands(self):
         return self.role.can_view_all_brands if self.role else False
 
@@ -168,11 +182,38 @@ class User(UserMixin, db.Model):
     def can_export_reports(self):
         return self.role.can_export_reports if self.role else False
 
+    @property
+    def can_manage_attendance(self):
+        return self.role.can_manage_attendance if self.role else False
+
+    @property
+    def can_view_complaints(self):
+        return self.role.can_view_complaints if self.role else False
+
+    @property
+    def can_manage_classes(self):
+        return self.role.can_manage_classes if self.role else False
+
+    @property
+    def can_view_daily_closing(self):
+        return self.role.can_view_daily_closing if self.role else False
+
     def can_access_brand(self, brand_id):
         """Check if user can access a specific brand"""
         if self.can_view_all_brands:
             return True
         return self.brand_id == brand_id
+
+    def can_access_branch(self, branch_id):
+        """Check if user can access a specific branch"""
+        if self.is_owner or self.can_view_all_brands:
+            return True
+        if self.role and self.role.name_en == 'owner':
+            # Brand owner can access all branches of their brand
+            from .company import Branch
+            branch = Branch.query.get(branch_id)
+            return branch and branch.brand_id == self.brand_id
+        return self.branch_id == branch_id
 
     def get_accessible_brands(self):
         """Get brands this user can access"""

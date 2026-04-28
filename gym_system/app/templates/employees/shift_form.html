@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+
+{% block title %}مناوبة {{ user.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-clock-history"></i>
+        {% if shift %}تعديل{% else %}تعيين{% endif %} مناوبة {{ user.name }}
+    </h1>
+    <a href="{{ url_for('employees.shifts', brand_id=user.brand_id) }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-right"></i>
+        رجوع
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-person-gear"></i>
+                مناوبة {{ user.name }}
+                {% if user.department %}
+                <span class="badge bg-secondary">{{ user.department }}</span>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+
+                    <h5 class="mb-3"><i class="bi bi-clock"></i> أوقات المناوبة</h5>
+                    <div class="row mb-4">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">وقت البداية</label>
+                            {{ form.work_start_time(class="form-control", type="time") }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">وقت النهاية</label>
+                            {{ form.work_end_time(class="form-control", type="time") }}
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <h5 class="mb-3"><i class="bi bi-calendar-week"></i> أيام العمل</h5>
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <div class="d-flex flex-wrap gap-3">
+                                <div class="form-check">
+                                    {{ form.day_sat(class="form-check-input") }}
+                                    <label class="form-check-label">السبت</label>
+                                </div>
+                                <div class="form-check">
+                                    {{ form.day_sun(class="form-check-input") }}
+                                    <label class="form-check-label">الأحد</label>
+                                </div>
+                                <div class="form-check">
+                                    {{ form.day_mon(class="form-check-input") }}
+                                    <label class="form-check-label">الاثنين</label>
+                                </div>
+                                <div class="form-check">
+                                    {{ form.day_tue(class="form-check-input") }}
+                                    <label class="form-check-label">الثلاثاء</label>
+                                </div>
+                                <div class="form-check">
+                                    {{ form.day_wed(class="form-check-input") }}
+                                    <label class="form-check-label">الأربعاء</label>
+                                </div>
+                                <div class="form-check">
+                                    {{ form.day_thu(class="form-check-input") }}
+                                    <label class="form-check-label">الخميس</label>
+                                </div>
+                                <div class="form-check">
+                                    {{ form.day_fri(class="form-check-input") }}
+                                    <label class="form-check-label">الجمعة</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <h5 class="mb-3"><i class="bi bi-alarm"></i> فترة السماح</h5>
+                    <div class="row mb-4">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">فترة السماح للتأخير (بالدقائق)</label>
+                            {{ form.late_threshold_minutes(class="form-control", type="number", min="0", max="120", placeholder="اتركه فارغاً لاستخدام الافتراضي") }}
+                            <small class="text-muted">
+                                الافتراضي: {{ brand_settings.late_threshold_minutes or 15 }} دقيقة.
+                                اتركه فارغاً لاستخدام الإعداد الافتراضي.
+                            </small>
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg"></i>
+                            حفظ المناوبة
+                        </button>
+                        <a href="{{ url_for('employees.shifts', brand_id=user.brand_id) }}" class="btn btn-outline-secondary">
+                            إلغاء
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <!-- Employee Info -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <i class="bi bi-person"></i>
+                بيانات الموظف
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled mb-0">
+                    <li class="mb-2"><strong>الاسم:</strong> {{ user.name }}</li>
+                    <li class="mb-2"><strong>البريد:</strong> {{ user.email }}</li>
+                    <li class="mb-2"><strong>الدور:</strong> {{ user.role.name if user.role else '-' }}</li>
+                    {% if user.department %}
+                    <li class="mb-2"><strong>القسم:</strong> {{ user.department }}</li>
+                    {% endif %}
+                    {% if user.fingerprint_id %}
+                    <li class="mb-2"><strong>رقم البصمة:</strong> {{ user.fingerprint_id }}</li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+
+        <!-- Brand Default Info -->
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-info-circle"></i>
+                الإعداد الافتراضي للبراند
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled small mb-0">
+                    <li class="mb-2">
+                        <strong>بداية العمل:</strong>
+                        {{ brand_settings.work_start_time.strftime('%H:%M') if brand_settings.work_start_time else '08:00' }}
+                    </li>
+                    <li class="mb-2">
+                        <strong>نهاية العمل:</strong>
+                        {{ brand_settings.work_end_time.strftime('%H:%M') if brand_settings.work_end_time else '17:00' }}
+                    </li>
+                    <li class="mb-2">
+                        <strong>فترة السماح:</strong>
+                        {{ brand_settings.late_threshold_minutes or 15 }} دقيقة
+                    </li>
+                </ul>
+                <hr>
+                <small class="text-muted">
+                    المناوبة المخصصة تتجاوز الإعداد الافتراضي لهذا الموظف فقط.
+                    إذا لم يتم تعيين مناوبة مخصصة، يتم استخدام إعدادات البراند.
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

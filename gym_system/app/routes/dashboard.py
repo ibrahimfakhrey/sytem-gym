@@ -25,11 +25,11 @@ def index():
     """Main dashboard - redirects based on role"""
     if current_user.is_owner:
         return redirect(url_for('dashboard.owner'))
-    elif current_user.role.name == 'مدير مالية':
+    elif current_user.role.name_en == 'finance_admin':
         return redirect(url_for('dashboard.finance_admin'))
-    elif current_user.role.name == 'موظف استقبال':
+    elif current_user.role.name_en == 'branch_receptionist':
         return redirect(url_for('dashboard.receptionist'))
-    elif current_user.role.name in ['مالية', 'مدير براند']:
+    elif current_user.role.name_en in ['branch_finance', 'owner', 'branch_manager']:
         return redirect(url_for('dashboard.brand_manager'))
     else:
         return redirect(url_for('dashboard.employee'))
@@ -861,8 +861,8 @@ def receptionist():
 
     # Enrich sessions with booking info
     for session in today_sessions:
-        session.current_bookings = session.get_current_bookings_count(today)
-        session.available_slots = session.max_capacity - session.current_bookings
+        session.current_bookings = session.today_booked_count
+        session.available_slots = session.capacity - session.current_bookings
         session.is_past = session.end_time < current_time
 
     # Check if daily closing done today
@@ -891,7 +891,7 @@ def receptionist():
 @login_required
 def finance_admin():
     """Finance admin dashboard - all brands financial view"""
-    if current_user.role.name != 'مدير مالية' and not current_user.is_owner:
+    if current_user.role.name_en != 'finance_admin' and not current_user.is_owner:
         return redirect(url_for('dashboard.index'))
 
     brands = Brand.query.filter_by(is_active=True).all()

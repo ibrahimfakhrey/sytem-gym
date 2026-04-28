@@ -152,6 +152,37 @@ class APIClient:
 
     # ============= Test Connection =============
 
+    def get_class_schedule(self, schedule_date=None) -> Dict:
+        """Get today's class schedule for access control"""
+        try:
+            params = {'brand_id': self.brand_id}
+            if schedule_date:
+                params['date'] = schedule_date if isinstance(schedule_date, str) else schedule_date.isoformat()
+            response = self.session.get(
+                f"{self.base_url}/api/bridge/class-schedule",
+                params=params, timeout=self.timeout
+            )
+            if response.status_code == 200:
+                return response.json()
+            return {'success': False, 'error': f'HTTP {response.status_code}'}
+        except requests.ConnectionError:
+            return {'success': False, 'error': 'لا يمكن الاتصال بالسيرفر'}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+
+    def get_bridge_settings(self) -> Dict:
+        """Get bridge settings from cloud"""
+        try:
+            response = self.session.get(
+                f"{self.base_url}/api/bridge/settings",
+                params={'brand_id': self.brand_id}, timeout=self.timeout
+            )
+            if response.status_code == 200:
+                return response.json().get('settings', {})
+            return {}
+        except Exception:
+            return {}
+
     def test_connection(self) -> tuple:
         """Test connection to server and return status"""
         try:

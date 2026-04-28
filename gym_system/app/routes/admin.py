@@ -263,6 +263,7 @@ def branches_edit(branch_id):
 
 @admin_bp.route('/users')
 @login_required
+@brand_manager_required
 def users_list():
     """List users"""
     if current_user.is_owner:
@@ -412,6 +413,7 @@ def users_edit(user_id):
 
 @admin_bp.route('/plans')
 @login_required
+@brand_manager_required
 def plans_list():
     """List plans"""
     brands = []
@@ -521,6 +523,7 @@ def plans_edit(plan_id):
 
 @admin_bp.route('/service-types')
 @login_required
+@brand_manager_required
 def service_types_list():
     """List service types"""
     brands = []

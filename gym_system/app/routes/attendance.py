@@ -6,7 +6,7 @@ from app import db, csrf
 from app.models.company import Brand
 from app.models.member import Member
 from app.models.attendance import MemberAttendance, EmployeeAttendance
-from app.utils.helpers import pagination_args
+from app.utils.helpers import pagination_args, apply_branch_filter, check_entity_access
 
 attendance_bp = Blueprint('attendance', __name__)
 
@@ -15,7 +15,7 @@ attendance_bp = Blueprint('attendance', __name__)
 @login_required
 def index():
     """Attendance check-in page"""
-    if not current_user.brand_id and not current_user.can_view_all_brands:
+    if not current_user.can_manage_attendance:
         flash('ليس لديك صلاحية', 'danger')
         return redirect(url_for('dashboard.index'))
 
@@ -23,17 +23,10 @@ def index():
 
     # Get today's attendance
     today = date.today()
-    if current_user.can_view_all_brands:
-        today_attendance = MemberAttendance.query.filter(
-            db.func.date(MemberAttendance.check_in) == today
-        ).order_by(MemberAttendance.check_in.desc()).all()
-    elif current_user.brand_id:
-        today_attendance = MemberAttendance.query.filter(
-            MemberAttendance.brand_id == current_user.brand_id,
-            db.func.date(MemberAttendance.check_in) == today
-        ).order_by(MemberAttendance.check_in.desc()).all()
-    else:
-        today_attendance = []
+    today_query = apply_branch_filter(MemberAttendance.query, MemberAttendance)
+    today_attendance = today_query.filter(
+        db.func.date(MemberAttendance.check_in) == today
+    ).order_by(MemberAttendance.check_in.desc()).all()
 
     return render_template('attendance/index.html',
                           brand=brand,
@@ -108,14 +101,7 @@ def members_list():
         filter_date = date.today()
 
     # Base query
-    if current_user.can_view_all_brands:
-        brand_id = request.args.get('brand_id', type=int)
-        if brand_id:
-            query = MemberAttendance.query.filter_by(brand_id=brand_id)
-        else:
-            query = MemberAttendance.query
-    else:
-        query = MemberAttendance.query.filter_by(brand_id=current_user.brand_id)
+    query = apply_branch_filter(MemberAttendance.query, MemberAttendance)
 
     # Date filter
     query = query.filter(db.func.date(MemberAttendance.check_in) == filter_date)
@@ -153,14 +139,7 @@ def employees_list():
         filter_date = date.today()
 
     # Base query
-    if current_user.can_view_all_brands:
-        brand_id = request.args.get('brand_id', type=int)
-        if brand_id:
-            query = EmployeeAttendance.query.filter_by(brand_id=brand_id)
-        else:
-            query = EmployeeAttendance.query
-    else:
-        query = EmployeeAttendance.query.filter_by(brand_id=current_user.brand_id)
+    query = apply_branch_filter(EmployeeAttendance.query, EmployeeAttendance)
 
     # Date filter
     query = query.filter(EmployeeAttendance.date == filter_date)

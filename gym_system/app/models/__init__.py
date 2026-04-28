@@ -8,7 +8,7 @@ from .subscription import (
 )
 from .attendance import MemberAttendance, EmployeeAttendance
 from .finance import Income, Expense, Salary, Refund, ExpenseCategory
-from .fingerprint import FingerprintSyncLog, BridgeStatus, DeviceCommand
+from .fingerprint import FingerprintSyncLog, BridgeStatus, DeviceCommand, BridgeSettings
 
 # New models
 from .service import ServiceType
@@ -18,5 +18,5 @@ from .classes import GymClass, ClassBooking
 from .giftcard import GiftCard
 from .daily_closing import DailyClosing
 from .offer import PromotionalOffer
-from .employee import EmployeeSettings, EmployeeReward, EmployeeDeduction
+from .employee import EmployeeSettings, EmployeeShift, EmployeeReward, EmployeeDeduction
 from .blocked_member import BlockedMember

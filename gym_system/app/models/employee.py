@@ -43,6 +43,79 @@ class EmployeeSettings(db.Model):
         return settings
 
 
+class EmployeeShift(db.Model):
+    """Per-employee shift schedule (overrides brand-level EmployeeSettings)"""
+    __tablename__ = 'employee_shifts'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    brand_id = db.Column(db.Integer, db.ForeignKey('brands.id'), nullable=False)
+
+    # Shift times
+    work_start_time = db.Column(db.Time, nullable=False)
+    work_end_time = db.Column(db.Time, nullable=False)
+
+    # Which days this shift applies (comma-separated: "0,1,2,3,4" = Sat-Wed)
+    # 0=Saturday, 1=Sunday, ..., 6=Friday (Arabic week)
+    # NULL means all days
+    applicable_days = db.Column(db.String(20))
+
+    # Override late threshold for this employee (NULL = use brand default)
+    late_threshold_minutes = db.Column(db.Integer)
+
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
+
+    # Relationships
+    employee = db.relationship('User', foreign_keys=[user_id], backref='shifts')
+    brand = db.relationship('Brand', backref='employee_shifts')
+    creator = db.relationship('User', foreign_keys=[created_by])
+
+    def __repr__(self):
+        return f'<EmployeeShift user_id={self.user_id} {self.work_start_time}-{self.work_end_time}>'
+
+    @property
+    def days_list(self):
+        """Get applicable days as list of integers"""
+        if not self.applicable_days:
+            return list(range(7))  # All days
+        return [int(d.strip()) for d in self.applicable_days.split(',') if d.strip().isdigit()]
+
+    @property
+    def days_arabic(self):
+        """Get applicable days as Arabic text"""
+        day_names = ['السبت', 'الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة']
+        if not self.applicable_days:
+            return 'كل الأيام'
+        return ', '.join(day_names[d] for d in self.days_list if 0 <= d <= 6)
+
+    def applies_today(self):
+        """Check if this shift applies to today"""
+        today_weekday = (date.today().weekday() + 2) % 7  # Convert Python weekday to Arabic week
+        return today_weekday in self.days_list
+
+    def get_late_threshold(self, brand_settings=None):
+        """Get late threshold - use shift override or fall back to brand default"""
+        if self.late_threshold_minutes is not None:
+            return self.late_threshold_minutes
+        if brand_settings:
+            return brand_settings.late_threshold_minutes or 15
+        return 15
+
+    @classmethod
+    def get_active_shift(cls, user_id, day_of_week=None):
+        """Get the active shift for a user on a specific day"""
+        if day_of_week is None:
+            day_of_week = (date.today().weekday() + 2) % 7
+
+        shifts = cls.query.filter_by(user_id=user_id, is_active=True).all()
+        for shift in shifts:
+            if day_of_week in shift.days_list:
+                return shift
+        return None
+
+
 class EmployeeReward(db.Model):
     """Employee rewards/bonuses"""
     __tablename__ = 'employee_rewards'

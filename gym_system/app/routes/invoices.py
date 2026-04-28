@@ -5,7 +5,7 @@ from app import db
 from app.models.finance import Invoice
 from app.models.company import Brand
 from app.utils.decorators import members_required
-from app.utils.helpers import pagination_args
+from app.utils.helpers import pagination_args, apply_branch_filter, check_entity_access
 
 invoices_bp = Blueprint('invoices', __name__)
 
@@ -18,14 +18,7 @@ def index():
     page, per_page = pagination_args(request)
 
     # Base query
-    if current_user.can_view_all_brands:
-        brand_id = request.args.get('brand_id', type=int)
-        if brand_id:
-            query = Invoice.query.filter_by(brand_id=brand_id)
-        else:
-            query = Invoice.query
-    else:
-        query = Invoice.query.filter_by(brand_id=current_user.brand_id)
+    query = apply_branch_filter(Invoice.query, Invoice)
 
     # Search by invoice number or member name
     search = request.args.get('search', '').strip()
@@ -84,8 +77,8 @@ def view(invoice_id):
     """View invoice details"""
     invoice = Invoice.query.get_or_404(invoice_id)
 
-    if not current_user.can_access_brand(invoice.brand_id):
+    if not check_entity_access(invoice):
         flash('ليس لديك صلاحية', 'danger')
-        return redirect(url_for('dashboard.index'))
+        return redirect(url_for('invoices.index'))
 
     return render_template('invoices/view.html', invoice=invoice)
