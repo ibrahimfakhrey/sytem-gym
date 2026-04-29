@@ -11,7 +11,7 @@ from app.models.user import User, Role
 from app.models.subscription import Plan
 from app.models.service import ServiceType
 from app.forms import BranchForm
-from app.utils.decorators import owner_required, brand_manager_required
+from app.utils.decorators import owner_required, brand_manager_required, branch_manager_required
 from app.utils.helpers import save_uploaded_file, delete_uploaded_file
 
 admin_bp = Blueprint('admin', __name__)
@@ -195,7 +195,7 @@ def branches_list(brand_id):
 
 @admin_bp.route('/brands/<int:brand_id>/branches/create', methods=['GET', 'POST'])
 @login_required
-@brand_manager_required
+@owner_required
 def branches_create(brand_id):
     """Create new branch"""
     brand = Brand.query.get_or_404(brand_id)
@@ -229,7 +229,7 @@ def branches_create(brand_id):
 
 @admin_bp.route('/branches/<int:branch_id>/edit', methods=['GET', 'POST'])
 @login_required
-@brand_manager_required
+@owner_required
 def branches_edit(branch_id):
     """Edit branch"""
     branch = Branch.query.get_or_404(branch_id)
@@ -263,13 +263,27 @@ def branches_edit(branch_id):
 
 @admin_bp.route('/users')
 @login_required
-@brand_manager_required
+@branch_manager_required
 def users_list():
     """List users"""
-    if current_user.is_owner:
+    # Hide admin and finance_admin from non-admin
+    hidden_roles = Role.query.filter(Role.name_en.in_(['admin', 'finance_admin'])).all()
+    hidden_role_ids = [r.id for r in hidden_roles]
+
+    if current_user.is_owner:  # admin sees all
         users = User.query.order_by(User.created_at.desc()).all()
-    elif current_user.can_manage_users and current_user.brand_id:
-        users = User.query.filter_by(brand_id=current_user.brand_id).all()
+    elif (current_user.is_brand_manager or current_user.is_branch_manager) and current_user.brand_id:
+        # Owner/branch_manager sees brand users (except admin/finance_admin)
+        query = User.query.filter(
+            User.brand_id == current_user.brand_id,
+            ~User.role_id.in_(hidden_role_ids)
+        )
+        # Branch manager with branch_id sees only their branch
+        if current_user.is_branch_manager and current_user.branch_id:
+            query = query.filter(
+                db.or_(User.branch_id == current_user.branch_id, User.branch_id.is_(None))
+            )
+        users = query.all()
     else:
         flash('ليس لديك صلاحية لإدارة المستخدمين', 'danger')
         return redirect(url_for('dashboard.index'))
@@ -279,13 +293,25 @@ def users_list():
 
 @admin_bp.route('/users/create', methods=['GET', 'POST'])
 @login_required
-@brand_manager_required
+@branch_manager_required
 def users_create():
     """Create new user"""
     form = UserForm()
 
-    # Populate choices - must be done before validate_on_submit
-    roles = Role.query.all()
+    # Populate choices - filter roles based on current user level
+    # Hidden roles: admin, finance_admin (only admin can assign these)
+    if current_user.is_owner:  # admin sees all
+        roles = Role.query.all()
+    elif current_user.role.name_en == 'owner':  # brand owner
+        roles = Role.query.filter(
+            Role.name_en.in_(['branch_manager', 'brand_finance', 'branch_finance', 'branch_receptionist', 'employee'])
+        ).all()
+    elif current_user.role.name_en == 'branch_manager':  # branch manager
+        roles = Role.query.filter(
+            Role.name_en.in_(['branch_finance', 'branch_receptionist', 'employee'])
+        ).all()
+    else:
+        roles = []
     form.role_id.choices = [(0, '-- اختر الدور --')] + [(r.id, r.name) for r in roles]
 
     if current_user.is_owner:
@@ -342,20 +368,35 @@ def users_create():
 
 @admin_bp.route('/users/<int:user_id>/edit', methods=['GET', 'POST'])
 @login_required
-@brand_manager_required
+@branch_manager_required
 def users_edit(user_id):
     """Edit user"""
     user = User.query.get_or_404(user_id)
 
-    # Check permissions
-    if not current_user.is_owner and user.brand_id != current_user.brand_id:
-        flash('ليس لديك صلاحية لتعديل هذا المستخدم', 'danger')
-        return redirect(url_for('admin.users_list'))
+    # Check permissions — can't edit users at or above your level
+    if not current_user.is_owner:
+        if user.brand_id != current_user.brand_id:
+            flash('ليس لديك صلاحية لتعديل هذا المستخدم', 'danger')
+            return redirect(url_for('admin.users_list'))
+        if user.role and current_user.role and user.role.role_level >= current_user.role.role_level:
+            flash('لا يمكنك تعديل مستخدم بنفس مستواك أو أعلى', 'danger')
+            return redirect(url_for('admin.users_list'))
 
     form = UserForm(obj=user)
 
-    # Populate choices
-    roles = Role.query.all()
+    # Populate choices - filter roles based on current user level
+    if current_user.is_owner:
+        roles = Role.query.all()
+    elif current_user.role.name_en == 'owner':
+        roles = Role.query.filter(
+            Role.name_en.in_(['branch_manager', 'brand_finance', 'branch_finance', 'branch_receptionist', 'employee'])
+        ).all()
+    elif current_user.role.name_en == 'branch_manager':
+        roles = Role.query.filter(
+            Role.name_en.in_(['branch_finance', 'branch_receptionist', 'employee'])
+        ).all()
+    else:
+        roles = []
     form.role_id.choices = [(0, '-- اختر الدور --')] + [(r.id, r.name) for r in roles]
 
     if current_user.is_owner:

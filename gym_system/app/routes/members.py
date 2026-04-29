@@ -134,6 +134,7 @@ def index():
 @members_required
 def create():
     """Create new member"""
+    from app.models.company import Branch
     form = MemberForm()
 
     # Get brand
@@ -147,6 +148,9 @@ def create():
         brand = current_user.brand
         brand_id = brand.id
 
+    # Get branches for branch selection dropdown
+    branches = Branch.query.filter_by(brand_id=brand_id, is_active=True).all()
+
     if form.validate_on_submit():
         # Check if phone or national_id is blocked
         blocked = BlockedMember.is_blocked(
@@ -157,7 +161,7 @@ def create():
         if blocked:
             flash(f'⛔ هذا الشخص محظور من الجيم! السبب: {blocked.reason}', 'danger')
             flash(f'تاريخ الحظر: {blocked.blocked_at.strftime("%Y-%m-%d")}', 'warning')
-            return render_template('members/form.html', form=form, brand=brand)
+            return render_template('members/form.html', form=form, brand=brand, branches=branches)
         
         # Check phone uniqueness in brand
         existing = Member.query.filter_by(
@@ -166,10 +170,19 @@ def create():
         ).first()
         if existing:
             flash('رقم الهاتف مسجل مسبقاً في هذا البراند', 'danger')
-            return render_template('members/form.html', form=form, brand=brand)
+            return render_template('members/form.html', form=form, brand=brand, branches=branches)
+
+        # Get branch_id from form
+        branch_id_val = request.form.get('branch_id', type=int)
+        if not branch_id_val and current_user.branch_id:
+            branch_id_val = current_user.branch_id
+        if not branch_id_val and branches:
+            flash('يرجى اختيار الفرع', 'danger')
+            return render_template('members/form.html', form=form, brand=brand, branches=branches)
 
         member = Member(
             brand_id=brand_id,
+            branch_id=branch_id_val,
             name=form.name.data,
             phone=form.phone.data,
             email=form.email.data,
@@ -186,9 +199,9 @@ def create():
             created_by=current_user.id
         )
 
-        # Generate fingerprint_id if brand uses fingerprint
-        if brand.uses_fingerprint:
-            # Get max fingerprint_id for this brand and add 1
+        # Generate fingerprint_id if branch uses fingerprint
+        member_branch = Branch.query.get(branch_id_val) if branch_id_val else None
+        if member_branch and member_branch.uses_fingerprint:
             max_fp = db.session.query(db.func.max(Member.fingerprint_id)).filter_by(
                 brand_id=brand_id
             ).scalar()
@@ -210,7 +223,7 @@ def create():
         # Redirect to create subscription
         return redirect(url_for('subscriptions.create', member_id=member.id))
 
-    return render_template('members/form.html', form=form, brand=brand)
+    return render_template('members/form.html', form=form, brand=brand, branches=branches)
 
 
 @members_bp.route('/<int:member_id>')
@@ -257,12 +270,14 @@ def view(member_id):
 @members_required
 def edit(member_id):
     """Edit member"""
+    from app.models.company import Branch
     member = Member.query.get_or_404(member_id)
 
-    if not current_user.can_access_brand(member.brand_id):
+    if not check_entity_access(member):
         flash('ليس لديك صلاحية لتعديل هذا العضو', 'danger')
         return redirect(url_for('members.index'))
 
+    branches = Branch.query.filter_by(brand_id=member.brand_id, is_active=True).all()
     form = MemberForm(obj=member)
 
     if form.validate_on_submit():
@@ -274,7 +289,7 @@ def edit(member_id):
         ).first()
         if existing:
             flash('رقم الهاتف مسجل مسبقاً', 'danger')
-            return render_template('members/form.html', form=form, member=member, brand=member.brand)
+            return render_template('members/form.html', form=form, member=member, brand=member.brand, branches=branches)
 
         member.name = form.name.data
         member.phone = form.phone.data
@@ -302,7 +317,7 @@ def edit(member_id):
         flash('تم تحديث بيانات العضو بنجاح', 'success')
         return redirect(url_for('members.view', member_id=member_id))
 
-    return render_template('members/form.html', form=form, member=member, brand=member.brand)
+    return render_template('members/form.html', form=form, member=member, brand=member.brand, branches=branches)
 
 
 @members_bp.route('/search')

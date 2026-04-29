@@ -82,6 +82,21 @@ class Role(db.Model):
         }
         return class_map.get(self.name_en, 'secondary')
 
+    @property
+    def role_level(self):
+        """Role hierarchy level (higher = more power). Used to prevent editing users above you."""
+        levels = {
+            'admin': 100,
+            'finance_admin': 90,
+            'owner': 80,
+            'branch_manager': 60,
+            'brand_finance': 50,
+            'branch_finance': 40,
+            'branch_receptionist': 30,
+            'employee': 10,
+        }
+        return levels.get(self.name_en, 0)
+
 
 class User(UserMixin, db.Model):
     """User model - System users"""

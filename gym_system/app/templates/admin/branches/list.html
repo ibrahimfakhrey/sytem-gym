@@ -8,10 +8,12 @@
         <i class="bi bi-geo-alt"></i>
         فروع {{ brand.name }}
     </h1>
+    {% if current_user.is_owner %}
     <a href="{{ url_for('admin.branches_create', brand_id=brand.id) }}" class="btn btn-primary">
         <i class="bi bi-plus"></i>
         إضافة فرع
     </a>
+    {% endif %}
 </div>
 
 {% set filter_type = request.args.get('filter', '') %}

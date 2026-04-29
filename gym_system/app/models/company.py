@@ -68,6 +68,11 @@ class Branch(db.Model):
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+    # Fingerprint settings (per branch, not per brand)
+    uses_fingerprint = db.Column(db.Boolean, default=False)
+    fingerprint_ip = db.Column(db.String(15))
+    fingerprint_port = db.Column(db.Integer, default=5005)
+
     # Capacity settings
     gym_capacity = db.Column(db.Integer, default=100)
     pool_capacity = db.Column(db.Integer, default=50)

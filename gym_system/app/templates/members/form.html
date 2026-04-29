@@ -28,11 +28,34 @@
                         </div>
                     </div>
 
+                    {% if branches is defined and branches %}
                     <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">الفرع *</label>
+                            <select name="branch_id" class="form-select" required>
+                                <option value="">-- اختر الفرع --</option>
+                                {% for branch in branches %}
+                                <option value="{{ branch.id }}" {% if member is defined and member and member.branch_id == branch.id %}selected{% endif %}
+                                    {% if current_user.branch_id and current_user.branch_id == branch.id %}selected{% endif %}>
+                                    {{ branch.name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label">البريد الإلكتروني</label>
                             {{ form.email(class="form-control", placeholder="example@email.com") }}
                         </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="row">
+                        {% if not (branches is defined and branches) %}
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">البريد الإلكتروني</label>
+                            {{ form.email(class="form-control", placeholder="example@email.com") }}
+                        </div>
+                        {% endif %}
                         <div class="col-md-6 mb-3">
                             <label class="form-label">تاريخ الميلاد</label>
                             {{ form.birth_date(class="form-control", type="date") }}

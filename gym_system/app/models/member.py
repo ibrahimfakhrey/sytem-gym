@@ -120,6 +120,9 @@ class Member(db.Model):
     @property
     def needs_fingerprint_enrollment(self):
         """Check if member needs fingerprint enrollment"""
+        # Check branch first (fingerprint is per-branch), fall back to brand
+        if self.branch and self.branch.uses_fingerprint:
+            return not self.fingerprint_enrolled
         if self.brand and self.brand.uses_fingerprint:
             return not self.fingerprint_enrolled
         return False

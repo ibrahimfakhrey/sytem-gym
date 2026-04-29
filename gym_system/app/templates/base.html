@@ -292,6 +292,7 @@
                             </a>
                         </li>
 
+                        {% if current_user.is_owner or current_user.is_brand_manager %}
                         <li class="nav-item">
                             <a class="nav-link {% if request.endpoint and 'plans' in request.endpoint %}active{% endif %}"
                                href="{{ url_for('admin.plans_list') }}">
@@ -307,8 +308,9 @@
                                 أنواع الخدمات
                             </a>
                         </li>
+                        {% endif %}
 
-                        {% if current_user.role and current_user.role.can_manage_offers %}
+                        {% if (current_user.is_owner or current_user.is_brand_manager) and current_user.role and current_user.role.can_manage_offers %}
                         <li class="nav-item">
                             <a class="nav-link {% if request.endpoint and 'offers' in request.endpoint %}active{% endif %}"
                                href="{{ url_for('offers.index') }}">
@@ -318,7 +320,7 @@
                         </li>
                         {% endif %}
 
-                        {% if current_user.role and current_user.role.can_manage_gift_cards %}
+                        {% if (current_user.is_owner or current_user.is_brand_manager) and current_user.role and current_user.role.can_manage_gift_cards %}
                         <li class="nav-item">
                             <a class="nav-link {% if request.endpoint and 'gift_cards' in request.endpoint %}active{% endif %}"
                                href="{{ url_for('gift_cards.index') }}">

@@ -206,12 +206,17 @@ def register_cli_commands(app):
                 'can_manage_attendance': True, 'can_view_complaints': True,
                 'can_manage_classes': True,
             }),
+            ('brand_finance', 'مالية براند', 'مالية على مستوى البراند بكل فروعه', {
+                'can_view_finance': True, 'can_manage_finance': True,
+                'can_view_reports': True,
+                'can_view_daily_closing': True, 'can_manage_daily_closing': True,
+            }),
             ('branch_finance', 'مالية فرع', 'مالية على مستوى فرع واحد', {
                 'can_view_finance': True, 'can_manage_finance': True,
                 'can_view_reports': True,
                 'can_view_daily_closing': True, 'can_manage_daily_closing': True,
             }),
-            ('finance_admin', 'مالية عامة', 'الاطلاع على مالية جميع البراندات', {
+            ('finance_admin', 'مالية عامة', 'الاطلاع على مالية جميع البراندات - مخفي', {
                 'can_view_all_brands': True, 'can_view_finance': True,
                 'can_view_reports': True, 'can_view_daily_closing': True,
             }),

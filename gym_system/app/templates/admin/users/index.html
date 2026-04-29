@@ -48,9 +48,13 @@
                     <tr>
                         <td>{{ user.id }}</td>
                         <td>
+                            {% if current_user.is_owner or (user.role and current_user.role and user.role.role_level < current_user.role.role_level) %}
                             <a href="{{ url_for('admin.users_edit', user_id=user.id) }}" class="text-decoration-none">
                                 <strong>{{ user.name }}</strong>
                             </a>
+                            {% else %}
+                            <strong>{{ user.name }}</strong>
+                            {% endif %}
                             {% if user.is_trainer %}
                             <span class="badge bg-info ms-1"><i class="bi bi-person-badge"></i> مدرب</span>
                             {% endif %}
@@ -86,9 +90,11 @@
                             {% endif %}
                         </td>
                         <td>
+                            {% if current_user.is_owner or (user.role and current_user.role and user.role.role_level < current_user.role.role_level) %}
                             <a href="{{ url_for('admin.users_edit', user_id=user.id) }}" class="btn btn-sm btn-outline-primary" title="تعديل">
                                 <i class="bi bi-pencil"></i>
                             </a>
+                            {% endif %}
                         </td>
                     </tr>
                     {% endfor %}
