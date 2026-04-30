@@ -62,7 +62,14 @@ def load_config():
         'first_setup_done': False,
         'access_control_enabled': False,
         'class_access_window_minutes': 15,
-        'employee_shift_tracking_enabled': False
+        'employee_shift_tracking_enabled': False,
+        # Branch registration
+        'branch_code': '',
+        'branch_id': None,
+        'brand_id': None,
+        'branch_name': '',
+        'brand_name': '',
+        'is_registered': False
     }
 
 

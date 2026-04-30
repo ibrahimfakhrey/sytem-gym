@@ -40,6 +40,7 @@ class Sidebar(ctk.CTkFrame):
             ('add_member', '➕', 'إضافة عضو'),
             ('sync', '🔄', 'المزامنة'),
             ('commands', '📋', 'الأوامر'),
+            ('test', '🔧', 'اختبار النظام'),
             ('settings', '⚙️', 'الإعدادات'),
         ]
 

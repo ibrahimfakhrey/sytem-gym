@@ -214,14 +214,21 @@ def branches_create(brand_id):
             phone=form.phone.data,
             gym_capacity=form.gym_capacity.data,
             pool_capacity=form.pool_capacity.data,
+            uses_fingerprint=form.uses_fingerprint.data,
+            fingerprint_ip=form.fingerprint_ip.data if form.uses_fingerprint.data else None,
+            fingerprint_port=form.fingerprint_port.data if form.uses_fingerprint.data else 5005,
             lease_expiry_date=form.lease_expiry_date.data,
             commercial_registration_expiry=form.commercial_registration_expiry.data,
             is_active=form.is_active.data
         )
         db.session.add(branch)
+        db.session.flush()  # Get the ID before commit
+
+        # Auto-generate branch code
+        branch.branch_code = f"BR-{brand_id}-{branch.id}"
         db.session.commit()
 
-        flash('تم إنشاء الفرع بنجاح', 'success')
+        flash(f'تم إنشاء الفرع بنجاح - رمز الفرع: {branch.branch_code}', 'success')
         return redirect(url_for('admin.branches_list', brand_id=brand_id))
 
     return render_template('admin/branches/create.html', form=form, brand=brand)

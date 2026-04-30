@@ -2438,3 +2438,350 @@ def set_employee_shift(user_id):
         'shift_id': shift.id,
         'message': 'تم حفظ المناوبة بنجاح'
     })
+
+
+# =============================================================================
+# BRANCH REGISTRATION & UNIFIED SYNC API
+# =============================================================================
+
+@api_bp.route('/bridge/register', methods=['POST'])
+@require_api_key
+def bridge_register():
+    """
+    Register a desktop bridge app by branch code.
+    Returns branch config for the app to save locally.
+    """
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+
+    branch_code = data.get('branch_code', '').strip().upper()
+    if not branch_code:
+        return jsonify({'error': 'branch_code is required'}), 400
+
+    branch = Branch.query.filter_by(branch_code=branch_code).first()
+    if not branch:
+        return jsonify({'error': 'رمز الفرع غير صحيح', 'valid': False}), 404
+
+    brand = branch.brand
+
+    # Get or create bridge settings for this branch
+    settings = BridgeSettings.get_or_create(brand.id, branch.id)
+
+    return jsonify({
+        'success': True,
+        'valid': True,
+        'branch_id': branch.id,
+        'brand_id': brand.id,
+        'branch_name': branch.name,
+        'brand_name': brand.name,
+        'branch_code': branch.branch_code,
+        'uses_fingerprint': branch.uses_fingerprint,
+        'fingerprint_ip': branch.fingerprint_ip,
+        'fingerprint_port': branch.fingerprint_port,
+        'settings': {
+            'class_access_window_minutes': settings.class_access_window_minutes,
+            'attendance_sync_interval': settings.attendance_sync_interval,
+            'access_control_interval': settings.access_control_interval,
+            'class_access_control_enabled': settings.class_access_control_enabled,
+            'employee_shift_tracking_enabled': settings.employee_shift_tracking_enabled,
+            'auto_block_expired': settings.auto_block_expired,
+        }
+    })
+
+
+@api_bp.route('/bridge/sync', methods=['POST'])
+@require_api_key
+def bridge_sync():
+    """
+    Unified sync endpoint — one call per cycle.
+    Desktop app sends attendance + heartbeat.
+    Cloud responds with commands + class schedule + member updates.
+    """
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+
+    branch_id = data.get('branch_id')
+    brand_id = data.get('brand_id')
+
+    if not branch_id:
+        return jsonify({'error': 'branch_id is required'}), 400
+
+    branch = Branch.query.get(branch_id)
+    if not branch:
+        return jsonify({'error': 'Branch not found'}), 404
+
+    if not brand_id:
+        brand_id = branch.brand_id
+
+    response = {
+        'success': True,
+        'attendance_synced': 0,
+        'commands': [],
+        'class_schedule': None,
+        'settings': None,
+    }
+
+    # 1. Process attendance records
+    records = data.get('attendance_records', [])
+    if records:
+        synced = 0
+        staff_synced = 0
+        member_synced = 0
+        blocked_entries = []
+
+        for record in records:
+            try:
+                fingerprint_id = record.get('fingerprint_id')
+                timestamp_str = record.get('timestamp')
+                log_id = record.get('log_id')
+
+                if not fingerprint_id or not timestamp_str:
+                    continue
+
+                try:
+                    timestamp = datetime.fromisoformat(timestamp_str)
+                except Exception:
+                    continue
+
+                # Check staff first
+                staff_user = User.query.filter_by(
+                    brand_id=brand_id, fingerprint_id=fingerprint_id, is_active=True
+                ).first()
+
+                if staff_user:
+                    if log_id:
+                        existing = EmployeeAttendance.query.filter_by(
+                            user_id=staff_user.id, fingerprint_log_id=log_id
+                        ).first()
+                        if existing:
+                            continue
+
+                    attendance_date = timestamp.date()
+                    existing_today = EmployeeAttendance.query.filter_by(
+                        user_id=staff_user.id, date=attendance_date
+                    ).first()
+
+                    if existing_today:
+                        existing_today.check_out = timestamp.time()
+                    else:
+                        check_in_time = timestamp.time()
+                        shift = EmployeeShift.get_active_shift(staff_user.id)
+                        brand_settings_obj = EmployeeSettings.get_or_create(brand_id)
+                        expected_start = shift.work_start_time if shift else brand_settings_obj.work_start_time
+                        late_threshold = (shift.get_late_threshold(brand_settings_obj) if shift
+                                          else brand_settings_obj.late_threshold_minutes or 15)
+                        status = 'present'
+                        late_minutes = 0
+
+                        if expected_start:
+                            ci_mins = check_in_time.hour * 60 + check_in_time.minute
+                            st_mins = expected_start.hour * 60 + expected_start.minute
+                            if ci_mins > st_mins + late_threshold:
+                                late_minutes = ci_mins - st_mins
+                                status = 'late'
+
+                        att = EmployeeAttendance(
+                            user_id=staff_user.id, brand_id=brand_id, branch_id=branch_id,
+                            date=attendance_date, check_in=check_in_time,
+                            expected_check_in=expected_start, late_minutes=late_minutes,
+                            status=status, source='fingerprint', fingerprint_log_id=log_id
+                        )
+                        db.session.add(att)
+
+                    staff_synced += 1
+                    synced += 1
+                    continue
+
+                # Check member
+                member = Member.query.filter_by(
+                    brand_id=brand_id, fingerprint_id=fingerprint_id
+                ).first()
+
+                if not member:
+                    continue
+
+                if log_id:
+                    existing = MemberAttendance.query.filter_by(fingerprint_log_id=log_id).first()
+                    if existing:
+                        continue
+
+                subscription = Subscription.query.filter(
+                    Subscription.member_id == member.id,
+                    Subscription.status == 'active',
+                    Subscription.end_date >= date.today()
+                ).first()
+
+                has_warning = False
+                warning_message = None
+
+                if not subscription:
+                    has_warning = True
+                    warning_message = 'لا يوجد اشتراك نشط'
+                    blocked_entries.append({
+                        'member_id': member.id, 'member_name': member.name,
+                        'fingerprint_id': fingerprint_id, 'reason': warning_message
+                    })
+
+                att = MemberAttendance(
+                    member_id=member.id,
+                    subscription_id=subscription.id if subscription else None,
+                    brand_id=brand_id, branch_id=branch_id,
+                    check_in=timestamp, source='fingerprint', fingerprint_log_id=log_id,
+                    has_warning=has_warning, warning_message=warning_message
+                )
+                db.session.add(att)
+                member_synced += 1
+                synced += 1
+
+            except Exception:
+                continue
+
+        if synced > 0:
+            db.session.commit()
+
+        # Log sync
+        sync_log = FingerprintSyncLog(
+            brand_id=brand_id, branch_id=branch_id,
+            sync_type='attendance', records_synced=synced,
+            status='success' if synced > 0 else 'failed'
+        )
+        db.session.add(sync_log)
+        db.session.commit()
+
+        response['attendance_synced'] = synced
+        response['blocked_entries'] = blocked_entries
+
+    # 2. Process heartbeat
+    heartbeat = data.get('heartbeat', {})
+    if heartbeat:
+        computer_name = heartbeat.get('computer_name', 'Unknown')
+        bridge = BridgeStatus.get_or_create(brand_id, computer_name)
+        bridge.branch_id = branch_id
+        bridge.ip_address = heartbeat.get('ip_address')
+        bridge.os_info = heartbeat.get('os_info')
+        bridge.database_path = heartbeat.get('database_path')
+        bridge.database_found = heartbeat.get('database_found', False)
+        bridge.last_heartbeat = datetime.utcnow()
+        bridge.is_online = True
+        if heartbeat.get('sync_count'):
+            bridge.total_syncs = (bridge.total_syncs or 0) + heartbeat['sync_count']
+        db.session.commit()
+
+    # 3. Get pending commands for this branch
+    commands = DeviceCommand.query.filter(
+        DeviceCommand.brand_id == brand_id,
+        db.or_(DeviceCommand.branch_id == branch_id, DeviceCommand.branch_id.is_(None)),
+        DeviceCommand.status == 'pending'
+    ).order_by(DeviceCommand.created_at.asc()).all()
+
+    response['commands'] = [
+        {
+            'id': cmd.id, 'command_type': cmd.command_type,
+            'target_emp_id': cmd.target_emp_id, 'member_id': cmd.member_id,
+            'command_data': json.loads(cmd.command_data) if cmd.command_data else {},
+        }
+        for cmd in commands
+    ]
+
+    # 4. Get class schedule for this branch
+    today = date.today()
+    day_of_week = (today.weekday() + 2) % 7
+    settings = BridgeSettings.get_or_create(brand_id, branch_id)
+
+    today_classes = GymClass.query.filter(
+        GymClass.brand_id == brand_id,
+        db.or_(GymClass.branch_id == branch_id, GymClass.branch_id.is_(None)),
+        GymClass.day_of_week == day_of_week,
+        GymClass.is_active == True
+    ).order_by(GymClass.start_time).all()
+
+    classes_data = []
+    class_member_ids = set()
+
+    for gym_class in today_classes:
+        bookings = ClassBooking.query.filter(
+            ClassBooking.class_id == gym_class.id,
+            ClassBooking.booking_date == today,
+            ClassBooking.status.in_(['booked', 'attended'])
+        ).all()
+
+        booked_members = []
+        for booking in bookings:
+            m = booking.member
+            if m and m.fingerprint_id:
+                emp_id = m.member_import_id or str(m.fingerprint_id).zfill(8)
+                booked_members.append({
+                    'member_id': m.id, 'fingerprint_id': m.fingerprint_id,
+                    'emp_id': emp_id, 'name': m.name
+                })
+                class_member_ids.add(m.id)
+
+        if booked_members:
+            classes_data.append({
+                'class_id': gym_class.id, 'name': gym_class.name,
+                'start_time': gym_class.start_time.strftime('%H:%M') if gym_class.start_time else None,
+                'end_time': gym_class.end_time.strftime('%H:%M') if gym_class.end_time else None,
+                'booked_members': booked_members
+            })
+
+    # Gym members (active sub, no class requirement, this branch)
+    gym_members = []
+    active_subs = Subscription.query.filter(
+        Subscription.brand_id == brand_id,
+        db.or_(Subscription.branch_id == branch_id, Subscription.branch_id.is_(None)),
+        Subscription.status == 'active', Subscription.end_date >= today
+    ).all()
+
+    for sub in active_subs:
+        m = sub.member
+        if not m or not m.fingerprint_id or not m.is_active:
+            continue
+        if m.id in class_member_ids:
+            continue
+        if sub.plan and sub.plan.requires_class_booking:
+            continue
+        emp_id = m.member_import_id or str(m.fingerprint_id).zfill(8)
+        gym_members.append({
+            'member_id': m.id, 'fingerprint_id': m.fingerprint_id,
+            'emp_id': emp_id, 'name': m.name,
+            'subscription_end_date': sub.end_date.isoformat()
+        })
+
+    # Blocked members
+    blocked_members = []
+    active_ids = class_member_ids | {m['member_id'] for m in gym_members}
+    blocked_query = Member.query.filter(
+        Member.brand_id == brand_id, Member.fingerprint_id.isnot(None),
+        ~Member.id.in_(active_ids) if active_ids else True
+    ).all()
+
+    for m in blocked_query:
+        if m.id in active_ids:
+            continue
+        emp_id = m.member_import_id or str(m.fingerprint_id).zfill(8)
+        blocked_members.append({
+            'member_id': m.id, 'fingerprint_id': m.fingerprint_id,
+            'emp_id': emp_id, 'name': m.name
+        })
+
+    response['class_schedule'] = {
+        'date': today.isoformat(),
+        'access_window_minutes': settings.class_access_window_minutes,
+        'classes': classes_data,
+        'gym_members': gym_members,
+        'blocked_members': blocked_members,
+    }
+
+    # 5. Return latest settings
+    response['settings'] = {
+        'class_access_window_minutes': settings.class_access_window_minutes,
+        'attendance_sync_interval': settings.attendance_sync_interval,
+        'access_control_interval': settings.access_control_interval,
+        'class_access_control_enabled': settings.class_access_control_enabled,
+        'employee_shift_tracking_enabled': settings.employee_shift_tracking_enabled,
+        'auto_block_expired': settings.auto_block_expired,
+    }
+
+    return jsonify(response)

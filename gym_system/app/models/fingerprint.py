@@ -8,6 +8,7 @@ class BridgeStatus(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     brand_id = db.Column(db.Integer, db.ForeignKey('brands.id'), nullable=False)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'), nullable=True)
 
     # Computer info
     computer_name = db.Column(db.String(100))
@@ -80,6 +81,7 @@ class DeviceCommand(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     brand_id = db.Column(db.Integer, db.ForeignKey('brands.id'), nullable=False)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'), nullable=True)
 
     # Command type: 'block_member', 'unblock_member', 'update_member', 'add_member', 'delete_member'
     command_type = db.Column(db.String(50), nullable=False)
@@ -159,6 +161,7 @@ class FingerprintSyncLog(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     brand_id = db.Column(db.Integer, db.ForeignKey('brands.id'), nullable=False)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'), nullable=True)
 
     # Type: 'attendance', 'enrollment', 'full'
     sync_type = db.Column(db.String(20), nullable=False)
@@ -232,11 +235,12 @@ class FingerprintSyncLog(db.Model):
 
 
 class BridgeSettings(db.Model):
-    """Per-brand bridge configuration (access windows, sync intervals, feature flags)"""
+    """Per-branch bridge configuration (access windows, sync intervals, feature flags)"""
     __tablename__ = 'bridge_settings'
 
     id = db.Column(db.Integer, primary_key=True)
-    brand_id = db.Column(db.Integer, db.ForeignKey('brands.id'), nullable=False, unique=True)
+    brand_id = db.Column(db.Integer, db.ForeignKey('brands.id'), nullable=False)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'), nullable=True)
 
     # Class access window - minutes before class start that member is allowed entry
     class_access_window_minutes = db.Column(db.Integer, default=15)
@@ -261,14 +265,33 @@ class BridgeSettings(db.Model):
     brand = db.relationship('Brand', backref=db.backref('bridge_settings_config', uselist=False))
 
     def __repr__(self):
-        return f'<BridgeSettings brand_id={self.brand_id}>'
+        return f'<BridgeSettings branch_id={self.branch_id}>'
 
     @classmethod
-    def get_or_create(cls, brand_id):
-        """Get settings for brand, create with defaults if not exists"""
-        settings = cls.query.filter_by(brand_id=brand_id).first()
-        if not settings:
-            settings = cls(brand_id=brand_id)
-            db.session.add(settings)
-            db.session.commit()
+    def get_or_create(cls, brand_id, branch_id=None):
+        """Get settings for branch (or brand), create with defaults if not exists"""
+        if branch_id:
+            settings = cls.query.filter_by(branch_id=branch_id).first()
+            if not settings:
+                # Try existing brand-level settings as base
+                settings = cls.query.filter_by(brand_id=brand_id).first()
+                if settings and settings.branch_id is None:
+                    # Upgrade existing brand-level to branch-level
+                    settings.branch_id = branch_id
+                    db.session.commit()
+                elif not settings:
+                    settings = cls(brand_id=brand_id, branch_id=branch_id)
+                    db.session.add(settings)
+                    db.session.commit()
+                else:
+                    # Brand record exists with different branch, create new
+                    settings = cls(brand_id=brand_id, branch_id=branch_id)
+                    db.session.add(settings)
+                    db.session.commit()
+        else:
+            settings = cls.query.filter_by(brand_id=brand_id).first()
+            if not settings:
+                settings = cls(brand_id=brand_id)
+                db.session.add(settings)
+                db.session.commit()
         return settings

@@ -6,9 +6,9 @@ import customtkinter as ctk
 from .styles import COLORS, FONTS, configure_theme
 from .components import Sidebar, StatusBar
 from .pages import (
-    HomePage, LiveFeedPage, ClassSchedulePage,
+    HomePage, SetupPage, LiveFeedPage, ClassSchedulePage,
     AddMemberPage, MembersPage,
-    SyncPage, CommandsPage, SettingsPage
+    SyncPage, CommandsPage, SettingsPage, TestPage
 )
 
 
@@ -66,6 +66,7 @@ class MainWindow(ctk.CTk):
     def _create_pages(self):
         """Create all pages"""
         self.pages['home'] = HomePage(self.page_container, app=self)
+        self.pages['setup'] = SetupPage(self.page_container, app=self)
         self.pages['live_feed'] = LiveFeedPage(self.page_container, app=self)
         self.pages['class_schedule'] = ClassSchedulePage(self.page_container, app=self)
         self.pages['members'] = MembersPage(self.page_container, app=self)
@@ -73,6 +74,7 @@ class MainWindow(ctk.CTk):
         self.pages['sync'] = SyncPage(self.page_container, app=self)
         self.pages['commands'] = CommandsPage(self.page_container, app=self)
         self.pages['settings'] = SettingsPage(self.page_container, app=self)
+        self.pages['test'] = TestPage(self.page_container, app=self)
 
     def show_page(self, page_id: str):
         """Show a specific page"""

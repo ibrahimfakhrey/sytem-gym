@@ -39,10 +39,9 @@
                 <thead>
                     <tr>
                         <th>الاسم</th>
+                        <th>رمز الفرع</th>
+                        <th>البصمة</th>
                         <th>العنوان</th>
-                        <th>الهاتف</th>
-                        <th>عقد الإيجار</th>
-                        <th>السجل التجاري</th>
                         <th>الحالة</th>
                         <th>الإجراءات</th>
                     </tr>
@@ -55,39 +54,25 @@
                                 <strong>{{ branch.name }}</strong>
                             </a>
                         </td>
-                        <td>{{ branch.address or '-' }}</td>
-                        <td>{{ branch.phone or '-' }}</td>
                         <td>
-                            {% if branch.lease_expiry_date %}
-                                {% if branch.lease_expiry_date < today %}
-                                <span class="badge bg-danger">
-                                    <i class="bi bi-exclamation-circle"></i>
-                                    منتهي
-                                </span>
-                                {% elif branch.lease_expiry_date <= warning_date %}
-                                <span class="badge bg-warning text-dark">
-                                    <i class="bi bi-clock"></i>
-                                    {{ branch.lease_expiry_date.strftime('%Y-%m-%d') }}
-                                </span>
-                                {% else %}
-                                <span class="text-success">{{ branch.lease_expiry_date.strftime('%Y-%m-%d') }}</span>
-                                {% endif %}
+                            {% if branch.branch_code %}
+                            <code class="bg-dark text-light px-2 py-1 rounded">{{ branch.branch_code }}</code>
                             {% else %}
                             <span class="text-muted">-</span>
                             {% endif %}
                         </td>
                         <td>
-                            {% if branch.commercial_registration_expiry %}
-                                {% if branch.commercial_registration_expiry < today %}
-                                <span class="badge bg-danger">
-                                    <i class="bi bi-exclamation-circle"></i>
-                                    منتهي
-                                </span>
-                                {% elif branch.commercial_registration_expiry <= warning_date %}
-                                <span class="badge bg-warning text-dark">
-                                    <i class="bi bi-clock"></i>
-                                    {{ branch.commercial_registration_expiry.strftime('%Y-%m-%d') }}
-                                </span>
+                            {% if branch.uses_fingerprint %}
+                            <span class="badge bg-info"><i class="bi bi-fingerprint"></i> مفعل</span>
+                            {% if branch.fingerprint_ip %}
+                            <br><small class="text-muted">{{ branch.fingerprint_ip }}:{{ branch.fingerprint_port }}</small>
+                            {% endif %}
+                            {% else %}
+                            <span class="badge bg-secondary">غير مفعل</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ branch.address or '-' }}</td>
+                        <td>
                                 {% else %}
                                 <span class="text-success">{{ branch.commercial_registration_expiry.strftime('%Y-%m-%d') }}</span>
                                 {% endif %}

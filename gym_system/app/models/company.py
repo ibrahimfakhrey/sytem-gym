@@ -62,6 +62,7 @@ class Branch(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     brand_id = db.Column(db.Integer, db.ForeignKey('brands.id'), nullable=False)
+    branch_code = db.Column(db.String(20), unique=True)  # e.g., "BR-3-1" for desktop app registration
     name = db.Column(db.String(100), nullable=False)
     address = db.Column(db.Text)
     phone = db.Column(db.String(20))

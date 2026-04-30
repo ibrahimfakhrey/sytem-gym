@@ -35,7 +35,16 @@ class AppController:
         # Create main window
         self.window = MainWindow(app_controller=self)
 
-        # Initialize API client
+        # Check if registered
+        if not self.config.get('is_registered'):
+            # Show setup page and wait for registration
+            self.window.load_settings(self.config)
+            if 'setup' in self.window.pages:
+                self.window.pages['setup'].load_config(self.config)
+            self.window.show_page('setup')
+            return  # Don't continue init until registered
+
+        # Initialize API client with branch info
         api_url = self.config.get('api_url', 'https://gymsystem.pythonanywhere.com')
         api_key = self.config.get('api_key', '')
         brand_id = self.config.get('brand_id', 1)
@@ -45,6 +54,12 @@ class AppController:
             api_key=api_key,
             brand_id=brand_id
         )
+
+        # Set window title with branch name
+        branch_name = self.config.get('branch_name', '')
+        brand_name = self.config.get('brand_name', '')
+        if branch_name:
+            self.window.title(f"نظام الجيم - {branch_name} | {brand_name}")
 
         # Try to connect to database
         db_path = self.config.get('db_path')
@@ -454,6 +469,72 @@ class AppController:
         except Exception as e:
             self.window.add_activity(f"فشل تنفيذ الأمر: {str(e)}", "error")
             return False
+
+    # =====================
+    # Registration Methods
+    # =====================
+
+    def complete_registration(self, reg_data: dict):
+        """Called after successful branch registration from setup page"""
+        # Save registration data to config
+        self.config.update(reg_data)
+
+        # Also save settings from server
+        settings = reg_data.get('settings', {})
+        if settings:
+            self.config['access_control_enabled'] = settings.get('class_access_control_enabled', False)
+            self.config['class_access_window_minutes'] = settings.get('class_access_window_minutes', 15)
+            self.config['employee_shift_tracking_enabled'] = settings.get('employee_shift_tracking_enabled', False)
+
+        save_config(self.config)
+
+        # Re-initialize the full app now that we're registered
+        self.window.add_activity(f"تم تسجيل الفرع: {reg_data.get('branch_name')}", "success")
+
+        # Initialize API client
+        self.api_client = APIClient(
+            base_url=self.config.get('api_url', ''),
+            api_key=self.config.get('api_key', ''),
+            brand_id=self.config.get('brand_id', 1)
+        )
+
+        # Set window title
+        self.window.title(f"نظام الجيم - {reg_data.get('branch_name', '')} | {reg_data.get('brand_name', '')}")
+
+        # Continue initialization — connect databases, start sync
+        db_path = self.config.get('db_path') or self.config.get('database_path')
+        if db_path:
+            self._connect_database(db_path)
+        else:
+            self._auto_detect_database()
+
+        att2000_path = self.config.get('att2000_db_path')
+        if att2000_path:
+            self._connect_device_database(att2000_path)
+        else:
+            self._auto_detect_device_database()
+
+        # Init sync manager
+        if self.db_manager and self.api_client:
+            self.sync_manager = SyncManager(
+                database_manager=self.db_manager,
+                api_client=self.api_client,
+                device_db_manager=self.device_db_manager
+            )
+            self.sync_manager.access_control_enabled = self.config.get('access_control_enabled', False)
+            self.sync_manager.on_attendance_event = self._on_attendance_event
+            self.sync_manager.on_schedule_update = self._on_schedule_update
+
+        self._update_connection_status()
+        self._load_initial_data()
+
+        # Show dashboard
+        self.window.show_page('home')
+
+        # Start auto-sync
+        if self.config.get('auto_start', True) and self.sync_manager:
+            interval = self.config.get('sync_interval', 30)
+            self.start_auto_sync(interval)
 
     # =====================
     # Settings Methods

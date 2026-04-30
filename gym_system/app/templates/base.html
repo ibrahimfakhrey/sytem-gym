@@ -40,6 +40,9 @@
                         <span class="nav-link">
                             <i class="bi bi-shop"></i>
                             {{ current_user.brand.name }}
+                            {% if current_user.branch %}
+                            <span class="text-muted">- {{ current_user.branch.name }}</span>
+                            {% endif %}
                         </span>
                     </li>
                     {% endif %}

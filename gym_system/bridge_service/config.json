@@ -2,7 +2,9 @@
     "cloud_api": {
         "url": "https://gymsystem.pythonanywhere.com",
         "api_key": "fingerprint-api-key",
-        "brand_id": 1
+        "branch_code": "",
+        "branch_id": null,
+        "brand_id": null
     },
     "databases": {
         "att2000_path": "",
@@ -14,5 +16,5 @@
         "access_control_interval": 60,
         "heartbeat_interval": 150
     },
-    "_comment": "Change api_key to match FINGERPRINT_API_KEY on PythonAnywhere. Set database paths or leave empty for auto-detect."
+    "_comment": "Enter branch_code (e.g., BR-3-1) and api_key. The bridge will auto-register with the cloud on first run."
 }
