@@ -37,11 +37,13 @@
                 <ul class="navbar-nav me-auto">
                     {% if current_user.brand %}
                     <li class="nav-item">
-                        <span class="nav-link">
-                            <i class="bi bi-shop"></i>
-                            {{ current_user.brand.name }}
+                        <span class="nav-link d-flex align-items-center" style="white-space: nowrap;">
+                            <i class="bi bi-shop me-1"></i>
+                            <span>{{ current_user.brand.name }}</span>
                             {% if current_user.branch %}
-                            <span class="text-muted">- {{ current_user.branch.name }}</span>
+                            <span class="mx-2 opacity-50">|</span>
+                            <i class="bi bi-geo-alt me-1 text-danger"></i>
+                            <span class="text-danger fw-semibold">{{ current_user.branch.name }}</span>
                             {% endif %}
                         </span>
                     </li>
