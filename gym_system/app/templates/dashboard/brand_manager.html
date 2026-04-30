@@ -7,6 +7,9 @@
     <h1>
         <i class="bi bi-shop"></i>
         {{ brand.name }}
+        {% if current_user.branch %}
+        <small class="text-muted">- {{ current_user.branch.name }}</small>
+        {% endif %}
         {% if brand.uses_fingerprint %}
         <span class="badge bg-info">
             <i class="bi bi-fingerprint"></i> بصمة

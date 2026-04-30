@@ -1064,25 +1064,36 @@ def get_brand_stats(brand_id, start_date, end_date):
 def api_alerts():
     """API endpoint to get alerts for notification bell"""
     from flask import jsonify
-    
+
     today = date.today()
     alerts = []
-    
-    # Get brands based on user role
-    if current_user.is_owner:
+
+    # Determine the user's scope: owner sees all, brand-level sees brand, branch-level sees branch
+    is_owner = current_user.is_owner
+    user_brand_id = current_user.brand_id
+    user_branch_id = current_user.branch_id
+
+    if is_owner:
         brands = Brand.query.filter_by(is_active=True).all()
-    else:
+    elif user_brand_id:
         brands = [current_user.brand] if current_user.brand else []
-    
-    if not brands:
+    else:
+        brands = []
+
+    if not is_owner and not brands:
         return jsonify({'alerts': [], 'count': 0})
-    
-    # 1. Urgent expiring subscriptions (48 hours)
-    expiring_48h = Subscription.query.filter(
+
+    # 1. Urgent expiring subscriptions (48 hours) - scoped
+    sub_q = Subscription.query.filter(
         Subscription.status == 'active',
         Subscription.end_date > today,
         Subscription.end_date <= today + timedelta(days=2)
-    ).count()
+    )
+    if user_branch_id:
+        sub_q = sub_q.filter(Subscription.branch_id == user_branch_id)
+    elif not is_owner and user_brand_id:
+        sub_q = sub_q.filter(Subscription.brand_id == user_brand_id)
+    expiring_48h = sub_q.count()
     if expiring_48h > 0:
         alerts.append({
             'type': 'warning',
@@ -1091,10 +1102,15 @@ def api_alerts():
             'link': url_for('subscriptions.expiring')
         })
 
-    # 2. Open complaints
-    open_complaints = Complaint.query.filter(
+    # 2. Open complaints - scoped
+    comp_q = Complaint.query.filter(
         Complaint.status.in_(['pending', 'in_progress'])
-    ).count()
+    )
+    if user_branch_id:
+        comp_q = comp_q.filter(Complaint.branch_id == user_branch_id)
+    elif not is_owner and user_brand_id:
+        comp_q = comp_q.filter(Complaint.brand_id == user_brand_id)
+    open_complaints = comp_q.count()
     if open_complaints > 0:
         alerts.append({
             'type': 'danger',
@@ -1103,16 +1119,24 @@ def api_alerts():
             'link': url_for('complaints.index')
         })
 
-    # 3. Pending daily closings
+    # 3. Pending daily closings - scoped
     yesterday = today - timedelta(days=1)
     pending_closings = []
-    for brand in brands:
+    if user_branch_id:
         closing = DailyClosing.query.filter_by(
-            brand_id=brand.id,
+            branch_id=user_branch_id,
             closing_date=yesterday
         ).first()
         if not closing:
-            pending_closings.append(brand.name)
+            pending_closings.append(user_branch_id)
+    else:
+        for brand in brands:
+            closing = DailyClosing.query.filter_by(
+                brand_id=brand.id,
+                closing_date=yesterday
+            ).first()
+            if not closing:
+                pending_closings.append(brand.name)
     if pending_closings:
         alerts.append({
             'type': 'info',
@@ -1121,12 +1145,17 @@ def api_alerts():
             'link': url_for('daily_closing.index')
         })
 
-    # 4. Contract/Lease expirations (30 days)
-    expiring_leases = Branch.query.filter(
+    # 4. Contract/Lease expirations (30 days) - scoped
+    lease_q = Branch.query.filter(
         Branch.is_active == True,
         Branch.lease_expiry_date <= today + timedelta(days=30),
         Branch.lease_expiry_date >= today
-    ).all()
+    )
+    if user_branch_id:
+        lease_q = lease_q.filter(Branch.id == user_branch_id)
+    elif not is_owner and user_brand_id:
+        lease_q = lease_q.filter(Branch.brand_id == user_brand_id)
+    expiring_leases = lease_q.all()
     if expiring_leases:
         first_branch = expiring_leases[0]
         alerts.append({
@@ -1136,12 +1165,17 @@ def api_alerts():
             'link': url_for('admin.branches_list', brand_id=first_branch.brand_id)
         })
 
-    # 5. Commercial registration expirations (30 days)
-    expiring_registrations = Branch.query.filter(
+    # 5. Commercial registration expirations (30 days) - scoped
+    reg_q = Branch.query.filter(
         Branch.is_active == True,
         Branch.commercial_registration_expiry <= today + timedelta(days=30),
         Branch.commercial_registration_expiry >= today
-    ).all()
+    )
+    if user_branch_id:
+        reg_q = reg_q.filter(Branch.id == user_branch_id)
+    elif not is_owner and user_brand_id:
+        reg_q = reg_q.filter(Branch.brand_id == user_brand_id)
+    expiring_registrations = reg_q.all()
     if expiring_registrations:
         first_branch = expiring_registrations[0]
         alerts.append({
@@ -1151,8 +1185,13 @@ def api_alerts():
             'link': url_for('admin.branches_list', brand_id=first_branch.brand_id)
         })
 
-    # 6. Pending expense approvals
-    pending_expenses = Expense.query.filter_by(status='pending').count()
+    # 6. Pending expense approvals - scoped
+    exp_q = Expense.query.filter_by(status='pending')
+    if user_branch_id:
+        exp_q = exp_q.filter(Expense.branch_id == user_branch_id)
+    elif not is_owner and user_brand_id:
+        exp_q = exp_q.filter(Expense.brand_id == user_brand_id)
+    pending_expenses = exp_q.count()
     if pending_expenses > 0:
         alerts.append({
             'type': 'info',
@@ -1161,11 +1200,16 @@ def api_alerts():
             'link': url_for('finance.expenses')
         })
 
-    # 7. Late employees today
-    late_employees = EmployeeAttendance.query.filter(
+    # 7. Late employees today - scoped
+    late_q = EmployeeAttendance.query.filter(
         EmployeeAttendance.date == today,
         EmployeeAttendance.status == 'late'
-    ).count()
+    )
+    if user_branch_id:
+        late_q = late_q.filter(EmployeeAttendance.branch_id == user_branch_id)
+    elif not is_owner and user_brand_id:
+        late_q = late_q.filter(EmployeeAttendance.brand_id == user_brand_id)
+    late_employees = late_q.count()
     if late_employees > 0:
         alerts.append({
             'type': 'warning',
@@ -1174,11 +1218,16 @@ def api_alerts():
             'link': url_for('employees.attendance')
         })
 
-    # 8. Absent employees today
-    absent_employees = EmployeeAttendance.query.filter(
+    # 8. Absent employees today - scoped
+    absent_q = EmployeeAttendance.query.filter(
         EmployeeAttendance.date == today,
         EmployeeAttendance.status == 'absent'
-    ).count()
+    )
+    if user_branch_id:
+        absent_q = absent_q.filter(EmployeeAttendance.branch_id == user_branch_id)
+    elif not is_owner and user_brand_id:
+        absent_q = absent_q.filter(EmployeeAttendance.brand_id == user_brand_id)
+    absent_employees = absent_q.count()
     if absent_employees > 0:
         alerts.append({
             'type': 'danger',
