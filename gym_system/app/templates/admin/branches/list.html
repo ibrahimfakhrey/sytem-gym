@@ -73,14 +73,6 @@
                         </td>
                         <td>{{ branch.address or '-' }}</td>
                         <td>
-                                {% else %}
-                                <span class="text-success">{{ branch.commercial_registration_expiry.strftime('%Y-%m-%d') }}</span>
-                                {% endif %}
-                            {% else %}
-                            <span class="text-muted">-</span>
-                            {% endif %}
-                        </td>
-                        <td>
                             {% if branch.is_active %}
                             <span class="badge bg-success">مفعل</span>
                             {% else %}
