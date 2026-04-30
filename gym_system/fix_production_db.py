@@ -148,17 +148,46 @@ with app.app_context():
         else:
             print(f'  Role {name_en} already exists')
 
-    # 8. Stamp migration head
+    # 8. Add branch_code to branches
+    try:
+        db.session.execute(text('ALTER TABLE branches ADD COLUMN branch_code VARCHAR(20) UNIQUE'))
+        db.session.commit()
+        print(f'  Added branches.branch_code')
+    except Exception as e:
+        db.session.rollback()
+        print(f'  branches.branch_code: already exists or {e}')
+
+    # Generate branch codes for existing branches
+    try:
+        db.session.execute(text("UPDATE branches SET branch_code = 'BR-' || brand_id || '-' || id WHERE branch_code IS NULL"))
+        db.session.commit()
+        print(f'  Generated branch codes')
+    except Exception as e:
+        db.session.rollback()
+        print(f'  Branch codes: {e}')
+
+    # 9. Add branch_id to fingerprint models
+    fp_tables = ['bridge_status', 'bridge_settings', 'device_commands', 'fingerprint_sync_logs']
+    for table in fp_tables:
+        try:
+            db.session.execute(text(f'ALTER TABLE {table} ADD COLUMN branch_id INTEGER REFERENCES branches(id)'))
+            db.session.commit()
+            print(f'  Added {table}.branch_id')
+        except Exception as e:
+            db.session.rollback()
+            print(f'  {table}.branch_id: already exists or {e}')
+
+    # 10. Stamp migration head
     try:
         db.session.execute(text("DELETE FROM alembic_version"))
-        db.session.execute(text("INSERT INTO alembic_version (version_num) VALUES ('994ef56af55e')"))
+        db.session.execute(text("INSERT INTO alembic_version (version_num) VALUES ('8843c681fd29')"))
         db.session.commit()
-        print(f'  Stamped alembic to 994ef56af55e')
+        print(f'  Stamped alembic to 8843c681fd29')
     except Exception as e:
         db.session.rollback()
         print(f'  Alembic stamp: {e}')
 
-    # 9. Verify
+    # 11. Verify
     print('\n=== Verification ===')
     roles = Role.query.all()
     print(f'Total roles: {len(roles)}')
@@ -166,8 +195,9 @@ with app.app_context():
         print(f'  {r.name_en}: {r.name}')
 
     from app.models.company import Branch
-    b = Branch.query.first()
-    if b:
-        print(f'\nBranch fingerprint: uses_fingerprint={b.uses_fingerprint}, ip={b.fingerprint_ip}')
+    branches = Branch.query.all()
+    print(f'\nBranches: {len(branches)}')
+    for b in branches:
+        print(f'  {b.branch_code}: {b.name} (fp={b.uses_fingerprint})')
 
     print('\n=== Done ===')
