@@ -16,11 +16,12 @@
             <div class="card-body">
                 {% if form.errors %}
                 <div class="alert alert-danger">
-                    <strong>يوجد أخطاء في النموذج:</strong>
-                    <ul class="mb-0">
-                    {% for field, errors in form.errors.items() %}
+                    <strong><i class="bi bi-exclamation-triangle"></i> يوجد أخطاء في النموذج:</strong>
+                    <ul class="mb-0 mt-2">
+                    {% for field_name, errors in form.errors.items() %}
+                        {% set field = form[field_name] %}
                         {% for error in errors %}
-                        <li>{{ error }}</li>
+                        <li><strong>{{ field.label.text }}:</strong> {{ error }}</li>
                         {% endfor %}
                     {% endfor %}
                     </ul>
@@ -33,17 +34,26 @@
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label class="form-label">الاسم *</label>
-                            {{ form.name(class="form-control", placeholder="الاسم الكامل", required=true) }}
+                            {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else ""), placeholder="الاسم الكامل", required=true) }}
+                            {% for error in form.name.errors %}
+                            <div class="invalid-feedback">{{ error }}</div>
+                            {% endfor %}
                         </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label">رقم الهاتف</label>
-                            {{ form.phone(class="form-control", placeholder="05xxxxxxxx") }}
+                            {{ form.phone(class="form-control" + (" is-invalid" if form.phone.errors else ""), placeholder="05xxxxxxxx") }}
+                            {% for error in form.phone.errors %}
+                            <div class="invalid-feedback">{{ error }}</div>
+                            {% endfor %}
                         </div>
                     </div>
 
                     <div class="mb-3">
                         <label class="form-label">البريد الإلكتروني *</label>
-                        {{ form.email(class="form-control", placeholder="example@email.com", type="email", required=true) }}
+                        {{ form.email(class="form-control" + (" is-invalid" if form.email.errors else ""), placeholder="example@email.com", type="email", required=true) }}
+                        {% for error in form.email.errors %}
+                        <div class="invalid-feedback">{{ error }}</div>
+                        {% endfor %}
                     </div>
 
                     {% if not user %}
@@ -60,16 +70,28 @@
                         </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label">البراند</label>
-                            {{ form.brand_id(class="form-select", id="brand_id") }}
-                            <small class="text-muted">اختياري للمالك، إلزامي للأدوار الأخرى</small>
+                            {% if current_user.is_owner %}
+                                {{ form.brand_id(class="form-select", id="brand_id") }}
+                                <small class="text-muted">اختياري للمالك، إلزامي للأدوار الأخرى</small>
+                            {% else %}
+                                {{ form.brand_id(class="form-select", id="brand_id", disabled=true) }}
+                                <input type="hidden" name="brand_id" value="{{ current_user.brand_id }}">
+                                <small class="text-muted"><i class="bi bi-lock"></i> البراند ثابت على برانك</small>
+                            {% endif %}
                         </div>
                     </div>
 
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label class="form-label">الفرع</label>
-                            {{ form.branch_id(class="form-select", id="branch_id") }}
-                            <small class="text-muted">الفرع الذي يعمل فيه الموظف</small>
+                            {% if current_user.role and current_user.role.name_en == 'branch_manager' and current_user.branch_id %}
+                                {{ form.branch_id(class="form-select", id="branch_id", disabled=true) }}
+                                <input type="hidden" name="branch_id" value="{{ current_user.branch_id }}">
+                                <small class="text-muted"><i class="bi bi-lock"></i> الفرع ثابت على فرعك</small>
+                            {% else %}
+                                {{ form.branch_id(class="form-select", id="branch_id") }}
+                                <small class="text-muted">الفرع الذي يعمل فيه الموظف</small>
+                            {% endif %}
                         </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label">نوع الراتب</label>
@@ -167,47 +189,45 @@
 {% endblock %}
 
 {% block extra_js %}
+{% if current_user.is_owner %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const brandSelect = document.getElementById('brand_id');
     const branchSelect = document.getElementById('branch_id');
-    
-    if (brandSelect && branchSelect) {
-        // Store current branch value for edit mode
-        const currentBranchId = {{ user.branch_id if user and user.branch_id else 'null' }};
-        
-        function loadBranches(brandId, selectedBranchId) {
-            // Clear current options except first
-            branchSelect.innerHTML = '<option value="0">-- بدون فرع --</option>';
-            
-            if (!brandId || brandId == 0) return;
-            
-            fetch(`/admin/api/branches/${brandId}`)
-                .then(response => response.json())
-                .then(branches => {
-                    branches.forEach(branch => {
-                        const option = document.createElement('option');
-                        option.value = branch.id;
-                        option.textContent = branch.name;
-                        if (selectedBranchId && branch.id == selectedBranchId) {
-                            option.selected = true;
-                        }
-                        branchSelect.appendChild(option);
-                    });
-                })
-                .catch(error => console.error('Error loading branches:', error));
-        }
-        
-        // Load branches when brand changes
-        brandSelect.addEventListener('change', function() {
-            loadBranches(this.value, null);
-        });
-        
-        // Load branches on page load if brand is selected
-        if (brandSelect.value && brandSelect.value != 0) {
-            loadBranches(brandSelect.value, currentBranchId);
-        }
+
+    if (!brandSelect || !branchSelect) return;
+    if (brandSelect.disabled) return;
+
+    const currentBranchId = {{ user.branch_id if user and user.branch_id else 'null' }};
+
+    function loadBranches(brandId, selectedBranchId) {
+        branchSelect.innerHTML = '<option value="0">-- بدون فرع --</option>';
+        if (!brandId || brandId == 0) return;
+
+        fetch(`/admin/api/branches/${brandId}`)
+            .then(response => response.json())
+            .then(branches => {
+                branches.forEach(branch => {
+                    const option = document.createElement('option');
+                    option.value = branch.id;
+                    option.textContent = branch.name;
+                    if (selectedBranchId && branch.id == selectedBranchId) {
+                        option.selected = true;
+                    }
+                    branchSelect.appendChild(option);
+                });
+            })
+            .catch(error => console.error('Error loading branches:', error));
+    }
+
+    brandSelect.addEventListener('change', function() {
+        loadBranches(this.value, null);
+    });
+
+    if (brandSelect.value && brandSelect.value != 0) {
+        loadBranches(brandSelect.value, currentBranchId);
     }
 });
 </script>
+{% endif %}
 {% endblock %}

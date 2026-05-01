@@ -5,6 +5,12 @@
 {% block content %}
 <div class="page-header">
     <h1><i class="bi bi-card-checklist"></i> الاشتراكات</h1>
+    {% if current_user.can_manage_subscriptions %}
+    <a href="{{ url_for('subscriptions.new_select_member') }}" class="btn btn-primary">
+        <i class="bi bi-plus-lg"></i>
+        اشتراك جديد
+    </a>
+    {% endif %}
 </div>
 
 <!-- Filter -->

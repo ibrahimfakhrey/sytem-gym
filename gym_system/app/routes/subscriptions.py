@@ -184,6 +184,64 @@ def index():
                           status=status)
 
 
+@subscriptions_bp.route('/new')
+@login_required
+@members_required
+def new_select_member():
+    """Pick a member to create a new subscription for.
+
+    Shows members eligible for a NEW subscription (no active sub, expired,
+    or active sub expiring within `days_window` days). Searchable.
+    """
+    page, per_page = pagination_args(request)
+    search = request.args.get('search', '').strip()
+    days_window = request.args.get('days', 7, type=int)
+    today = date.today()
+    end_window = today + timedelta(days=days_window)
+
+    # Active subscriptions per member (correlated subquery)
+    active_sub_subq = db.session.query(Subscription.member_id).filter(
+        Subscription.status == 'active',
+        Subscription.end_date >= today,
+    ).subquery()
+
+    # Active subscriptions expiring soon
+    expiring_sub_subq = db.session.query(Subscription.member_id).filter(
+        Subscription.status == 'active',
+        Subscription.end_date >= today,
+        Subscription.end_date <= end_window,
+    ).subquery()
+
+    # Base query — apply user's brand/branch scope
+    query = apply_branch_filter(Member.query, Member).filter(Member.is_active == True)
+
+    # Eligible: no active sub OR active sub expiring soon
+    query = query.filter(
+        db.or_(
+            Member.id.notin_(db.session.query(active_sub_subq.c.member_id)),
+            Member.id.in_(db.session.query(expiring_sub_subq.c.member_id)),
+        )
+    )
+
+    # Search by name or phone
+    if search:
+        query = query.filter(
+            db.or_(
+                Member.name.ilike(f'%{search}%'),
+                Member.phone.ilike(f'%{search}%'),
+            )
+        )
+
+    members = query.order_by(Member.name).paginate(page=page, per_page=per_page, error_out=False)
+
+    return render_template(
+        'subscriptions/new_select_member.html',
+        members=members,
+        search=search,
+        days_window=days_window,
+    )
+
+
 @subscriptions_bp.route('/create', methods=['GET', 'POST'])
 @login_required
 @members_required
@@ -192,7 +250,7 @@ def create():
     member_id = request.args.get('member_id', type=int)
     if not member_id:
         flash('يرجى اختيار العضو أولاً', 'warning')
-        return redirect(url_for('members.index'))
+        return redirect(url_for('subscriptions.new_select_member'))
 
     member = Member.query.get_or_404(member_id)
 

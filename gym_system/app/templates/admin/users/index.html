@@ -94,6 +94,19 @@
                             <a href="{{ url_for('admin.users_edit', user_id=user.id) }}" class="btn btn-sm btn-outline-primary" title="تعديل">
                                 <i class="bi bi-pencil"></i>
                             </a>
+                            {% if user.id != current_user.id %}
+                            <button type="button" class="btn btn-sm btn-outline-warning" title="إعادة تعيين كلمة المرور"
+                                    data-bs-toggle="modal" data-bs-target="#resetPasswordModal"
+                                    data-user-id="{{ user.id }}" data-user-name="{{ user.name }}">
+                                <i class="bi bi-key"></i>
+                            </button>
+                            <form method="POST" action="{{ url_for('admin.users_delete', user_id=user.id) }}" class="d-inline" onsubmit="return confirm('هل أنت متأكد من حذف المستخدم {{ user.name }}؟ لا يمكن التراجع عن هذا الإجراء.');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="حذف">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                            {% endif %}
                             {% endif %}
                         </td>
                     </tr>
@@ -114,4 +127,78 @@
         {% endif %}
     </div>
 </div>
+
+<div class="modal fade" id="resetPasswordModal" tabindex="-1" aria-labelledby="resetPasswordModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <form method="POST" id="resetPasswordForm">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="resetPasswordModalLabel">
+                        <i class="bi bi-key"></i>
+                        إعادة تعيين كلمة المرور
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-3">
+                        المستخدم: <strong id="resetPasswordUserName"></strong>
+                    </p>
+                    <div class="mb-3">
+                        <label class="form-label">كلمة المرور الجديدة *</label>
+                        <input type="password" name="new_password" class="form-control" minlength="6" required placeholder="6 أحرف على الأقل">
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label">تأكيد كلمة المرور *</label>
+                        <input type="password" id="confirmPassword" class="form-control" minlength="6" required placeholder="أعد كتابة كلمة المرور">
+                        <div class="invalid-feedback" id="confirmPasswordError">كلمتا المرور غير متطابقتين</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-warning">
+                        <i class="bi bi-check-lg"></i>
+                        تأكيد إعادة التعيين
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const modal = document.getElementById('resetPasswordModal');
+    if (!modal) return;
+    const form = document.getElementById('resetPasswordForm');
+    const userNameEl = document.getElementById('resetPasswordUserName');
+    const newPasswordInput = form.querySelector('input[name="new_password"]');
+    const confirmInput = document.getElementById('confirmPassword');
+
+    modal.addEventListener('show.bs.modal', function(event) {
+        const button = event.relatedTarget;
+        const userId = button.getAttribute('data-user-id');
+        const userName = button.getAttribute('data-user-name');
+        userNameEl.textContent = userName;
+        form.action = `/admin/users/${userId}/reset-password`;
+        newPasswordInput.value = '';
+        confirmInput.value = '';
+        confirmInput.classList.remove('is-invalid');
+    });
+
+    form.addEventListener('submit', function(e) {
+        if (newPasswordInput.value !== confirmInput.value) {
+            e.preventDefault();
+            confirmInput.classList.add('is-invalid');
+        }
+    });
+
+    confirmInput.addEventListener('input', function() {
+        confirmInput.classList.remove('is-invalid');
+    });
+});
+</script>
 {% endblock %}

@@ -321,24 +321,54 @@ def users_create():
         roles = []
     form.role_id.choices = [(0, '-- اختر الدور --')] + [(r.id, r.name) for r in roles]
 
-    if current_user.is_owner:
+    # Brand choices and branch choices, locked based on current user's level
+    if current_user.is_owner:  # admin — sees all brands and all branches
         form.brand_id.choices = [(0, '-- بدون براند --')] + [(b.id, b.name) for b in Brand.query.filter_by(is_active=True).all()]
-    else:
+        all_branches = Branch.query.filter_by(is_active=True).all()
+        form.branch_id.choices = [(0, '-- بدون فرع --')] + [(b.id, b.name) for b in all_branches]
+    elif current_user.role.name_en == 'owner':  # brand owner — locked to own brand, all branches in brand
         form.brand_id.choices = [(current_user.brand_id, current_user.brand.name)]
-
-    form.branch_id.choices = [(0, '-- بدون فرع --')]
+        branches = Branch.query.filter_by(brand_id=current_user.brand_id, is_active=True).all()
+        form.branch_id.choices = [(0, '-- بدون فرع --')] + [(b.id, b.name) for b in branches]
+    else:  # branch manager — locked to own brand and own branch
+        form.brand_id.choices = [(current_user.brand_id, current_user.brand.name)]
+        if current_user.branch_id:
+            form.branch_id.choices = [(current_user.branch_id, current_user.branch.name)]
+        else:
+            form.branch_id.choices = [(0, '-- بدون فرع --')]
 
     # Pre-select brand from query parameter (when coming from dashboard)
     if request.method == 'GET':
         preselect_brand_id = request.args.get('brand_id', type=int)
         if preselect_brand_id and current_user.is_owner:
             form.brand_id.data = preselect_brand_id
+        # For non-admin, default to current user's brand
+        if not current_user.is_owner:
+            form.brand_id.data = current_user.brand_id
+            # Branch manager: also pre-select their branch
+            if current_user.role.name_en == 'branch_manager' and current_user.branch_id:
+                form.branch_id.data = current_user.branch_id
 
     if form.validate_on_submit():
         # Validate role
         if not form.role_id.data or form.role_id.data == 0:
             flash('يرجى اختيار الدور', 'danger')
             return render_template('admin/users/form.html', form=form)
+
+        # Force brand to current user's brand for non-admin (defense in depth)
+        if not current_user.is_owner:
+            form.brand_id.data = current_user.brand_id
+            # Branch manager: force their own branch
+            if current_user.role.name_en == 'branch_manager' and current_user.branch_id:
+                form.branch_id.data = current_user.branch_id
+
+        # Branch-level roles must have a branch assigned
+        selected_role = Role.query.get(form.role_id.data)
+        branch_required_roles = ['branch_manager', 'branch_finance', 'branch_receptionist']
+        if selected_role and selected_role.name_en in branch_required_roles:
+            if not form.branch_id.data or form.branch_id.data == 0:
+                flash(f'الدور "{selected_role.name}" يتطلب اختيار فرع', 'danger')
+                return render_template('admin/users/form.html', form=form)
 
         # Validate password
         if not form.password.data or len(form.password.data) < 6:
@@ -406,17 +436,21 @@ def users_edit(user_id):
         roles = []
     form.role_id.choices = [(0, '-- اختر الدور --')] + [(r.id, r.name) for r in roles]
 
-    if current_user.is_owner:
+    # Brand choices and branch choices, locked based on current user's level
+    if current_user.is_owner:  # admin — sees all brands and all branches
         form.brand_id.choices = [(0, '-- بدون براند --')] + [(b.id, b.name) for b in Brand.query.filter_by(is_active=True).all()]
-    else:
+        all_branches = Branch.query.filter_by(is_active=True).all()
+        form.branch_id.choices = [(0, '-- بدون فرع --')] + [(b.id, b.name) for b in all_branches]
+    elif current_user.role.name_en == 'owner':  # brand owner — locked to own brand
         form.brand_id.choices = [(current_user.brand_id, current_user.brand.name)]
-
-    form.branch_id.choices = [(0, '-- بدون فرع --')]
-
-    # Load branches for selected brand
-    if user.brand_id:
-        branches = Branch.query.filter_by(brand_id=user.brand_id, is_active=True).all()
-        form.branch_id.choices += [(b.id, b.name) for b in branches]
+        branches = Branch.query.filter_by(brand_id=current_user.brand_id, is_active=True).all()
+        form.branch_id.choices = [(0, '-- بدون فرع --')] + [(b.id, b.name) for b in branches]
+    else:  # branch manager — locked to own brand and own branch
+        form.brand_id.choices = [(current_user.brand_id, current_user.brand.name)]
+        if current_user.branch_id:
+            form.branch_id.choices = [(current_user.branch_id, current_user.branch.name)]
+        else:
+            form.branch_id.choices = [(0, '-- بدون فرع --')]
 
     # Make password optional for edit
     form.password.validators = []
@@ -426,6 +460,20 @@ def users_edit(user_id):
         if not form.role_id.data or form.role_id.data == 0:
             flash('يرجى اختيار الدور', 'danger')
             return render_template('admin/users/form.html', form=form, user=user, edit=True)
+
+        # Force brand to current user's brand for non-admin
+        if not current_user.is_owner:
+            form.brand_id.data = current_user.brand_id
+            if current_user.role.name_en == 'branch_manager' and current_user.branch_id:
+                form.branch_id.data = current_user.branch_id
+
+        # Branch-level roles must have a branch assigned
+        selected_role = Role.query.get(form.role_id.data)
+        branch_required_roles = ['branch_manager', 'branch_finance', 'branch_receptionist']
+        if selected_role and selected_role.name_en in branch_required_roles:
+            if not form.branch_id.data or form.branch_id.data == 0:
+                flash(f'الدور "{selected_role.name}" يتطلب اختيار فرع', 'danger')
+                return render_template('admin/users/form.html', form=form, user=user, edit=True)
 
         # Check email uniqueness (exclude current user)
         existing_user = User.query.filter_by(email=form.email.data.lower()).first()
@@ -455,6 +503,75 @@ def users_edit(user_id):
         return redirect(url_for('admin.users_list'))
 
     return render_template('admin/users/form.html', form=form, user=user, edit=True)
+
+
+@admin_bp.route('/users/<int:user_id>/reset-password', methods=['POST'])
+@login_required
+@branch_manager_required
+def users_reset_password(user_id):
+    """Reset a user's password — only for users below your role level"""
+    user = User.query.get_or_404(user_id)
+
+    # Prevent resetting your own password from this page (use profile instead)
+    if user.id == current_user.id:
+        flash('لا يمكنك إعادة تعيين كلمة مرورك من هنا، استخدم صفحة الملف الشخصي', 'danger')
+        return redirect(url_for('admin.users_list'))
+
+    # Permission check — same rules as edit/delete
+    if not current_user.is_owner:
+        if user.brand_id != current_user.brand_id:
+            flash('ليس لديك صلاحية لإعادة تعيين كلمة مرور هذا المستخدم', 'danger')
+            return redirect(url_for('admin.users_list'))
+        if user.role and current_user.role and user.role.role_level >= current_user.role.role_level:
+            flash('لا يمكنك إعادة تعيين كلمة مرور مستخدم بنفس مستواك أو أعلى', 'danger')
+            return redirect(url_for('admin.users_list'))
+
+    new_password = request.form.get('new_password', '').strip()
+    if not new_password or len(new_password) < 6:
+        flash('كلمة المرور يجب أن تكون 6 أحرف على الأقل', 'danger')
+        return redirect(url_for('admin.users_list'))
+
+    user.set_password(new_password)
+    db.session.commit()
+    flash(f'تم إعادة تعيين كلمة المرور للمستخدم {user.name} بنجاح', 'success')
+    return redirect(url_for('admin.users_list'))
+
+
+@admin_bp.route('/users/<int:user_id>/delete', methods=['POST'])
+@login_required
+@branch_manager_required
+def users_delete(user_id):
+    """Delete user"""
+    user = User.query.get_or_404(user_id)
+
+    # Prevent self-deletion
+    if user.id == current_user.id:
+        flash('لا يمكنك حذف حسابك الشخصي', 'danger')
+        return redirect(url_for('admin.users_list'))
+
+    # Permission check — mirror users_edit logic
+    if not current_user.is_owner:
+        if user.brand_id != current_user.brand_id:
+            flash('ليس لديك صلاحية لحذف هذا المستخدم', 'danger')
+            return redirect(url_for('admin.users_list'))
+        if user.role and current_user.role and user.role.role_level >= current_user.role.role_level:
+            flash('لا يمكنك حذف مستخدم بنفس مستواك أو أعلى', 'danger')
+            return redirect(url_for('admin.users_list'))
+
+    # Block delete if user has linked records — must deactivate instead
+    has_members = user.created_members.count() > 0
+    has_subscriptions = user.created_subscriptions.count() > 0
+    has_attendance = user.employee_attendance.count() > 0
+    has_salaries = user.salaries.count() > 0
+
+    if has_members or has_subscriptions or has_attendance or has_salaries:
+        flash('لا يمكن حذف هذا المستخدم لوجود سجلات مرتبطة به (أعضاء، اشتراكات، حضور، أو رواتب). قم بتعطيله بدلاً من حذفه.', 'warning')
+        return redirect(url_for('admin.users_edit', user_id=user.id))
+
+    db.session.delete(user)
+    db.session.commit()
+    flash('تم حذف المستخدم بنجاح', 'success')
+    return redirect(url_for('admin.users_list'))
 
 
 # ============== Plans ==============

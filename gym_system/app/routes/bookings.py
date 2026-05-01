@@ -18,9 +18,10 @@ bookings_bp = Blueprint('bookings', __name__)
 
 class ClassSessionForm(FlaskForm):
     """Class/Session form"""
-    name = StringField('اسم الحصة', validators=[DataRequired()])
-    service_type_id = SelectField('نوع الخدمة', coerce=int, validators=[DataRequired()])
+    name = StringField('اسم الحصة', validators=[DataRequired(message='اسم الحصة مطلوب')])
+    service_type_id = SelectField('نوع الخدمة', coerce=int, validators=[DataRequired(message='يرجى اختيار نوع الخدمة')])
     day_of_week = SelectField('اليوم', choices=[
+        (-1, '-- اختر اليوم --'),
         (0, 'السبت'),
         (1, 'الأحد'),
         (2, 'الإثنين'),
@@ -28,10 +29,13 @@ class ClassSessionForm(FlaskForm):
         (4, 'الأربعاء'),
         (5, 'الخميس'),
         (6, 'الجمعة')
-    ], coerce=int, validators=[DataRequired()])
-    start_time = TimeField('وقت البداية', validators=[DataRequired()])
-    end_time = TimeField('وقت النهاية', validators=[DataRequired()])
-    capacity = IntegerField('الطاقة الاستيعابية', validators=[DataRequired(), NumberRange(min=1, max=100)])
+    ], coerce=int, default=-1, validators=[NumberRange(min=0, max=6, message='يرجى اختيار اليوم')])
+    start_time = TimeField('وقت البداية', validators=[DataRequired(message='وقت البداية مطلوب')])
+    end_time = TimeField('وقت النهاية', validators=[DataRequired(message='وقت النهاية مطلوب')])
+    capacity = IntegerField('الطاقة الاستيعابية', validators=[
+        DataRequired(message='الطاقة الاستيعابية مطلوبة'),
+        NumberRange(min=1, max=100, message='الطاقة الاستيعابية يجب أن تكون بين 1 و 100')
+    ])
     trainer_id = SelectField('المدرب', coerce=int, validators=[Optional()])
 
 
