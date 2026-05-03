@@ -61,10 +61,10 @@
     {% for session in sessions.items %}
     <div class="col-md-6 col-lg-4 mb-4">
         <div class="card h-100">
-            <div class="card-header bg-primary text-white">
-                <strong>{{ session.name }}</strong>
+            <div class="card-header">
+                <strong class="text-danger">{{ session.name }}</strong>
                 {% if session.service_type %}
-                <span class="badge bg-light text-dark float-start">{{ session.service_type.name }}</span>
+                <span class="badge bg-secondary float-start">{{ session.service_type.name }}</span>
                 {% endif %}
             </div>
             <div class="card-body">

@@ -82,6 +82,7 @@
                 <span class="badge bg-danger">{{ deductions|length }}</span>
             </div>
             <div class="card-body">
+                {% set can_remove = current_user.is_owner or (current_user.role and current_user.role.name_en == 'owner') %}
                 {% if deductions %}
                 <ul class="list-group list-group-flush">
                     {% for ded in deductions[:10] %}
@@ -92,7 +93,17 @@
                             <br>
                             <small class="text-muted">{{ ded.deduction_date.strftime('%Y-%m-%d') }}</small>
                         </div>
-                        <span class="text-danger">-{{ ded.amount|int }} ر.س</span>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="text-danger">-{{ ded.amount|int }} ر.س</span>
+                            {% if can_remove %}
+                            <form method="POST" action="{{ url_for('employees.delete_deduction', deduction_id=ded.id) }}" onsubmit="return confirm('حذف هذا الخصم؟');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="حذف الخصم">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+                        </div>
                     </li>
                     {% endfor %}
                 </ul>
@@ -140,6 +151,7 @@
                                 <th>التأخير</th>
                                 <th>الحالة</th>
                                 <th>المصدر</th>
+                                {% if can_remove %}<th></th>{% endif %}
                             </tr>
                         </thead>
                         <tbody>
@@ -161,6 +173,16 @@
                                 <td>
                                     <small class="text-muted">{{ att.source_text }}</small>
                                 </td>
+                                {% if can_remove %}
+                                <td>
+                                    <form method="POST" action="{{ url_for('employees.delete_attendance', attendance_id=att.id) }}" onsubmit="return confirm('حذف هذا السجل؟ هيتشال أي خصومات مرتبطة به.');">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="حذف">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                                {% endif %}
                             </tr>
                             {% endfor %}
                         </tbody>

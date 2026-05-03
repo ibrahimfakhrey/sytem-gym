@@ -43,6 +43,43 @@ class EmployeeSettings(db.Model):
         return settings
 
 
+class EmployeeLateRule(db.Model):
+    """Tiered late-deduction rules per brand.
+
+    Each row represents: if late_minutes >= min_late_minutes, deduct deduction_amount.
+    The tier with the highest min_late_minutes that is <= actual late_minutes wins.
+    """
+    __tablename__ = 'employee_late_rules'
+
+    id = db.Column(db.Integer, primary_key=True)
+    brand_id = db.Column(db.Integer, db.ForeignKey('brands.id'), nullable=False, index=True)
+    min_late_minutes = db.Column(db.Integer, nullable=False)
+    deduction_amount = db.Column(db.Numeric(10, 2), nullable=False, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    brand = db.relationship('Brand', backref='late_rules')
+
+    def __repr__(self):
+        return f'<EmployeeLateRule brand={self.brand_id} >={self.min_late_minutes}min => {self.deduction_amount}>'
+
+    @classmethod
+    def get_deduction_for(cls, brand_id, late_minutes):
+        """Return the deduction amount for a given lateness in minutes.
+
+        Picks the tier with the highest min_late_minutes that is <= late_minutes.
+        Returns None if no tier matches (caller should decide whether to fall back).
+        """
+        if late_minutes is None or late_minutes <= 0:
+            return None
+        rule = cls.query.filter(
+            cls.brand_id == brand_id,
+            cls.min_late_minutes <= late_minutes,
+        ).order_by(cls.min_late_minutes.desc()).first()
+        if rule is None:
+            return None
+        return rule.deduction_amount
+
+
 class EmployeeShift(db.Model):
     """Per-employee shift schedule (overrides brand-level EmployeeSettings)"""
     __tablename__ = 'employee_shifts'

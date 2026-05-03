@@ -24,9 +24,6 @@ class BrandForm(FlaskForm):
     name = StringField('اسم البراند', validators=[DataRequired()])
     name_en = StringField('اسم البراند (إنجليزي)')
     description = StringField('الوصف')
-    uses_fingerprint = BooleanField('يستخدم نظام البصمة')
-    fingerprint_ip = StringField('IP جهاز البصمة')
-    fingerprint_port = IntegerField('Port', default=5005)
     is_active = BooleanField('مفعل', default=True)
 
 
@@ -106,9 +103,6 @@ def brands_create():
         brand = Brand(
             company_id=company.id,
             name=form.name.data,
-            uses_fingerprint=form.uses_fingerprint.data,
-            fingerprint_ip=form.fingerprint_ip.data if form.uses_fingerprint.data else None,
-            fingerprint_port=form.fingerprint_port.data if form.uses_fingerprint.data else 5005,
             is_active=form.is_active.data
         )
 
@@ -143,9 +137,6 @@ def brands_edit(brand_id):
 
     if form.validate_on_submit():
         brand.name = form.name.data
-        brand.uses_fingerprint = form.uses_fingerprint.data
-        brand.fingerprint_ip = form.fingerprint_ip.data if form.uses_fingerprint.data else None
-        brand.fingerprint_port = form.fingerprint_port.data if form.uses_fingerprint.data else 5005
         brand.is_active = form.is_active.data
 
         # Handle logo upload
@@ -254,6 +245,9 @@ def branches_edit(branch_id):
         branch.phone = form.phone.data
         branch.gym_capacity = form.gym_capacity.data
         branch.pool_capacity = form.pool_capacity.data
+        branch.uses_fingerprint = form.uses_fingerprint.data
+        branch.fingerprint_ip = form.fingerprint_ip.data if form.uses_fingerprint.data else None
+        branch.fingerprint_port = form.fingerprint_port.data if form.uses_fingerprint.data else 5005
         branch.lease_expiry_date = form.lease_expiry_date.data
         branch.commercial_registration_expiry = form.commercial_registration_expiry.data
         branch.is_active = form.is_active.data

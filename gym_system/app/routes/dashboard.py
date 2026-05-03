@@ -1,5 +1,6 @@
-from flask import Blueprint, render_template, request, redirect, url_for
+from flask import Blueprint, render_template, request, redirect, url_for, session
 from flask_login import login_required, current_user
+import hashlib
 from datetime import date, datetime, timedelta
 from sqlalchemy import func
 
@@ -657,9 +658,11 @@ def brand_manager():
         brand_id=brand.id
     ).order_by(Complaint.created_at.desc()).limit(5).all()
 
-    # Fingerprint sync status
+    # Fingerprint sync status — show if any branch in the brand uses fingerprint
     sync_status = None
-    if brand.uses_fingerprint:
+    from app.models.company import Branch
+    has_fp_branch = Branch.query.filter_by(brand_id=brand.id, uses_fingerprint=True).first() is not None
+    if has_fp_branch:
         sync_status = FingerprintSyncLog.get_sync_status(brand.id)
 
     return render_template('dashboard/brand_manager.html',
@@ -822,24 +825,24 @@ def receptionist():
             Subscription.status == 'stopped'
         ).order_by(Subscription.stopped_at.desc()).limit(5).all()
 
-    # Pending fingerprint enrollment - Filter by branch if assigned (include NULL)
+    # Pending fingerprint enrollment - per-branch only
     pending_enrollment = []
-    if brand.uses_fingerprint:
-        if current_user.branch_id:
+    if current_user.branch_id and current_user.branch and current_user.branch.uses_fingerprint:
+        pending_enrollment = Member.query.filter(
+            Member.brand_id == brand.id,
+            Member.branch_id == current_user.branch_id,
+            Member.is_active == True,
+            Member.fingerprint_enrolled == False
+        ).limit(10).all()
+    elif not current_user.branch_id:
+        # Brand-level user (e.g., owner) — show across all branches that use fingerprint
+        from app.models.company import Branch
+        fp_branch_ids = [b.id for b in Branch.query.filter_by(brand_id=brand.id, uses_fingerprint=True).all()]
+        if fp_branch_ids:
             pending_enrollment = Member.query.filter(
-                Member.brand_id == brand.id,
-                db.or_(
-                    Member.branch_id == current_user.branch_id,
-                    Member.branch_id.is_(None)
-                ),
+                Member.branch_id.in_(fp_branch_ids),
                 Member.is_active == True,
                 Member.fingerprint_enrolled == False
-            ).limit(10).all()
-        else:
-            pending_enrollment = Member.query.filter_by(
-                brand_id=brand.id,
-                is_active=True,
-                fingerprint_enrolled=False
             ).limit(10).all()
 
     # Pending complaints (own brand only)
@@ -1059,16 +1062,18 @@ def get_brand_stats(brand_id, start_date, end_date):
     }
 
 
-@dashboard_bp.route('/api/alerts')
-@login_required
-def api_alerts():
-    """API endpoint to get alerts for notification bell"""
-    from flask import jsonify
+def build_user_alerts():
+    """Build the list of alerts visible to the current user based on their scope.
 
+    Returns a list of dicts with keys: type, icon, title, link.
+    Scope rules:
+      - admin (is_owner=True): all brands
+      - branch-level user (has branch_id): only their branch
+      - brand-level user (has brand_id, no branch_id): their brand
+    """
     today = date.today()
     alerts = []
 
-    # Determine the user's scope: owner sees all, brand-level sees brand, branch-level sees branch
     is_owner = current_user.is_owner
     user_brand_id = current_user.brand_id
     user_branch_id = current_user.branch_id
@@ -1081,7 +1086,7 @@ def api_alerts():
         brands = []
 
     if not is_owner and not brands:
-        return jsonify({'alerts': [], 'count': 0})
+        return []
 
     # 1. Urgent expiring subscriptions (48 hours) - scoped
     sub_q = Subscription.query.filter(
@@ -1236,7 +1241,38 @@ def api_alerts():
             'link': url_for('employees.attendance')
         })
 
-    return jsonify({
-        'alerts': alerts,
-        'count': len(alerts)
-    })
+    return alerts
+
+
+def _alert_fingerprint(alert):
+    """Stable fingerprint for an alert so we can mark it as 'seen'."""
+    raw = f"{alert.get('type', '')}|{alert.get('icon', '')}|{alert.get('title', '')}"
+    return hashlib.md5(raw.encode('utf-8')).hexdigest()
+
+
+@dashboard_bp.route('/api/alerts')
+@login_required
+def api_alerts():
+    """API endpoint for notification bell.
+
+    Returns the full alerts list, plus a `count` of UNSEEN alerts only.
+    The badge uses `count`, so it clears once the user has viewed /notifications.
+    """
+    from flask import jsonify
+    alerts = build_user_alerts()
+    seen = set(session.get('seen_alert_fingerprints', []))
+    unseen_count = sum(1 for a in alerts if _alert_fingerprint(a) not in seen)
+    return jsonify({'alerts': alerts, 'count': unseen_count})
+
+
+@dashboard_bp.route('/notifications')
+@login_required
+def notifications():
+    """Full-page list of all alerts/notifications scoped to current user.
+
+    Visiting this page marks every currently-visible alert as 'seen' for this
+    session — so the bell badge clears.
+    """
+    alerts = build_user_alerts()
+    session['seen_alert_fingerprints'] = [_alert_fingerprint(a) for a in alerts]
+    return render_template('notifications.html', alerts=alerts)

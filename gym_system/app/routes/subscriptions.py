@@ -484,7 +484,7 @@ def create():
         db.session.commit()
 
         # Send command to fingerprint device to unblock member
-        if member.fingerprint_id and member.brand.uses_fingerprint:
+        if member.fingerprint_id and member.branch and member.branch.uses_fingerprint:
             unblock_cmd = DeviceCommand(
                 brand_id=member.brand_id,
                 command_type='unblock_member',
@@ -656,7 +656,7 @@ def renew(subscription_id):
 
         # Send command to fingerprint device to unblock member with new end date
         member = subscription.member
-        if member.fingerprint_id and member.brand.uses_fingerprint:
+        if member.fingerprint_id and member.branch and member.branch.uses_fingerprint:
             unblock_cmd = DeviceCommand(
                 brand_id=subscription.brand_id,
                 command_type='unblock_member',
@@ -721,7 +721,7 @@ def freeze(subscription_id):
 
         # Send command to fingerprint device to block member during freeze
         member = subscription.member
-        if member.fingerprint_id and member.brand.uses_fingerprint:
+        if member.fingerprint_id and member.branch and member.branch.uses_fingerprint:
             block_cmd = DeviceCommand(
                 brand_id=subscription.brand_id,
                 command_type='block_member',
@@ -759,7 +759,7 @@ def unfreeze(subscription_id):
 
     # Send command to fingerprint device to unblock member after unfreeze
     member = subscription.member
-    if member.fingerprint_id and member.brand.uses_fingerprint:
+    if member.fingerprint_id and member.branch and member.branch.uses_fingerprint:
         unblock_cmd = DeviceCommand(
             brand_id=subscription.brand_id,
             command_type='unblock_member',

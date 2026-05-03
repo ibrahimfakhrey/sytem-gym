@@ -46,6 +46,36 @@
                     </div>
 
                     <hr class="my-4">
+                    <h5 class="mb-3"><i class="bi bi-fingerprint"></i> إعدادات البصمة (لهذا الفرع)</h5>
+
+                    <div class="mb-3">
+                        <div class="form-check">
+                            {{ form.uses_fingerprint(class="form-check-input", id="uses_fingerprint") }}
+                            <label class="form-check-label" for="uses_fingerprint">
+                                تفعيل نظام البصمة لهذا الفرع
+                            </label>
+                        </div>
+                        <small class="text-muted">البصمة تعمل بشكل مستقل لكل فرع — كل فرع له جهاز IP وإعدادات خاصة به</small>
+                    </div>
+
+                    <div id="fingerprint-settings" style="display: none;">
+                        <div class="row">
+                            <div class="col-md-8 mb-3">
+                                <label class="form-label">عنوان IP لجهاز البصمة</label>
+                                {{ form.fingerprint_ip(class="form-control", placeholder="192.168.1.224") }}
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">المنفذ</label>
+                                {{ form.fingerprint_port(class="form-control", placeholder="5005") }}
+                            </div>
+                        </div>
+                        <div class="alert alert-info mb-0">
+                            <i class="bi bi-info-circle"></i>
+                            تأكد من أن جهاز البصمة موصول بشبكة هذا الفرع تحديداً.
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
                     <h5 class="mb-3"><i class="bi bi-file-earmark-text"></i> المستندات القانونية (اختياري)</h5>
 
                     <div class="row">
@@ -83,4 +113,17 @@
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const checkbox = document.getElementById('uses_fingerprint');
+    const settings = document.getElementById('fingerprint-settings');
+    if (!checkbox || !settings) return;
+    function toggle() {
+        settings.style.display = checkbox.checked ? 'block' : 'none';
+    }
+    checkbox.addEventListener('change', toggle);
+    toggle();
+});
+</script>
 {% endblock %}

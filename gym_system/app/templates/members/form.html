@@ -114,7 +114,8 @@
                         {{ form.notes(class="form-control", rows="2", placeholder="أي ملاحظات...") }}
                     </div>
 
-                    {% if brand and brand.uses_fingerprint %}
+                    {% set show_fp = (member and member.branch and member.branch.uses_fingerprint) or (not member and brand and brand.branches.filter_by(uses_fingerprint=True).first()) %}
+                    {% if show_fp %}
                     <hr class="my-4">
                     <h5 class="mb-3"><i class="bi bi-fingerprint"></i> البصمة</h5>
 
@@ -165,8 +166,8 @@
                 <ul class="text-muted small">
                     <li>إنشاء اشتراك جديد له</li>
                     <li>تسجيل حضوره يدوياً</li>
-                    {% if brand and brand.uses_fingerprint %}
-                    <li>تسجيل بصمته في برنامج AAS</li>
+                    {% if brand and brand.branches.filter_by(uses_fingerprint=True).first() %}
+                    <li>تسجيل بصمته في برنامج AAS (للفروع التي تستخدم البصمة)</li>
                     {% endif %}
                 </ul>
             </div>

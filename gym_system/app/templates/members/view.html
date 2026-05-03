@@ -103,7 +103,7 @@
                     </tr>
                 </table>
 
-                {% if member.brand.uses_fingerprint %}
+                {% if member.branch and member.branch.uses_fingerprint %}
                 <hr>
                 <h6><i class="bi bi-fingerprint"></i> البصمة</h6>
                 {% if member.fingerprint_id %}

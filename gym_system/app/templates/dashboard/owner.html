@@ -232,8 +232,8 @@
                                     <a href="{{ url_for('admin.branches_list', brand_id=item.brand.id) }}" class="text-decoration-none">
                                         <strong>{{ item.brand.name }}</strong>
                                     </a>
-                                    {% if item.brand.uses_fingerprint %}
-                                    <span class="badge bg-info">بصمة</span>
+                                    {% if item.brand.branches.filter_by(uses_fingerprint=True).first() %}
+                                    <span class="badge bg-info" title="فرع واحد على الأقل يستخدم البصمة">بصمة</span>
                                     {% endif %}
                                 </td>
                                 <td>{{ item.stats.members }}</td>

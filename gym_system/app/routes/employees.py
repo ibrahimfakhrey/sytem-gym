@@ -10,7 +10,7 @@ from sqlalchemy import func
 from app import db
 from app.models import Brand, User, Role
 from app.models.attendance import EmployeeAttendance
-from app.models.employee import EmployeeSettings, EmployeeShift, EmployeeReward, EmployeeDeduction
+from app.models.employee import EmployeeSettings, EmployeeShift, EmployeeReward, EmployeeDeduction, EmployeeLateRule
 from app.models.finance import Salary
 
 employees_bp = Blueprint('employees', __name__, url_prefix='/employees')
@@ -111,15 +111,54 @@ def settings():
 
     if form.validate_on_submit():
         form.populate_obj(employee_settings)
+
+        # Only brand owner / admin can edit tiered rules — branch_manager keeps them intact
+        can_edit_rules = current_user.is_owner or (current_user.role and current_user.role.name_en == 'owner')
+
+        if can_edit_rules:
+            # Replace tiered late rules from the submitted form
+            # Inputs are sent as parallel arrays: rule_min_minutes[], rule_amount[]
+            mins = request.form.getlist('rule_min_minutes')
+            amounts = request.form.getlist('rule_amount')
+
+            # Wipe existing rules for this brand and re-insert valid ones
+            EmployeeLateRule.query.filter_by(brand_id=brand_id).delete()
+            seen_minutes = set()
+            for raw_min, raw_amt in zip(mins, amounts):
+                raw_min = (raw_min or '').strip()
+                raw_amt = (raw_amt or '').strip()
+                if not raw_min or not raw_amt:
+                    continue
+                try:
+                    m = int(raw_min)
+                    a = float(raw_amt)
+                except ValueError:
+                    continue
+                if m < 0 or a < 0:
+                    continue
+                if m in seen_minutes:
+                    continue  # skip duplicate threshold
+                seen_minutes.add(m)
+                db.session.add(EmployeeLateRule(
+                    brand_id=brand_id,
+                    min_late_minutes=m,
+                    deduction_amount=a,
+                ))
+
         db.session.commit()
         flash('تم حفظ الإعدادات بنجاح', 'success')
         return redirect(url_for('employees.settings', brand_id=brand_id))
+
+    late_rules = EmployeeLateRule.query.filter_by(
+        brand_id=brand_id
+    ).order_by(EmployeeLateRule.min_late_minutes.asc()).all()
 
     return render_template('employees/settings.html',
                           form=form,
                           brand=brand,
                           brands=brands,
-                          settings=employee_settings)
+                          settings=employee_settings,
+                          late_rules=late_rules)
 
 
 # ============== REPORT ROUTES ==============
@@ -376,6 +415,55 @@ def give_deduction(user_id):
                           employee=employee)
 
 
+def _can_remove_deductions():
+    """Only admin and brand owner can remove deductions or wrong attendance records."""
+    return current_user.is_owner or (
+        current_user.role and current_user.role.name_en == 'owner'
+    )
+
+
+@employees_bp.route('/deductions/<int:deduction_id>/delete', methods=['POST'])
+@login_required
+def delete_deduction(deduction_id):
+    """Delete a deduction (admin / brand owner only)."""
+    if not _can_remove_deductions():
+        flash('يقدر يحذف الخصم مالك البراند فقط', 'danger')
+        return redirect(url_for('dashboard.index'))
+
+    deduction = EmployeeDeduction.query.get_or_404(deduction_id)
+    if not current_user.is_owner and current_user.brand_id != deduction.brand_id:
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('dashboard.index'))
+
+    user_id = deduction.user_id
+    db.session.delete(deduction)
+    db.session.commit()
+    flash('تم حذف الخصم', 'success')
+    return redirect(url_for('employees.details', user_id=user_id))
+
+
+@employees_bp.route('/attendance/<int:attendance_id>/delete', methods=['POST'])
+@login_required
+def delete_attendance(attendance_id):
+    """Delete an attendance record + its auto-deductions (admin / brand owner only)."""
+    if not _can_remove_deductions():
+        flash('يقدر يحذف سجل الحضور مالك البراند فقط', 'danger')
+        return redirect(url_for('dashboard.index'))
+
+    att = EmployeeAttendance.query.get_or_404(attendance_id)
+    if not current_user.is_owner and current_user.brand_id != att.brand_id:
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('dashboard.index'))
+
+    user_id = att.user_id
+    # Cascade: remove auto-deductions linked to this attendance record
+    EmployeeDeduction.query.filter_by(attendance_id=att.id).delete()
+    db.session.delete(att)
+    db.session.commit()
+    flash('تم حذف سجل الحضور والخصومات المرتبطة به', 'success')
+    return redirect(url_for('employees.details', user_id=user_id))
+
+
 # ============== ATTENDANCE ROUTES ==============
 
 @employees_bp.route('/attendance', methods=['GET', 'POST'])
@@ -450,19 +538,22 @@ def attendance():
             )
             db.session.add(attendance)
 
-            # Auto deduction for lateness
-            if status == 'late' and settings.auto_deduction_enabled and (settings.auto_deduction_amount or 0) > 0:
-                deduction = EmployeeDeduction(
-                    user_id=form.user_id.data,
-                    brand_id=brand_id,
-                    title='خصم تأخير',
-                    amount=settings.auto_deduction_amount,
-                    reason=f'تأخير {late_minutes} دقيقة',
-                    deduction_type='late',
-                    deduction_date=form.date.data,
-                    created_by=current_user.id
-                )
-                db.session.add(deduction)
+            # Auto deduction for lateness — tiered first, fallback to flat amount
+            if status == 'late' and settings.auto_deduction_enabled:
+                tier_amount = EmployeeLateRule.get_deduction_for(brand_id, late_minutes)
+                deduction_amount = tier_amount if tier_amount is not None else (settings.auto_deduction_amount or 0)
+                if deduction_amount and float(deduction_amount) > 0:
+                    deduction = EmployeeDeduction(
+                        user_id=form.user_id.data,
+                        brand_id=brand_id,
+                        title='خصم تأخير',
+                        amount=deduction_amount,
+                        reason=f'تأخير {late_minutes} دقيقة',
+                        deduction_type='late',
+                        deduction_date=form.date.data,
+                        created_by=current_user.id
+                    )
+                    db.session.add(deduction)
 
             db.session.commit()
             flash('تم تسجيل الحضور بنجاح', 'success')

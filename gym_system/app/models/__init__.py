@@ -18,5 +18,5 @@ from .classes import GymClass, ClassBooking
 from .giftcard import GiftCard
 from .daily_closing import DailyClosing
 from .offer import PromotionalOffer
-from .employee import EmployeeSettings, EmployeeShift, EmployeeReward, EmployeeDeduction
+from .employee import EmployeeSettings, EmployeeShift, EmployeeReward, EmployeeDeduction, EmployeeLateRule
 from .blocked_member import BlockedMember

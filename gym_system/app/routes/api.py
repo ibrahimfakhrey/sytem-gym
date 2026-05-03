@@ -10,7 +10,7 @@ from app.models.user import User, Role
 from app.models.subscription import Subscription, Plan
 from app.models.attendance import MemberAttendance, EmployeeAttendance
 from app.models.fingerprint import FingerprintSyncLog, BridgeStatus, DeviceCommand, BridgeSettings
-from app.models.employee import EmployeeSettings, EmployeeShift, EmployeeDeduction
+from app.models.employee import EmployeeSettings, EmployeeShift, EmployeeDeduction, EmployeeLateRule
 from app.models.service import ServiceType
 from app.models.health import HealthReport
 from app.models.complaint import Complaint, ComplaintCategory
@@ -76,10 +76,14 @@ def sync_attendance():
     if not brand_id:
         return jsonify({'error': 'brand_id is required'}), 400
 
-    # Verify brand exists and uses fingerprint
+    # Verify brand exists and at least one branch in it uses fingerprint
     brand = Brand.query.get(brand_id)
-    if not brand or not brand.uses_fingerprint:
-        return jsonify({'error': 'Invalid brand or fingerprint not enabled'}), 400
+    if not brand:
+        return jsonify({'error': 'Invalid brand'}), 400
+    from app.models.company import Branch
+    has_fp_branch = Branch.query.filter_by(brand_id=brand.id, uses_fingerprint=True).first() is not None
+    if not has_fp_branch:
+        return jsonify({'error': 'Fingerprint not enabled for any branch in this brand'}), 400
 
     synced = 0
     staff_synced = 0
@@ -181,14 +185,16 @@ def sync_attendance():
                 )
                 db.session.add(attendance)
 
-                # Auto-create deduction if late and auto_deduction enabled
+                # Auto-create deduction if late — tiered first, fallback to flat amount
                 if status == 'late' and brand_settings and brand_settings.auto_deduction_enabled:
-                    if brand_settings.auto_deduction_amount and float(brand_settings.auto_deduction_amount) > 0:
+                    tier_amount = EmployeeLateRule.get_deduction_for(brand_id, late_minutes)
+                    deduction_amount = tier_amount if tier_amount is not None else (brand_settings.auto_deduction_amount or 0)
+                    if deduction_amount and float(deduction_amount) > 0:
                         deduction = EmployeeDeduction(
                             user_id=staff_user.id,
                             brand_id=brand_id,
                             title='خصم تأخير',
-                            amount=brand_settings.auto_deduction_amount,
+                            amount=deduction_amount,
                             reason=f'تأخير {late_minutes} دقيقة - بصمة',
                             deduction_type='late',
                             deduction_date=attendance_date

@@ -29,9 +29,6 @@ class BrandForm(FlaskForm):
     name = StringField('اسم البراند (عربي)', validators=[DataRequired(), Length(max=100)])
     name_en = StringField('اسم البراند (إنجليزي)', validators=[Optional(), Length(max=100)])
     description = TextAreaField('الوصف', validators=[Optional()])
-    uses_fingerprint = BooleanField('تفعيل نظام البصمة')
-    fingerprint_ip = StringField('عنوان IP للبصمة', validators=[Optional()])
-    fingerprint_port = IntegerField('منفذ البصمة', validators=[Optional()], default=5005)
     is_active = BooleanField('نشط', default=True)
 
 

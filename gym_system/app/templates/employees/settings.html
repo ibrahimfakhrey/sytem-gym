@@ -65,19 +65,72 @@
                         </div>
                     </div>
 
-                    <div class="row mb-4">
+                    <div class="row mb-3">
                         <div class="col-md-6 mb-3">
                             <div class="form-check form-switch">
                                 {{ form.auto_deduction_enabled(class="form-check-input") }}
                                 <label class="form-check-label">تفعيل الخصم التلقائي للتأخير</label>
                             </div>
+                            <small class="text-muted">المفتاح الرئيسي لتفعيل/تعطيل الخصم</small>
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">مبلغ خصم التأخير (لليوم)</label>
+                            <label class="form-label">مبلغ افتراضي (لليوم)</label>
                             {{ form.auto_deduction_amount(class="form-control", type="number", step="0.01", min="0") }}
-                            <small class="text-muted">يتم خصمه تلقائياً عند تسجيل تأخير</small>
+                            <small class="text-muted">يستخدم فقط لو لم يُحدَّد قواعد متدرجة بالأسفل</small>
                         </div>
                     </div>
+
+                    {% set can_edit_rules = current_user.is_owner or (current_user.role and current_user.role.name_en == 'owner') %}
+                    {% if can_edit_rules %}
+                    <div class="card border-warning mb-4">
+                        <div class="card-header bg-warning bg-opacity-10">
+                            <strong><i class="bi bi-list-ol"></i> قواعد الخصم المتدرجة</strong>
+                            <small class="text-muted d-block mt-1">حدد قيم الخصم حسب مدة التأخير. يُطبَّق على كل تأخير القاعدة الأعلى التي لا تتعدى مدته. <strong>(تطبق على كل البراند)</strong></small>
+                        </div>
+                        <div class="card-body">
+                            <div id="lateRulesBody">
+                                {% for rule in late_rules %}
+                                <div class="row g-2 align-items-end mb-2 late-rule-row">
+                                    <div class="col-md-5">
+                                        <label class="form-label small mb-1">من (دقيقة) <span class="text-danger">*</span></label>
+                                        <input type="number" name="rule_min_minutes" class="form-control" min="0" max="600" value="{{ rule.min_late_minutes }}" required>
+                                    </div>
+                                    <div class="col-md-5">
+                                        <label class="form-label small mb-1">الخصم (لليوم) <span class="text-danger">*</span></label>
+                                        <input type="number" name="rule_amount" class="form-control" min="0" step="0.01" value="{{ rule.deduction_amount }}" required>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <button type="button" class="btn btn-outline-danger w-100 remove-rule" title="حذف">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            <button type="button" id="addRuleBtn" class="btn btn-sm btn-outline-primary mt-2">
+                                <i class="bi bi-plus-lg"></i> إضافة قاعدة
+                            </button>
+                            <div class="alert alert-info mt-3 mb-0 small">
+                                <i class="bi bi-info-circle"></i>
+                                <strong>مثال:</strong> 15 دقيقة → 50 جنيه، 30 دقيقة → 100 جنيه، 60 دقيقة → 200 جنيه. لو موظف اتأخر 45 دقيقة، يُطبَّق خصم 100 (لأن 30 هي أعلى عتبة لا تتعدى 45).
+                            </div>
+                        </div>
+                    </div>
+                    {% elif late_rules %}
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <strong><i class="bi bi-list-ol"></i> قواعد الخصم المتدرجة</strong>
+                            <small class="text-muted d-block">للعرض فقط — يقدر يعدّلها مالك البراند فقط</small>
+                        </div>
+                        <div class="card-body">
+                            <ul class="list-unstyled mb-0">
+                                {% for rule in late_rules %}
+                                <li class="mb-1"><i class="bi bi-arrow-left-circle text-warning"></i> تأخير ≥ <strong>{{ rule.min_late_minutes }}</strong> دقيقة → خصم <strong>{{ rule.deduction_amount|int }}</strong></li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+                    {% endif %}
 
                     <hr>
 
@@ -158,4 +211,42 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const container = document.getElementById('lateRulesBody');
+    const addBtn = document.getElementById('addRuleBtn');
+    if (!container || !addBtn) return;
+
+    function addRow(min, amt) {
+        const row = document.createElement('div');
+        row.className = 'row g-2 align-items-end mb-2 late-rule-row';
+        row.innerHTML = `
+            <div class="col-md-5">
+                <label class="form-label small mb-1">من (دقيقة) <span class="text-danger">*</span></label>
+                <input type="number" name="rule_min_minutes" class="form-control" min="0" max="600" value="${min || ''}" required>
+            </div>
+            <div class="col-md-5">
+                <label class="form-label small mb-1">الخصم (لليوم) <span class="text-danger">*</span></label>
+                <input type="number" name="rule_amount" class="form-control" min="0" step="0.01" value="${amt || ''}" required>
+            </div>
+            <div class="col-md-2">
+                <button type="button" class="btn btn-outline-danger w-100 remove-rule" title="حذف">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+        `;
+        container.appendChild(row);
+    }
+
+    addBtn.addEventListener('click', () => addRow('', ''));
+
+    container.addEventListener('click', function(e) {
+        const btn = e.target.closest('.remove-rule');
+        if (btn) btn.closest('.late-rule-row').remove();
+    });
+});
+</script>
 {% endblock %}

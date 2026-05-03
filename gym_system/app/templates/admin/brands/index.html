@@ -20,7 +20,6 @@
                     <tr>
                         <th>#</th>
                         <th>الاسم</th>
-                        <th>البصمة</th>
                         <th>الفروع</th>
                         <th>الأعضاء</th>
                         <th>الحالة</th>
@@ -33,16 +32,6 @@
                         <td>{{ brand.id }}</td>
                         <td>
                             <strong>{{ brand.name }}</strong>
-                        </td>
-                        <td>
-                            {% if brand.uses_fingerprint %}
-                            <span class="badge bg-info">
-                                <i class="bi bi-fingerprint"></i> مفعل
-                            </span>
-                            <br><small class="text-muted">{{ brand.fingerprint_ip }}:{{ brand.fingerprint_port }}</small>
-                            {% else %}
-                            <span class="badge bg-secondary">غير مفعل</span>
-                            {% endif %}
                         </td>
                         <td>{{ brand.branches.count() }}</td>
                         <td>{{ brand.members.count() }}</td>
