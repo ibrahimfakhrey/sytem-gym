@@ -158,8 +158,9 @@ class APIClient:
             params = {'brand_id': self.brand_id}
             if schedule_date:
                 params['date'] = schedule_date if isinstance(schedule_date, str) else schedule_date.isoformat()
-            response = self.session.get(
+            response = requests.get(
                 f"{self.base_url}/api/bridge/class-schedule",
+                headers=self._get_headers(),
                 params=params, timeout=self.timeout
             )
             if response.status_code == 200:
@@ -173,8 +174,9 @@ class APIClient:
     def get_bridge_settings(self) -> Dict:
         """Get bridge settings from cloud"""
         try:
-            response = self.session.get(
+            response = requests.get(
                 f"{self.base_url}/api/bridge/settings",
+                headers=self._get_headers(),
                 params={'brand_id': self.brand_id}, timeout=self.timeout
             )
             if response.status_code == 200:

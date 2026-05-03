@@ -67,7 +67,7 @@ class SetupPage(ctk.CTkFrame):
         self.register_btn = ctk.CTkButton(
             input_frame, text="تسجيل الجهاز",
             font=("Arial", 16, "bold"), height=45, width=200,
-            command=self._register, fg_color="#4caf50", hover_color="#388e3c"
+            command=self._handle_register, fg_color="#4caf50", hover_color="#388e3c"
         )
         self.register_btn.pack(pady=(5, 20))
 
@@ -77,7 +77,7 @@ class SetupPage(ctk.CTkFrame):
         )
         self.status_label.pack(pady=10)
 
-    def _register(self):
+    def _handle_register(self):
         code = self.code_entry.get().strip().upper()
         api_url = self.api_url_entry.get().strip()
         api_key = self.api_key_entry.get().strip()

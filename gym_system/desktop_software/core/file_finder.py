@@ -99,7 +99,7 @@ class FileFinder:
                         # Skip system directories
                         skip_dirs = ['windows', '$recycle.bin', 'system volume information',
                                     'programdata', 'appdata', 'node_modules', '.git',
-                                    'winsxs', 'assembly', 'microsoft.net']
+                                    'winsxs', 'assembly', 'microsoft.net', 'backupdata']
                         if item.lower() not in skip_dirs:
                             self._search_directory(item_path, max_depth, current_depth + 1)
 
@@ -120,8 +120,15 @@ class FileFinder:
             size = stat.st_size
             modified = datetime.fromtimestamp(stat.st_mtime)
 
-            # Determine if it's backup or active
-            is_backup = 'backup' in path.lower() or 'bak' in path.lower()
+            # Determine if it's backup or active (also catches daily backups like 1tmkqbak.mdb..31tmkqbak.mdb)
+            path_lower = path.lower()
+            filename_lower = os.path.basename(path).lower()
+            is_backup = (
+                'backup' in path_lower
+                or 'backupdata' in path_lower
+                or 'bak.mdb' in filename_lower
+                or filename_lower.endswith('bak.mdb')
+            )
 
             db_info = {
                 'path': path,

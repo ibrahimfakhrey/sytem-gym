@@ -245,8 +245,7 @@ class AppController:
     def _check_api_status(self):
         """Check API connection status"""
         try:
-            result = self.api_client.test_connection()
-            connected = result.get('success', False)
+            connected, _msg = self.api_client.test_connection()
             self.window.after(0, lambda: self.window.update_api_status(
                 connected, self.config.get('api_url')
             ))

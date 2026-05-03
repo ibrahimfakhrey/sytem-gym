@@ -66,7 +66,6 @@ def load_config():
         # Branch registration
         'branch_code': '',
         'branch_id': None,
-        'brand_id': None,
         'branch_name': '',
         'brand_name': '',
         'is_registered': False
