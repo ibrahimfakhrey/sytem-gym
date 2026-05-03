@@ -55,14 +55,14 @@ class BookingForm(FlaskForm):
 def sessions_list():
     """List all class sessions"""
     page, per_page = pagination_args(request)
-    session_type = request.args.get('type', '')
+    service_type_id = request.args.get('type', type=int)
 
     # Base query - filter by brand/branch access
     query = apply_branch_filter(ClassSession.query, ClassSession)
 
-    # Type filter
-    if session_type:
-        query = query.filter_by(session_type=session_type)
+    # Service-type filter (filter by actual ServiceType FK)
+    if service_type_id:
+        query = query.filter(ClassSession.service_type_id == service_type_id)
 
     # Active only
     query = query.filter_by(is_active=True)
@@ -73,15 +73,23 @@ def sessions_list():
         ClassSession.start_time
     ).paginate(page=page, per_page=per_page, error_out=False)
 
-    # Get brands for filter (owner only)
+    # Get brands and service types for filters
     brands = None
     if current_user.can_view_all_brands:
         brands = Brand.query.filter_by(is_active=True).all()
+        service_types = ServiceType.query.filter_by(is_active=True).all()
+    elif current_user.brand_id:
+        service_types = ServiceType.query.filter_by(
+            brand_id=current_user.brand_id, is_active=True
+        ).all()
+    else:
+        service_types = []
 
     return render_template('bookings/sessions_list.html',
                           sessions=sessions,
                           brands=brands,
-                          session_type=session_type)
+                          service_types=service_types,
+                          selected_service_type_id=service_type_id)
 
 
 @bookings_bp.route('/sessions/create', methods=['GET', 'POST'])

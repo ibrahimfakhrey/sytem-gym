@@ -37,11 +37,9 @@
                 <label class="form-label">النوع</label>
                 <select name="type" class="form-select">
                     <option value="">الكل</option>
-                    <option value="gym_class" {% if session_type == 'gym_class' %}selected{% endif %}>كلاس جيم</option>
-                    <option value="swimming_education" {% if session_type == 'swimming_education' %}selected{% endif %}>سباحة - تعليم</option>
-                    <option value="swimming_recreation" {% if session_type == 'swimming_recreation' %}selected{% endif %}>سباحة - ترفيه</option>
-                    <option value="karate" {% if session_type == 'karate' %}selected{% endif %}>كاراتيه</option>
-                    <option value="other" {% if session_type == 'other' %}selected{% endif %}>أخرى</option>
+                    {% for st in service_types %}
+                    <option value="{{ st.id }}" {% if selected_service_type_id == st.id %}selected{% endif %}>{{ st.name }}</option>
+                    {% endfor %}
                 </select>
             </div>
 
@@ -104,14 +102,14 @@
             <ul class="pagination justify-content-center">
                 {% if sessions.has_prev %}
                 <li class="page-item">
-                    <a class="page-link" href="{{ url_for('bookings.sessions_list', page=sessions.prev_num, type=session_type) }}">السابق</a>
+                    <a class="page-link" href="{{ url_for('bookings.sessions_list', page=sessions.prev_num, type=selected_service_type_id) }}">السابق</a>
                 </li>
                 {% endif %}
 
                 {% for page_num in sessions.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
                     {% if page_num %}
                         <li class="page-item {% if page_num == sessions.page %}active{% endif %}">
-                            <a class="page-link" href="{{ url_for('bookings.sessions_list', page=page_num, type=session_type) }}">{{ page_num }}</a>
+                            <a class="page-link" href="{{ url_for('bookings.sessions_list', page=page_num, type=selected_service_type_id) }}">{{ page_num }}</a>
                         </li>
                     {% else %}
                         <li class="page-item disabled"><span class="page-link">...</span></li>
@@ -120,7 +118,7 @@
 
                 {% if sessions.has_next %}
                 <li class="page-item">
-                    <a class="page-link" href="{{ url_for('bookings.sessions_list', page=sessions.next_num, type=session_type) }}">التالي</a>
+                    <a class="page-link" href="{{ url_for('bookings.sessions_list', page=sessions.next_num, type=selected_service_type_id) }}">التالي</a>
                 </li>
                 {% endif %}
             </ul>
