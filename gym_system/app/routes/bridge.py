@@ -7,9 +7,26 @@ from datetime import datetime, timedelta
 
 from app import db
 from app.models.fingerprint import BridgeStatus, FingerprintSyncLog, BridgeSettings
-from app.models.company import Brand
+from app.models.company import Brand, Branch
 
 bridge_bp = Blueprint('bridge', __name__)
+
+
+def _accessible_brands():
+    """Brands the current user can manage bridge settings for."""
+    if current_user.is_owner:
+        return Brand.query.filter_by(is_active=True).order_by(Brand.name).all()
+    if current_user.brand:
+        return [current_user.brand]
+    return []
+
+
+def _branches_for_brand(brand_id):
+    """Branches in this brand the user can see. Branch-scoped users only see their own branch."""
+    q = Branch.query.filter_by(brand_id=brand_id, is_active=True)
+    if not (current_user.is_owner or current_user.is_brand_manager) and current_user.branch_id:
+        q = q.filter(Branch.id == current_user.branch_id)
+    return q.order_by(Branch.name).all()
 
 
 # ============== FORMS ==============
@@ -38,34 +55,36 @@ def index():
         flash('ليس لديك صلاحية', 'danger')
         return redirect(url_for('dashboard.index'))
 
-    # Get brand_id based on user role
-    if current_user.role.is_owner:
-        brands = Brand.query.filter_by(uses_fingerprint=True).all()
-        brand_id = request.args.get('brand_id', type=int)
-        if not brand_id and brands:
-            brand_id = brands[0].id
-    else:
-        brand_id = current_user.brand_id
-        brands = [current_user.brand] if current_user.brand else []
+    brands = _accessible_brands()
+    brand_id = request.args.get('brand_id', type=int)
+    if not brand_id and brands:
+        brand_id = brands[0].id
 
-    # Get bridge statuses
+    branches = _branches_for_brand(brand_id) if brand_id else []
+    branch_id = request.args.get('branch_id', type=int)
+    if branch_id and not any(b.id == branch_id for b in branches):
+        branch_id = None  # asked-for branch not visible to this user
+
     bridges = []
     sync_logs = []
     if brand_id:
-        bridges = BridgeStatus.query.filter_by(brand_id=brand_id).order_by(
-            BridgeStatus.last_heartbeat.desc()
-        ).all()
+        bridge_q = BridgeStatus.query.filter_by(brand_id=brand_id)
+        log_q = FingerprintSyncLog.query.filter_by(brand_id=brand_id)
+        if branch_id:
+            bridge_q = bridge_q.filter_by(branch_id=branch_id)
+            log_q = log_q.filter_by(branch_id=branch_id)
 
-        sync_logs = FingerprintSyncLog.query.filter_by(brand_id=brand_id).order_by(
-            FingerprintSyncLog.synced_at.desc()
-        ).limit(20).all()
+        bridges = bridge_q.order_by(BridgeStatus.last_heartbeat.desc()).all()
+        sync_logs = log_q.order_by(FingerprintSyncLog.synced_at.desc()).limit(20).all()
 
     return render_template(
         'bridge/index.html',
         bridges=bridges,
         sync_logs=sync_logs,
         brands=brands,
-        selected_brand_id=brand_id
+        branches=branches,
+        selected_brand_id=brand_id,
+        selected_branch_id=branch_id,
     )
 
 
@@ -74,11 +93,15 @@ def index():
 def refresh_status():
     """AJAX endpoint to refresh bridge status"""
     brand_id = request.args.get('brand_id', type=int)
+    branch_id = request.args.get('branch_id', type=int)
 
     if not brand_id:
         return jsonify({'error': 'brand_id required'}), 400
 
-    bridges = BridgeStatus.query.filter_by(brand_id=brand_id).all()
+    q = BridgeStatus.query.filter_by(brand_id=brand_id)
+    if branch_id:
+        q = q.filter_by(branch_id=branch_id)
+    bridges = q.all()
 
     return jsonify({
         'bridges': [
@@ -102,45 +125,54 @@ def refresh_status():
 @bridge_bp.route('/settings', methods=['GET', 'POST'])
 @login_required
 def settings():
-    """Bridge settings page - configure access windows and sync intervals"""
+    """Bridge settings page — per-branch configuration of access window, sync intervals, feature flags."""
     if not (current_user.is_owner or current_user.is_brand_manager):
         flash('ليس لديك صلاحية', 'danger')
         return redirect(url_for('dashboard.index'))
 
-    # Get brands — admin sees all, owner sees their own
-    if current_user.is_owner:
-        brands = Brand.query.filter_by(is_active=True).all()
-        brand_id = request.args.get('brand_id', type=int)
-        if not brand_id and brands:
-            brand_id = brands[0].id
-    else:
-        brand_id = current_user.brand_id
-        brands = [current_user.brand] if current_user.brand else []
+    brands = _accessible_brands()
+    brand_id = request.args.get('brand_id', type=int)
+    if not brand_id and brands:
+        brand_id = brands[0].id
 
     brand = Brand.query.get(brand_id) if brand_id else None
     if not brand:
         flash('لم يتم العثور على البراند', 'warning')
         return redirect(url_for('dashboard.index'))
 
-    # Get or create settings
-    bridge_settings = BridgeSettings.get_or_create(brand_id)
+    branches = _branches_for_brand(brand_id)
+    if not branches:
+        flash('لا يوجد فروع لهذا البراند. أنشئ فرعاً أولاً من إدارة الفروع.', 'warning')
+        return redirect(url_for('admin.branches_list', brand_id=brand_id))
 
+    branch_id = request.args.get('branch_id', type=int)
+    # Default: user's own branch if scoped, otherwise first branch
+    if not branch_id or not any(b.id == branch_id for b in branches):
+        branch_id = current_user.branch_id if current_user.branch_id and any(
+            b.id == current_user.branch_id for b in branches
+        ) else branches[0].id
+    branch = next((b for b in branches if b.id == branch_id), branches[0])
+
+    # Per-branch settings
+    bridge_settings = BridgeSettings.get_or_create(brand_id, branch_id)
     form = BridgeSettingsForm(obj=bridge_settings)
 
     if form.validate_on_submit():
         form.populate_obj(bridge_settings)
         db.session.commit()
-        flash('تم حفظ إعدادات الجسر بنجاح', 'success')
-        return redirect(url_for('bridge.settings', brand_id=brand_id))
+        flash(f'تم حفظ إعدادات جسر فرع {branch.name} بنجاح', 'success')
+        return redirect(url_for('bridge.settings', brand_id=brand_id, branch_id=branch_id))
 
-    # Get bridge status for this brand
-    bridge_status = BridgeStatus.query.filter_by(brand_id=brand_id).order_by(
-        BridgeStatus.last_heartbeat.desc()
-    ).first()
+    # Latest bridge status for this specific branch
+    bridge_status = BridgeStatus.query.filter_by(
+        brand_id=brand_id, branch_id=branch_id
+    ).order_by(BridgeStatus.last_heartbeat.desc()).first()
 
     return render_template('bridge/settings.html',
                            form=form,
                            brand=brand,
                            brands=brands,
+                           branch=branch,
+                           branches=branches,
                            bridge_settings=bridge_settings,
                            bridge_status=bridge_status)

@@ -71,6 +71,7 @@ def sync_attendance():
         return jsonify({'error': 'No data provided'}), 400
 
     brand_id = data.get('brand_id')
+    branch_id = data.get('branch_id')
     records = data.get('records', [])
 
     if not brand_id:
@@ -84,6 +85,12 @@ def sync_attendance():
     has_fp_branch = Branch.query.filter_by(brand_id=brand.id, uses_fingerprint=True).first() is not None
     if not has_fp_branch:
         return jsonify({'error': 'Fingerprint not enabled for any branch in this brand'}), 400
+
+    # Validate branch belongs to brand if provided
+    if branch_id:
+        branch = Branch.query.get(branch_id)
+        if not branch or branch.brand_id != brand_id:
+            return jsonify({'error': 'Invalid branch for this brand'}), 400
 
     synced = 0
     staff_synced = 0
@@ -108,12 +115,29 @@ def sync_attendance():
                 errors.append(f"Invalid timestamp: {timestamp_str}")
                 continue
 
-            # First check if fingerprint belongs to staff (User)
-            staff_user = User.query.filter_by(
-                brand_id=brand_id,
-                fingerprint_id=fingerprint_id,
-                is_active=True
-            ).first()
+            # First check if fingerprint belongs to staff (User).
+            # Prefer branch-scoped match; fall back to brand-level (no branch) staff.
+            staff_user = None
+            if branch_id:
+                staff_user = User.query.filter_by(
+                    branch_id=branch_id,
+                    fingerprint_id=fingerprint_id,
+                    is_active=True
+                ).first()
+            if not staff_user:
+                staff_user = User.query.filter_by(
+                    brand_id=brand_id,
+                    branch_id=None,
+                    fingerprint_id=fingerprint_id,
+                    is_active=True
+                ).first()
+            if not staff_user and not branch_id:
+                # Legacy callers without branch_id — fall back to brand-only lookup
+                staff_user = User.query.filter_by(
+                    brand_id=brand_id,
+                    fingerprint_id=fingerprint_id,
+                    is_active=True
+                ).first()
 
             if staff_user:
                 # This is a staff member - create EmployeeAttendance
@@ -175,6 +199,7 @@ def sync_attendance():
                 attendance = EmployeeAttendance(
                     user_id=staff_user.id,
                     brand_id=brand_id,
+                    branch_id=branch_id,
                     date=attendance_date,
                     check_in=check_in_time,
                     expected_check_in=expected_start,
@@ -205,11 +230,22 @@ def sync_attendance():
                 synced += 1
                 continue
 
-            # Check if fingerprint belongs to member
-            member = Member.query.filter_by(
-                brand_id=brand_id,
-                fingerprint_id=fingerprint_id
-            ).first()
+            # Check if fingerprint belongs to a member.
+            # Prefer branch-scoped match; fall back to brand-level legacy data.
+            member = None
+            if branch_id:
+                member = Member.query.filter_by(
+                    branch_id=branch_id, fingerprint_id=fingerprint_id
+                ).first()
+            if not member:
+                member = Member.query.filter_by(
+                    brand_id=brand_id, branch_id=None, fingerprint_id=fingerprint_id
+                ).first()
+            if not member and not branch_id:
+                # Legacy callers without branch_id
+                member = Member.query.filter_by(
+                    brand_id=brand_id, fingerprint_id=fingerprint_id
+                ).first()
 
             if not member:
                 errors.append(f"No staff or member found for fingerprint_id: {fingerprint_id}")
@@ -277,6 +313,7 @@ def sync_attendance():
                 member_id=member.id,
                 subscription_id=subscription.id if subscription else None,
                 brand_id=brand_id,
+                branch_id=branch_id or member.branch_id,
                 check_in=timestamp,
                 source='fingerprint',
                 fingerprint_log_id=log_id,
@@ -297,6 +334,7 @@ def sync_attendance():
     # Log sync
     sync_log = FingerprintSyncLog(
         brand_id=brand_id,
+        branch_id=branch_id,
         sync_type='attendance',
         records_synced=synced,
         last_sync_id=records[-1].get('log_id') if records else None,
@@ -439,6 +477,7 @@ def bridge_heartbeat():
         return jsonify({'error': 'No data provided'}), 400
 
     brand_id = data.get('brand_id')
+    branch_id = data.get('branch_id')
     computer_name = data.get('computer_name', 'Unknown')
 
     if not brand_id:
@@ -448,6 +487,8 @@ def bridge_heartbeat():
     bridge = BridgeStatus.get_or_create(brand_id, computer_name)
 
     # Update info
+    if branch_id:
+        bridge.branch_id = branch_id
     bridge.ip_address = data.get('ip_address')
     bridge.os_info = data.get('os_info')
     bridge.database_path = data.get('database_path')
@@ -511,11 +552,21 @@ def get_bridge_status():
 def get_pending_commands():
     """Get pending commands for the desktop software to execute"""
     brand_id = request.args.get('brand_id', type=int)
+    branch_id = request.args.get('branch_id', type=int)
 
     if not brand_id:
         return jsonify({'error': 'brand_id is required'}), 400
 
-    commands = DeviceCommand.get_pending_commands(brand_id)
+    # When branch_id is provided, only deliver commands for that branch
+    # plus brand-level (branch_id IS NULL) commands.
+    if branch_id:
+        commands = DeviceCommand.query.filter(
+            DeviceCommand.brand_id == brand_id,
+            db.or_(DeviceCommand.branch_id == branch_id, DeviceCommand.branch_id.is_(None)),
+            DeviceCommand.status == 'pending'
+        ).order_by(DeviceCommand.created_at.asc()).all()
+    else:
+        commands = DeviceCommand.get_pending_commands(brand_id)
 
     return jsonify({
         'success': True,
@@ -2003,6 +2054,7 @@ def get_class_schedule():
     - blocked_members (expired/cancelled/blocked - deny access)
     """
     brand_id = request.args.get('brand_id', type=int)
+    branch_id = request.args.get('branch_id', type=int)
     schedule_date = request.args.get('date')
 
     if not brand_id:
@@ -2017,8 +2069,8 @@ def get_class_schedule():
     else:
         schedule_date = date.today()
 
-    # Get bridge settings for access window
-    bridge_settings = BridgeSettings.get_or_create(brand_id)
+    # Per-branch settings when branch_id provided, brand-level otherwise
+    bridge_settings = BridgeSettings.get_or_create(brand_id, branch_id)
     access_window = bridge_settings.class_access_window_minutes
 
     # Get day of week (Arabic: 0=Sat, 1=Sun, ..., 6=Fri)
@@ -2028,11 +2080,17 @@ def get_class_schedule():
     classes_data = []
     class_member_ids = set()  # Track members who have class bookings
 
-    today_classes = GymClass.query.filter_by(
-        brand_id=brand_id,
-        day_of_week=day_of_week,
-        is_active=True
-    ).order_by(GymClass.start_time).all()
+    classes_query = GymClass.query.filter(
+        GymClass.brand_id == brand_id,
+        GymClass.day_of_week == day_of_week,
+        GymClass.is_active == True
+    )
+    if branch_id:
+        # Include branch's classes plus brand-level (no specific branch) classes
+        classes_query = classes_query.filter(
+            db.or_(GymClass.branch_id == branch_id, GymClass.branch_id.is_(None))
+        )
+    today_classes = classes_query.order_by(GymClass.start_time).all()
 
     for gym_class in today_classes:
         # Get booked members for this class today
@@ -2071,11 +2129,16 @@ def get_class_schedule():
     # --- 2. Gym members (active subscription, no class requirement) ---
     gym_members = []
 
-    active_subs = Subscription.query.filter(
+    subs_query = Subscription.query.filter(
         Subscription.brand_id == brand_id,
         Subscription.status == 'active',
         Subscription.end_date >= schedule_date
-    ).all()
+    )
+    if branch_id:
+        subs_query = subs_query.filter(
+            db.or_(Subscription.branch_id == branch_id, Subscription.branch_id.is_(None))
+        )
+    active_subs = subs_query.all()
 
     for sub in active_subs:
         member = sub.member
@@ -2108,11 +2171,17 @@ def get_class_schedule():
     # Get all members with fingerprints for this brand who are NOT in active lists
     active_member_ids = class_member_ids | {m['member_id'] for m in gym_members}
 
-    all_fp_members = Member.query.filter(
+    blocked_query = Member.query.filter(
         Member.brand_id == brand_id,
         Member.fingerprint_id.isnot(None),
         ~Member.id.in_(active_member_ids) if active_member_ids else True
-    ).all()
+    )
+    if branch_id:
+        # Only this branch's members; brand-level (NULL branch) included for legacy data
+        blocked_query = blocked_query.filter(
+            db.or_(Member.branch_id == branch_id, Member.branch_id.is_(None))
+        )
+    all_fp_members = blocked_query.all()
 
     for member in all_fp_members:
         if member.id in active_member_ids:
@@ -2551,10 +2620,16 @@ def bridge_sync():
                 except Exception:
                     continue
 
-                # Check staff first
+                # Check staff first — prefer this branch; fall back to brand-level (unscoped) staff
+                # so brand owners/managers without a branch can still use any device.
                 staff_user = User.query.filter_by(
-                    brand_id=brand_id, fingerprint_id=fingerprint_id, is_active=True
+                    branch_id=branch_id, fingerprint_id=fingerprint_id, is_active=True
                 ).first()
+                if not staff_user:
+                    staff_user = User.query.filter_by(
+                        brand_id=brand_id, branch_id=None,
+                        fingerprint_id=fingerprint_id, is_active=True
+                    ).first()
 
                 if staff_user:
                     if log_id:
@@ -2600,10 +2675,15 @@ def bridge_sync():
                     synced += 1
                     continue
 
-                # Check member
+                # Check member — must belong to this branch.
+                # Fall back to brand-level (unscoped) members for legacy data.
                 member = Member.query.filter_by(
-                    brand_id=brand_id, fingerprint_id=fingerprint_id
+                    branch_id=branch_id, fingerprint_id=fingerprint_id
                 ).first()
+                if not member:
+                    member = Member.query.filter_by(
+                        brand_id=brand_id, branch_id=None, fingerprint_id=fingerprint_id
+                    ).first()
 
                 if not member:
                     continue

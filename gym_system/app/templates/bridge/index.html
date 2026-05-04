@@ -10,16 +10,37 @@
     </button>
 </div>
 
-{% if brands|length > 1 %}
-<div class="mb-4">
-    <select class="form-select" style="width: auto; display: inline-block;" onchange="window.location.href='?brand_id=' + this.value">
-        {% for brand in brands %}
-        <option value="{{ brand.id }}" {% if brand.id == selected_brand_id %}selected{% endif %}>
-            {{ brand.name }}
-        </option>
-        {% endfor %}
-    </select>
-</div>
+{% if brands|length > 1 or branches|length > 0 %}
+<form method="get" class="mb-4 d-flex gap-2 flex-wrap align-items-end">
+    {% if brands|length > 1 %}
+    <div>
+        <label class="form-label small mb-1">البراند</label>
+        <select name="brand_id" class="form-select" style="width: auto;" onchange="this.form.submit()">
+            {% for brand in brands %}
+            <option value="{{ brand.id }}" {% if brand.id == selected_brand_id %}selected{% endif %}>
+                {{ brand.name }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+    {% else %}
+    <input type="hidden" name="brand_id" value="{{ selected_brand_id }}">
+    {% endif %}
+
+    {% if branches %}
+    <div>
+        <label class="form-label small mb-1">الفرع</label>
+        <select name="branch_id" class="form-select" style="width: auto;" onchange="this.form.submit()">
+            <option value="">كل الفروع</option>
+            {% for br in branches %}
+            <option value="{{ br.id }}" {% if br.id == selected_branch_id %}selected{% endif %}>
+                {{ br.name }}{% if br.branch_code %} ({{ br.branch_code }}){% endif %}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+    {% endif %}
+</form>
 {% endif %}
 
 <!-- Bridge Status Cards -->
@@ -167,9 +188,13 @@
 <script>
 function refreshStatus() {
     const brandId = {{ selected_brand_id or 0 }};
+    const branchId = {{ selected_branch_id or 0 }};
     if (!brandId) return;
 
-    fetch('/bridge/api/refresh?brand_id=' + brandId)
+    let url = '/bridge/api/refresh?brand_id=' + brandId;
+    if (branchId) url += '&branch_id=' + branchId;
+
+    fetch(url)
         .then(r => r.json())
         .then(data => {
             // Reload page for simplicity

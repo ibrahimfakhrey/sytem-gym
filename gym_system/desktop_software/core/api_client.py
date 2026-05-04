@@ -10,11 +10,19 @@ from datetime import datetime
 class APIClient:
     """Handle API communication with the web app"""
 
-    def __init__(self, base_url: str, api_key: str, brand_id: int = 1):
+    def __init__(self, base_url: str, api_key: str, brand_id: int = 1, branch_id: int = None):
         self.base_url = base_url.rstrip('/')
         self.api_key = api_key
         self.brand_id = brand_id
+        self.branch_id = branch_id
         self.timeout = 30
+
+    def _scope(self) -> Dict:
+        """Brand+branch scoping payload included in every relevant request."""
+        scope = {'brand_id': self.brand_id}
+        if self.branch_id:
+            scope['branch_id'] = self.branch_id
+        return scope
 
     def _get_headers(self) -> Dict:
         """Get request headers with API key"""
@@ -63,13 +71,12 @@ class APIClient:
 
     def get_sync_status(self) -> Dict:
         """Get overall sync status"""
-        return self._make_request('GET', '/sync/status',
-                                 params={'brand_id': self.brand_id})
+        return self._make_request('GET', '/sync/status', params=self._scope())
 
     def send_heartbeat(self, computer_name: str = None, ip_address: str = None) -> Dict:
         """Send heartbeat to server"""
         data = {
-            'brand_id': self.brand_id,
+            **self._scope(),
             'computer_name': computer_name or 'GYM-PC',
             'ip_address': ip_address or '',
             'software_version': '1.0.0'
@@ -80,17 +87,14 @@ class APIClient:
 
     def get_members(self, updated_since: str = None) -> Dict:
         """Get all members from web app"""
-        params = {'brand_id': self.brand_id}
+        params = self._scope()
         if updated_since:
             params['updated_since'] = updated_since
         return self._make_request('GET', '/members', params=params)
 
     def create_member(self, member_data: Dict) -> Dict:
         """Create new member in web app"""
-        data = {
-            'brand_id': self.brand_id,
-            **member_data
-        }
+        data = {**self._scope(), **member_data}
         return self._make_request('POST', '/members', data)
 
     def update_member(self, member_id: int, member_data: Dict) -> Dict:
@@ -101,10 +105,7 @@ class APIClient:
 
     def sync_attendance(self, records: List[Dict]) -> Dict:
         """Sync attendance records to web app"""
-        data = {
-            'brand_id': self.brand_id,
-            'records': records
-        }
+        data = {**self._scope(), 'records': records}
         return self._make_request('POST', '/fingerprint/attendance', data)
 
     def mark_enrolled(self, member_id: int, fingerprint_id: int) -> Dict:
@@ -119,8 +120,7 @@ class APIClient:
 
     def get_pending_commands(self) -> Dict:
         """Get pending commands to execute on local database"""
-        return self._make_request('GET', '/device/commands',
-                                 params={'brand_id': self.brand_id})
+        return self._make_request('GET', '/device/commands', params=self._scope())
 
     def complete_command(self, command_id: int, success: bool = True,
                         error_message: str = None) -> Dict:
@@ -139,7 +139,7 @@ class APIClient:
                              error: str = None) -> Dict:
         """Send detailed bridge heartbeat"""
         data = {
-            'brand_id': self.brand_id,
+            **self._scope(),
             'computer_name': computer_name,
             'ip_address': ip_address or '',
             'os_info': os_info or '',
@@ -155,7 +155,7 @@ class APIClient:
     def get_class_schedule(self, schedule_date=None) -> Dict:
         """Get today's class schedule for access control"""
         try:
-            params = {'brand_id': self.brand_id}
+            params = self._scope()
             if schedule_date:
                 params['date'] = schedule_date if isinstance(schedule_date, str) else schedule_date.isoformat()
             response = requests.get(
@@ -177,7 +177,7 @@ class APIClient:
             response = requests.get(
                 f"{self.base_url}/api/bridge/settings",
                 headers=self._get_headers(),
-                params={'brand_id': self.brand_id}, timeout=self.timeout
+                params=self._scope(), timeout=self.timeout
             )
             if response.status_code == 200:
                 return response.json().get('settings', {})

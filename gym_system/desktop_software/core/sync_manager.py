@@ -6,11 +6,19 @@ import threading
 import time
 import json
 import os
+import hashlib
 from typing import Dict, List, Callable, Optional
 from datetime import datetime, date, timedelta
 import socket
 import platform
 from pathlib import Path
+
+
+def _stable_log_id(user_id, check_time: datetime) -> int:
+    """Deterministic 32-bit log_id derived from (user_id, check_time).
+    Survives process restarts (Python's hash() is randomized per-process)."""
+    key = f"{user_id}|{check_time.isoformat()}".encode('utf-8')
+    return int.from_bytes(hashlib.md5(key).digest()[:4], 'big')
 
 # Persistence directory
 BRIDGE_DIR = Path.home() / '.gym_bridge'
@@ -423,7 +431,7 @@ class SyncManager:
             api_records.append({
                 'fingerprint_id': user_id,
                 'timestamp': check_time.isoformat(),
-                'log_id': hash(f"{user_id}-{check_time.isoformat()}")
+                'log_id': _stable_log_id(user_id, check_time)
             })
 
             # Fire live feed event

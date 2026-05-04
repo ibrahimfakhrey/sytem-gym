@@ -48,11 +48,13 @@ class AppController:
         api_url = self.config.get('api_url', 'https://gymsystem.pythonanywhere.com')
         api_key = self.config.get('api_key', '')
         brand_id = self.config.get('brand_id', 1)
+        branch_id = self.config.get('branch_id')
 
         self.api_client = APIClient(
             base_url=api_url,
             api_key=api_key,
-            brand_id=brand_id
+            brand_id=brand_id,
+            branch_id=branch_id
         )
 
         # Set window title with branch name
@@ -123,26 +125,36 @@ class AppController:
             return False
 
     def _auto_detect_database(self):
-        """Auto-detect database files"""
+        """Auto-detect the Employee management DB (Attendancear / backup.mdb).
+        Validates by schema (presence of Employee table) — filenames are unreliable
+        because the AAS install ships the Employee DB as `backup.mdb`.
+        """
         self.window.add_activity("جاري البحث عن قاعدة البيانات...", "info")
 
         def search_thread():
             results = self.file_finder.search_for_mdb()
-            if results:
-                # Use first non-backup result
-                for result in results:
-                    if not result.get('is_backup'):
-                        db_path = result['path']
-                        self.window.after(0, lambda: self._on_database_found(db_path))
-                        return
-
-                # If all are backups, use first one
-                db_path = results[0]['path']
-                self.window.after(0, lambda: self._on_database_found(db_path))
-            else:
+            if not results:
                 self.window.after(0, lambda: self.window.add_activity(
                     "لم يتم العثور على قاعدة البيانات", "warning"
                 ))
+                return
+
+            # Validate each candidate's schema until we find the Employee DB.
+            for result in results:
+                db_path = result['path']
+                try:
+                    schema_type = DeviceDatabaseManager.detect_schema(db_path)
+                except Exception:
+                    continue
+                if schema_type == 'backup':
+                    self.window.after(0, lambda p=db_path: self._on_database_found(p))
+                    return
+
+            # Nothing matched the AAS Employee schema.
+            self.window.after(0, lambda: self.window.add_activity(
+                "لم يتم العثور على قاعدة بيانات الأعضاء (Employee schema)",
+                "warning"
+            ))
 
         thread = threading.Thread(target=search_thread, daemon=True)
         thread.start()
@@ -172,7 +184,8 @@ class AppController:
     def _connect_device_database(self, db_path: str) -> bool:
         """Connect to ZKTeco device database (att2000.mdb)"""
         try:
-            self.device_db_manager = DeviceDatabaseManager(db_path)
+            device_password = self.config.get('att2000_password') or self.config.get('device_password', '')
+            self.device_db_manager = DeviceDatabaseManager(db_path, password=device_password)
             if self.device_db_manager.is_connected():
                 count = self.device_db_manager.get_record_count()
                 self.window.add_activity(f"تم الاتصال بقاعدة بيانات البصمة ({count} سجل)", "success")
@@ -494,7 +507,8 @@ class AppController:
         self.api_client = APIClient(
             base_url=self.config.get('api_url', ''),
             api_key=self.config.get('api_key', ''),
-            brand_id=self.config.get('brand_id', 1)
+            brand_id=self.config.get('brand_id', 1),
+            branch_id=self.config.get('branch_id')
         )
 
         # Set window title
@@ -577,6 +591,8 @@ class AppController:
                 self.api_client.base_url = settings.get('api_url', self.api_client.base_url)
                 self.api_client.api_key = settings.get('api_key', self.api_client.api_key)
                 self.api_client.brand_id = int(settings.get('brand_id', self.api_client.brand_id))
+                # Keep branch_id from config in sync (set during registration, not editable in settings UI)
+                self.api_client.branch_id = self.config.get('branch_id', self.api_client.branch_id)
 
             # Reconnect database if path or password changed
             new_db_path = settings.get('db_path')

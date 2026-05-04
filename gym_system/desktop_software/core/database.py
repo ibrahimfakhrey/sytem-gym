@@ -524,9 +524,11 @@ class DeviceDatabaseManager:
     """
 
     MDB_CONN_TEMPLATE = "DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=%s;"
+    MDB_CONN_TEMPLATE_PWD = "DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=%s;PWD=%s;"
 
-    def __init__(self, mdb_path: str = None):
+    def __init__(self, mdb_path: str = None, password: str = None):
         self.mdb_path = mdb_path
+        self.password = password or ''
         self._lock = Lock()
         self._pyodbc = None
 
@@ -542,6 +544,8 @@ class DeviceDatabaseManager:
         target = path or self.mdb_path
         if not target:
             raise ValueError("No database path set")
+        if self.password:
+            return pyodbc.connect(self.MDB_CONN_TEMPLATE_PWD % (target, self.password))
         return pyodbc.connect(self.MDB_CONN_TEMPLATE % target)
 
     def execute_with_retry(self, sql: str, params=None, fetch: bool = True,
