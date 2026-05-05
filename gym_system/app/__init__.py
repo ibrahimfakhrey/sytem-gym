@@ -49,6 +49,7 @@ def create_app(config_name=None):
     from .routes.finance import finance_bp
     from .routes.reports import reports_bp
     from .routes.api import api_bp
+    from .routes.api_v2 import api_v2_bp
     from .routes.bridge import bridge_bp
     from .routes.health import health_bp
     from .routes.complaints import complaints_bp
@@ -70,6 +71,7 @@ def create_app(config_name=None):
     app.register_blueprint(finance_bp, url_prefix='/finance')
     app.register_blueprint(reports_bp, url_prefix='/reports')
     app.register_blueprint(api_bp, url_prefix='/api')
+    app.register_blueprint(api_v2_bp)  # url_prefix='/api/v2' set in blueprint
     app.register_blueprint(bridge_bp, url_prefix='/bridge')
     app.register_blueprint(health_bp)
     app.register_blueprint(complaints_bp)
@@ -82,6 +84,7 @@ def create_app(config_name=None):
     app.register_blueprint(bookings_bp, url_prefix='/bookings')
     app.register_blueprint(invoices_bp, url_prefix='/invoices')
     csrf.exempt(api_bp)  # API uses API key auth, not CSRF
+    csrf.exempt(api_v2_bp)  # v2 API uses X-Branch-Code header auth, not CSRF
 
     # Register error handlers
     register_error_handlers(app)
