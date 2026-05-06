@@ -45,13 +45,13 @@ class SetupPage(ctk.CTkFrame):
             justify='center',
         )
         self.entry.pack(pady=(0, 18))
-        self.entry.bind('<Return>', lambda e: self._register())
+        self.entry.bind('<Return>', lambda e: self._handle_register())
 
         self.btn = ctk.CTkButton(
             inner, text='تسجيل الجهاز',
             font=FONTS['btn'], height=48, width=280,
             fg_color=COLORS['success'], hover_color='#059669',
-            command=self._register,
+            command=self._handle_register,
         )
         self.btn.pack(pady=(0, 12))
 
@@ -95,7 +95,7 @@ class SetupPage(ctk.CTkFrame):
             self.entry.delete(0, 'end')
             self.entry.insert(0, config['branch_code'])
 
-    def _register(self):
+    def _handle_register(self):
         code = self.entry.get().strip().upper()
         api_url = (self.url_entry.get().strip() if self.advanced_visible else '') \
                    or 'https://gymsystem.pythonanywhere.com'
