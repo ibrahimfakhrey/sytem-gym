@@ -814,6 +814,48 @@ def from_members():
         flash(f'تم تحويل {converted} عضو إلى موظفين. تم تجاهل {skipped}.', 'success')
         return redirect(url_for('employees.index') if False else url_for('employees.from_members'))
 
+    # GET — list candidates
+    query = Member.query.filter(
+        Member.is_staff.is_(False),
+        Member.fingerprint_id.isnot(None),
+    )
+    if current_user.role.name_en == 'admin':
+        pass
+    elif current_user.role.name_en == 'owner':
+        query = query.filter(Member.brand_id == current_user.brand_id)
+    else:
+        query = query.filter(Member.branch_id == current_user.branch_id)
+
+    # Branch filter — when a branch is picked, only show its members
+    selected_branch_id = request.args.get('branch_id', type=int)
+    if selected_branch_id and selected_branch_id in [b.id for b in branches]:
+        query = query.filter(Member.branch_id == selected_branch_id)
+    else:
+        selected_branch_id = None
+
+    # Branch_manager always locked to their own branch
+    if current_user.role.name_en == 'branch_manager':
+        selected_branch_id = current_user.branch_id
+
+    search = (request.args.get('q') or '').strip()
+    if search:
+        query = query.filter(
+            db.or_(
+                Member.name.ilike(f'%{search}%'),
+                Member.phone.ilike(f'%{search}%'),
+                Member.member_import_id.ilike(f'%{search}%'),
+            )
+        )
+
+    candidates = query.order_by(Member.name).limit(200).all() if selected_branch_id else []
+
+    return render_template('employees/from_members.html',
+                           candidates=candidates,
+                           branches=branches,
+                           roles=roles,
+                           search=search,
+                           selected_branch_id=selected_branch_id)
+
 
 @employees_bp.route('/from-members/<int:member_id>/convert', methods=['POST'])
 @login_required
@@ -932,46 +974,3 @@ def from_member_one(member_id):
         'email': email,
         'has_login': bool(custom_password),
     })
-
-    # GET — list candidates
-    from app.models.member import Member
-    query = Member.query.filter(
-        Member.is_staff.is_(False),
-        Member.fingerprint_id.isnot(None),
-    )
-    if current_user.role.name_en == 'admin':
-        pass
-    elif current_user.role.name_en == 'owner':
-        query = query.filter(Member.brand_id == current_user.brand_id)
-    else:
-        query = query.filter(Member.branch_id == current_user.branch_id)
-
-    # Branch filter — when a branch is picked, only show its members
-    selected_branch_id = request.args.get('branch_id', type=int)
-    if selected_branch_id and selected_branch_id in [b.id for b in branches]:
-        query = query.filter(Member.branch_id == selected_branch_id)
-    else:
-        selected_branch_id = None
-
-    # Branch_manager always locked to their own branch
-    if current_user.role.name_en == 'branch_manager':
-        selected_branch_id = current_user.branch_id
-
-    search = (request.args.get('q') or '').strip()
-    if search:
-        query = query.filter(
-            db.or_(
-                Member.name.ilike(f'%{search}%'),
-                Member.phone.ilike(f'%{search}%'),
-                Member.member_import_id.ilike(f'%{search}%'),
-            )
-        )
-
-    candidates = query.order_by(Member.name).limit(200).all() if selected_branch_id else []
-
-    return render_template('employees/from_members.html',
-                           candidates=candidates,
-                           branches=branches,
-                           roles=roles,
-                           search=search,
-                           selected_branch_id=selected_branch_id)
