@@ -36,6 +36,21 @@
             شكوى
         </a>
         {% if not member.is_blocked %}
+        <form action="{{ url_for('members.toggle_access', member_id=member.id) }}"
+              method="POST" class="d-inline" onsubmit="return confirm('{% if member.is_active %}إيقاف وصول هذا العضو للجيم؟ سيُمنع من الدخول خلال دقيقة.{% else %}استئناف وصول هذا العضو للجيم؟{% endif %}');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% if member.is_active %}
+            <button type="submit" class="btn btn-outline-warning">
+                <i class="bi bi-pause-circle"></i>
+                إيقاف وصول البصمة
+            </button>
+            {% else %}
+            <button type="submit" class="btn btn-outline-success">
+                <i class="bi bi-play-circle"></i>
+                استئناف وصول البصمة
+            </button>
+            {% endif %}
+        </form>
         <a href="{{ url_for('members.block', member_id=member.id) }}" class="btn btn-danger">
             <i class="bi bi-slash-circle"></i>
             حظر دائم
@@ -43,6 +58,17 @@
         {% endif %}
     </div>
 </div>
+
+{% if not member.is_active and not member.is_blocked %}
+<div class="alert alert-warning d-flex align-items-center mb-4" role="alert">
+    <i class="bi bi-pause-circle me-2 fs-4"></i>
+    <div>
+        <strong>⏸ وصول البصمة موقوف</strong>
+        <br>
+        <small>هذا العضو ممنوع مؤقتاً من الدخول للجيم. اضغط "استئناف وصول البصمة" أعلاه للسماح بالدخول.</small>
+    </div>
+</div>
+{% endif %}
 
 {% if member.is_blocked %}
 <div class="alert alert-danger d-flex align-items-center mb-4" role="alert">

@@ -436,6 +436,33 @@ def blocked_list():
                           brands=brands)
 
 
+@members_bp.route('/<int:member_id>/toggle-access', methods=['POST'])
+@login_required
+@members_required
+def toggle_access(member_id):
+    """
+    Toggle Member.is_active — temporarily suspend / resume gate access.
+
+    The desktop bridge polls /api/v2/access-state every 60 sec; setting
+    is_active=False causes the cloud to return end_date=2020-01-01 for this
+    member, which the desktop writes to tmkq.mdb so the device denies entry.
+    """
+    member = Member.query.get_or_404(member_id)
+    if not current_user.can_access_brand(member.brand_id):
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('members.view', member_id=member_id))
+
+    member.is_active = not member.is_active
+    db.session.commit()
+
+    if member.is_active:
+        flash(f'✅ تم استئناف وصول {member.name} للجيم. سيُسمح له بالدخول خلال دقيقة.', 'success')
+    else:
+        flash(f'⛔ تم إيقاف وصول {member.name} للجيم. سيُمنع من الدخول خلال دقيقة.', 'warning')
+
+    return redirect(url_for('members.view', member_id=member_id))
+
+
 @members_bp.route('/blocked/<int:blocked_id>/unblock', methods=['POST'])
 @login_required
 @members_required
