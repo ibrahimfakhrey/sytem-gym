@@ -412,16 +412,25 @@ def access_state():
                or BridgeSettings.query.filter_by(brand_id=brand_id, branch_id=None).first()
     window_minutes = settings.class_access_window_minutes if settings else 15
 
+    # Include inactive members too — they need to be blocked at the device.
+    # If we only return active ones, the desktop never updates their end_date
+    # and a soft-blocked member could still enter.
     members = Member.query.filter(
         Member.brand_id == brand_id,
-        Member.is_active.is_(True),
         Member.fingerprint_id.isnot(None),
         Member.member_import_id.isnot(None),
     ).all()
 
     out = []
     for m in members:
-        decision = _compute_access(m, now, today, window_minutes)
+        if not m.is_active:
+            decision = {
+                'allowed': False,
+                'end_date': PAST_DATE,
+                'reason': 'محظور من قبل الإدارة',
+            }
+        else:
+            decision = _compute_access(m, now, today, window_minutes)
         out.append({
             'emp_id': m.member_import_id,
             'fingerprint_id': m.fingerprint_id,
