@@ -91,11 +91,11 @@
                 <thead class="table-light">
                     <tr>
                         <th style="width: 40px;"></th>
-                        <th>الاسم</th>
-                        <th>الهاتف</th>
-                        <th>رقم البصمة</th>
-                        <th>رقم في الجهاز</th>
-                        <th>البراند</th>
+                        <th class="bg-danger text-white">الاسم</th>
+                        <th class="bg-danger text-white">الهاتف</th>
+                        <th class="bg-danger text-white">رقم البصمة</th>
+                        <th class="bg-danger text-white">رقم في الجهاز</th>
+                        <th class="bg-danger text-white">البراند</th>
                         <th style="width: 120px;"></th>
                     </tr>
                 </thead>
@@ -148,7 +148,7 @@
 <div class="modal fade" id="convertModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
-            <form id="convert-form" onsubmit="event.preventDefault(); submitConvert();">
+            <form id="convert-form" onsubmit="return false;">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="branch_id" id="modal-branch-id">
 
@@ -232,7 +232,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">إلغاء</button>
-                    <button type="submit" class="btn btn-success" id="modal-submit-btn">
+                    <button type="button" class="btn btn-success" id="modal-submit-btn">
                         <i class="bi bi-check-circle"></i>
                         تحويل إلى موظف
                     </button>
@@ -292,31 +292,57 @@ function applySearch() {
 }
 
 function openConvertModal(memberId, memberName, fingerprint) {
+    console.log('[convert] openConvertModal', { memberId, memberName });
     const branchSelect = document.getElementById('branch-select');
-    const branchId = branchSelect.value;
-    if (!branchId) {
+    if (!branchSelect || !branchSelect.value) {
         showToast('اختر فرعاً أولاً من الأعلى', 'warning');
         return;
     }
+    const branchId = branchSelect.value;
     currentMemberId = memberId;
-    document.getElementById('modal-member-name').textContent = memberName;
-    document.getElementById('modal-fingerprint').textContent = fingerprint || '-';
-    document.getElementById('modal-branch-id').value = branchId;
 
-    // Pre-fill from bulk shared settings as defaults
-    const bulkRole = document.querySelector('#bulk-form select[name="role_id"]').value;
-    const bulkDept = document.querySelector('#bulk-form select[name="department"]').value;
-    const bulkTrainer = document.querySelector('#bulk-form input[name="is_trainer"]').checked;
+    const setText = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val;
+        else console.warn('[convert] missing element', id);
+    };
+    const setVal = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.value = val;
+        else console.warn('[convert] missing element', id);
+    };
+
+    setText('modal-member-name', memberName);
+    setText('modal-fingerprint', fingerprint || '-');
+    setVal('modal-branch-id', branchId);
 
     const form = document.getElementById('convert-form');
-    form.reset();
-    document.getElementById('modal-branch-id').value = branchId;  // reset cleared it
-    if (bulkRole) form.querySelector('select[name="role_id"]').value = bulkRole;
-    if (bulkDept) form.querySelector('select[name="department"]').value = bulkDept;
-    form.querySelector('input[name="is_trainer"]').checked = bulkTrainer;
+    if (form) {
+        form.reset();
+        setVal('modal-branch-id', branchId);  // reset cleared it
+        const bulkRole = document.querySelector('#bulk-form select[name="role_id"]')?.value;
+        const bulkDept = document.querySelector('#bulk-form select[name="department"]')?.value;
+        const bulkTrainer = document.querySelector('#bulk-form input[name="is_trainer"]')?.checked;
+        if (bulkRole) {
+            const r = form.querySelector('select[name="role_id"]');
+            if (r) r.value = bulkRole;
+        }
+        if (bulkDept) {
+            const d = form.querySelector('select[name="department"]');
+            if (d) d.value = bulkDept;
+        }
+        const t = form.querySelector('input[name="is_trainer"]');
+        if (t) t.checked = !!bulkTrainer;
+    }
 
-    document.getElementById('modal-error').classList.add('d-none');
-    convertModal.show();
+    const errorBox = document.getElementById('modal-error');
+    if (errorBox) errorBox.classList.add('d-none');
+
+    if (typeof convertModal !== 'undefined' && convertModal) {
+        convertModal.show();
+    } else {
+        console.error('[convert] convertModal instance not initialized');
+    }
 }
 
 // Attach handlers to per-row convert buttons
@@ -330,38 +356,72 @@ document.querySelectorAll('.btn-convert').forEach(btn => {
     });
 });
 
-async function submitConvert() {
-    if (!currentMemberId) return;
-    const btn = document.getElementById('modal-submit-btn');
+// Modal submit button → AJAX
+document.getElementById('modal-submit-btn').addEventListener('click', submitConvert);
+
+function showError(msg) {
     const errorBox = document.getElementById('modal-error');
+    if (errorBox) {
+        errorBox.textContent = msg;
+        errorBox.classList.remove('d-none');
+    } else {
+        alert(msg);
+    }
+}
+
+async function submitConvert() {
+    console.log('[convert] submitConvert called, member=', currentMemberId);
+    if (!currentMemberId) {
+        console.warn('[convert] no currentMemberId set');
+        return;
+    }
+    const btn = document.getElementById('modal-submit-btn');
+    const form = document.getElementById('convert-form');
+    if (!btn || !form) {
+        console.error('[convert] missing btn or form', { btn, form });
+        alert('عناصر النموذج غير موجودة — حدث الصفحة');
+        return;
+    }
+
+    if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+    }
+
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> جاري التحويل...';
-    errorBox.classList.add('d-none');
+    const errorBox = document.getElementById('modal-error');
+    if (errorBox) errorBox.classList.add('d-none');
 
-    const form = document.getElementById('convert-form');
     const data = new FormData(form);
+    const url = `/employees/from-members/${currentMemberId}/convert`;
+    console.log('[convert] POST', url);
 
     try {
-        const resp = await fetch(`/employees/from-members/${currentMemberId}/convert`, {
+        const resp = await fetch(url, {
             method: 'POST',
             body: data,
             headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin',
         });
-        const json = await resp.json();
-        if (!resp.ok || !json.success) {
-            errorBox.textContent = json.message || 'حدث خطأ غير متوقع';
-            errorBox.classList.remove('d-none');
+        console.log('[convert] response status', resp.status);
+        const text = await resp.text();
+        let json;
+        try { json = JSON.parse(text); } catch { json = null; }
+
+        if (!resp.ok || !json || !json.success) {
+            const msg = (json && json.message) || `خطأ ${resp.status}: ${text.slice(0, 200)}`;
+            showError(msg);
             return;
         }
-        // Remove row + close modal + toast
         const row = document.getElementById(`member-row-${currentMemberId}`);
         if (row) row.remove();
         updateCount();
-        convertModal.hide();
+        if (typeof convertModal !== 'undefined' && convertModal) convertModal.hide();
         showToast(json.message + (json.has_login ? ` (البريد: ${json.email})` : ''), 'success');
     } catch (err) {
-        errorBox.textContent = 'فشل الاتصال بالخادم';
-        errorBox.classList.remove('d-none');
+        console.error('[convert] fetch error', err);
+        showError('فشل الاتصال بالخادم: ' + err.message);
     } finally {
         btn.disabled = false;
         btn.innerHTML = '<i class="bi bi-check-circle"></i> تحويل إلى موظف';
