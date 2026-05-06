@@ -112,8 +112,10 @@
                         <td><code class="text-muted">{{ m.member_import_id or '-' }}</code></td>
                         <td><small>{{ m.brand.name if m.brand else '-' }}</small></td>
                         <td>
-                            <button type="button" class="btn btn-sm btn-success"
-                                    onclick="openConvertModal({{ m.id }}, {{ m.name|tojson }}, {{ (m.fingerprint_id or '')|tojson }})">
+                            <button type="button" class="btn btn-sm btn-success btn-convert"
+                                    data-member-id="{{ m.id }}"
+                                    data-member-name="{{ m.name|e }}"
+                                    data-fingerprint="{{ (m.fingerprint_id or '')|e }}">
                                 <i class="bi bi-person-check"></i>
                                 تحويل
                             </button>
@@ -313,6 +315,17 @@ function openConvertModal(memberId, memberName, fingerprint) {
     document.getElementById('modal-error').classList.add('d-none');
     convertModal.show();
 }
+
+// Attach handlers to per-row convert buttons
+document.querySelectorAll('.btn-convert').forEach(btn => {
+    btn.addEventListener('click', function() {
+        openConvertModal(
+            parseInt(this.dataset.memberId, 10),
+            this.dataset.memberName,
+            this.dataset.fingerprint
+        );
+    });
+});
 
 async function submitConvert() {
     if (!currentMemberId) return;
