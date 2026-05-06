@@ -429,6 +429,13 @@ def access_state():
                 'end_date': PAST_DATE,
                 'reason': 'محظور من قبل الإدارة',
             }
+        elif m.is_staff:
+            # Staff bypass subscription/class checks — always allowed (until 2099)
+            decision = {
+                'allowed': True,
+                'end_date': FAR_FUTURE_DATE,
+                'reason': 'موظف',
+            }
         else:
             decision = _compute_access(m, now, today, window_minutes)
         out.append({

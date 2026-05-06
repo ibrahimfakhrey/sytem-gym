@@ -12,8 +12,10 @@ from app.models.blocked_member import BlockedMember
 from app.models.subscription import Subscription
 from app.models.health import HealthReport
 from app.models.complaint import Complaint
+from app.models.user import User, Role
 from app.utils.decorators import members_required
 from app.utils.helpers import save_uploaded_file, pagination_args
+import secrets
 
 
 class BlockMemberForm(FlaskForm):
@@ -434,6 +436,112 @@ def blocked_list():
     return render_template('members/blocked_list.html',
                           blocked_members=blocked_members,
                           brands=brands)
+
+
+def _can_convert_employees(user):
+    """Owner / branch_manager / admin can convert members to employees."""
+    return user.role and user.role.name_en in ('admin', 'owner', 'branch_manager')
+
+
+@members_bp.route('/<int:member_id>/convert-to-employee', methods=['GET', 'POST'])
+@login_required
+@members_required
+def convert_to_employee(member_id):
+    """
+    Promote a Member to a User (employee). Re-uses the same fingerprint_id so
+    their gate scans flow into BOTH MemberAttendance (entry log) and
+    EmployeeAttendance (work shift, late deductions).
+    """
+    member = Member.query.get_or_404(member_id)
+
+    # Permissions
+    if not _can_convert_employees(current_user):
+        flash('ليس لديك صلاحية لتحويل الأعضاء إلى موظفين', 'danger')
+        return redirect(url_for('members.view', member_id=member_id))
+    if not current_user.can_access_brand(member.brand_id):
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('members.view', member_id=member_id))
+
+    # Already converted?
+    if member.is_staff and member.staff_user_id:
+        flash('هذا العضو موظف بالفعل', 'info')
+        return redirect(url_for('members.view', member_id=member_id))
+
+    # Branches accessible to current user (within member's brand)
+    if current_user.role.name_en == 'admin':
+        branches = Branch.query.filter_by(brand_id=member.brand_id, is_active=True).all()
+    elif current_user.role.name_en == 'owner':
+        branches = Branch.query.filter_by(brand_id=current_user.brand_id, is_active=True).all()
+    else:  # branch_manager
+        branches = Branch.query.filter_by(id=current_user.branch_id, is_active=True).all()
+
+    # Roles available (employee, branch_receptionist, branch_finance — not admin/owner)
+    role_names = ['employee', 'branch_receptionist', 'branch_finance']
+    roles = Role.query.filter(Role.name_en.in_(role_names)).all()
+
+    if request.method == 'POST':
+        branch_id = request.form.get('branch_id', type=int)
+        role_id = request.form.get('role_id', type=int)
+        department = (request.form.get('department') or '').strip() or None
+        is_trainer = request.form.get('is_trainer') == 'on'
+        email = (request.form.get('email') or '').strip().lower()
+        custom_password = (request.form.get('password') or '').strip()
+
+        # Validate
+        if not branch_id or branch_id not in [b.id for b in branches]:
+            flash('يرجى اختيار فرع صحيح', 'danger')
+            return render_template('members/convert_to_employee.html',
+                                   member=member, branches=branches, roles=roles)
+        if not role_id or role_id not in [r.id for r in roles]:
+            flash('يرجى اختيار دور صحيح', 'danger')
+            return render_template('members/convert_to_employee.html',
+                                   member=member, branches=branches, roles=roles)
+
+        # Auto-generate email if blank
+        if not email:
+            slug = (member.member_import_id or str(member.id)).strip('0') or str(member.id)
+            email = f'emp_{slug}_{member.brand_id}@gym.local'
+
+        # Email uniqueness
+        if User.query.filter_by(email=email).first():
+            flash(f'البريد {email} مستخدم بالفعل', 'danger')
+            return render_template('members/convert_to_employee.html',
+                                   member=member, branches=branches, roles=roles)
+
+        # Random password if none provided (employee won't log in)
+        password = custom_password or secrets.token_urlsafe(16)
+
+        # Create User with same fingerprint_id
+        new_user = User(
+            name=member.name,
+            email=email,
+            role_id=role_id,
+            brand_id=member.brand_id,
+            branch_id=branch_id,
+            fingerprint_id=member.fingerprint_id,
+            is_trainer=is_trainer,
+            department=department,
+            is_active=True,
+        )
+        new_user.set_password(password)
+        db.session.add(new_user)
+        db.session.flush()  # get id
+
+        # Link member ↔ user
+        member.is_staff = True
+        member.staff_user_id = new_user.id
+        member.branch_id = branch_id  # also set member's branch to match employee
+        db.session.commit()
+
+        msg = f'✅ تم تحويل {member.name} إلى موظف. البريد: {email}'
+        if not custom_password:
+            msg += ' (لم يتم تعيين كلمة مرور — لا يستطيع تسجيل الدخول للموقع)'
+        flash(msg, 'success')
+
+        return redirect(url_for('members.view', member_id=member_id))
+
+    return render_template('members/convert_to_employee.html',
+                           member=member, branches=branches, roles=roles)
 
 
 @members_bp.route('/<int:member_id>/toggle-access', methods=['POST'])

@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+
+{% block title %}تحويل {{ member.name }} إلى موظف{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-person-badge"></i>
+        تحويل عضو إلى موظف
+    </h1>
+    <a href="{{ url_for('members.view', member_id=member.id) }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-right"></i>
+        رجوع
+    </a>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <i class="bi bi-info-circle"></i>
+                معلومات العضو الذي سيتم تحويله
+            </div>
+            <div class="card-body">
+                <table class="table table-sm mb-0">
+                    <tr>
+                        <th style="width: 200px;">الاسم:</th>
+                        <td><strong>{{ member.name }}</strong></td>
+                    </tr>
+                    <tr>
+                        <th>الهاتف:</th>
+                        <td>{{ member.phone }}</td>
+                    </tr>
+                    <tr>
+                        <th>رقم البصمة:</th>
+                        <td>
+                            {% if member.fingerprint_id %}
+                            <code>{{ member.fingerprint_id }}</code>
+                            <small class="text-muted">— سيتم استخدام نفس الرقم لتسجيل ساعات العمل</small>
+                            {% else %}
+                            <span class="text-warning">⚠ لا يوجد رقم بصمة — لن يتم تتبع الحضور تلقائياً</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>البراند:</th>
+                        <td>{{ member.brand.name if member.brand else '-' }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <form method="POST" class="mt-4">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-pencil-square"></i>
+                    تفاصيل التوظيف
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">الفرع <span class="text-danger">*</span></label>
+                            <select name="branch_id" class="form-select" required>
+                                <option value="">-- اختر الفرع --</option>
+                                {% for b in branches %}
+                                <option value="{{ b.id }}">{{ b.name }}</option>
+                                {% endfor %}
+                            </select>
+                            <small class="text-muted">سيتم تسجيل حضور الموظف لهذا الفرع</small>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">الدور الوظيفي <span class="text-danger">*</span></label>
+                            <select name="role_id" class="form-select" required>
+                                <option value="">-- اختر الدور --</option>
+                                {% for r in roles %}
+                                <option value="{{ r.id }}">{{ r.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">القسم</label>
+                            <select name="department" class="form-select">
+                                <option value="">-- (اختياري) --</option>
+                                <option value="reception">الاستقبال</option>
+                                <option value="training">التدريب</option>
+                                <option value="cleaning">النظافة</option>
+                                <option value="management">الإدارة</option>
+                                <option value="other">أخرى</option>
+                            </select>
+                        </div>
+
+                        <div class="col-md-6 d-flex align-items-end">
+                            <div class="form-check form-switch">
+                                <input type="checkbox" name="is_trainer" id="is_trainer" class="form-check-input" role="switch">
+                                <label for="is_trainer" class="form-check-label">مدرب يقدم كلاسات</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mt-3">
+                <div class="card-header">
+                    <i class="bi bi-shield-lock"></i>
+                    الدخول لتطبيق الويب (اختياري)
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small">
+                        إذا لم يكن الموظف بحاجة لتسجيل الدخول للنظام (مثل المدربين/عمال النظافة)،
+                        اتركها فارغة. سيتم توليد بريد إلكتروني عشوائي لربط حسابه فقط.
+                    </p>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">البريد الإلكتروني</label>
+                            <input type="email" name="email" class="form-control"
+                                   placeholder="(اختياري — يتم توليده تلقائياً)">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">كلمة المرور</label>
+                            <input type="text" name="password" class="form-control"
+                                   placeholder="(اتركها فارغة إذا لم يحتج للدخول)">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end gap-2 mt-4">
+                <a href="{{ url_for('members.view', member_id=member.id) }}" class="btn btn-outline-secondary">
+                    إلغاء
+                </a>
+                <button type="submit" class="btn btn-success">
+                    <i class="bi bi-check-circle"></i>
+                    تحويل إلى موظف
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -721,3 +721,126 @@ def delete_shift(user_id):
 
     user = User.query.get(user_id)
     return redirect(url_for('employees.shifts', brand_id=user.brand_id if user else None))
+
+
+# ============== BULK CONVERT MEMBERS → EMPLOYEES ==============
+
+@employees_bp.route('/from-members', methods=['GET', 'POST'])
+@login_required
+def from_members():
+    """
+    Bulk-convert members (synced from tmkq.mdb) into User employees.
+    Owner/Branch_manager/Admin only. Each selected member gets a User record
+    with the same fingerprint_id. Their gate scans then count as work shifts.
+    """
+    if not (current_user.role and current_user.role.name_en in ('admin', 'owner', 'branch_manager')):
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('dashboard.index'))
+
+    from app.models.member import Member
+    from app.models.company import Branch
+    import secrets as _secrets
+
+    # Build branch list based on role
+    if current_user.role.name_en == 'admin':
+        branches = Branch.query.filter_by(is_active=True).all()
+    elif current_user.role.name_en == 'owner':
+        branches = Branch.query.filter_by(brand_id=current_user.brand_id, is_active=True).all()
+    else:  # branch_manager
+        branches = Branch.query.filter_by(id=current_user.branch_id, is_active=True).all()
+
+    role_names = ['employee', 'branch_receptionist', 'branch_finance']
+    roles = Role.query.filter(Role.name_en.in_(role_names)).all()
+
+    if request.method == 'POST':
+        member_ids = request.form.getlist('member_ids', type=int)
+        branch_id = request.form.get('branch_id', type=int)
+        role_id = request.form.get('role_id', type=int)
+        department = (request.form.get('department') or '').strip() or None
+        is_trainer = request.form.get('is_trainer') == 'on'
+
+        if not member_ids:
+            flash('يرجى تحديد أعضاء على الأقل واحد', 'warning')
+            return redirect(url_for('employees.from_members'))
+        if not branch_id or branch_id not in [b.id for b in branches]:
+            flash('يرجى اختيار فرع صحيح', 'danger')
+            return redirect(url_for('employees.from_members'))
+        if not role_id or role_id not in [r.id for r in roles]:
+            flash('يرجى اختيار دور صحيح', 'danger')
+            return redirect(url_for('employees.from_members'))
+
+        target_branch = Branch.query.get(branch_id)
+        target_brand_id = target_branch.brand_id
+
+        converted = 0
+        skipped = 0
+        for mid in member_ids:
+            member = Member.query.get(mid)
+            if not member or member.is_staff or not current_user.can_access_brand(member.brand_id):
+                skipped += 1
+                continue
+            # Cross-brand safety: members must belong to same brand as target branch
+            if member.brand_id != target_brand_id:
+                skipped += 1
+                continue
+
+            slug = (member.member_import_id or str(member.id)).strip('0') or str(member.id)
+            email = f'emp_{slug}_{member.brand_id}@gym.local'
+            # Avoid email collisions
+            if User.query.filter_by(email=email).first():
+                email = f'emp_{slug}_{member.brand_id}_{_secrets.token_hex(3)}@gym.local'
+
+            new_user = User(
+                name=member.name,
+                email=email,
+                role_id=role_id,
+                brand_id=member.brand_id,
+                branch_id=branch_id,
+                fingerprint_id=member.fingerprint_id,
+                is_trainer=is_trainer,
+                department=department,
+                is_active=True,
+            )
+            new_user.set_password(_secrets.token_urlsafe(16))
+            db.session.add(new_user)
+            db.session.flush()
+
+            member.is_staff = True
+            member.staff_user_id = new_user.id
+            member.branch_id = branch_id
+            converted += 1
+
+        db.session.commit()
+        flash(f'تم تحويل {converted} عضو إلى موظفين. تم تجاهل {skipped}.', 'success')
+        return redirect(url_for('employees.index') if False else url_for('employees.from_members'))
+
+    # GET — list candidates
+    from app.models.member import Member
+    query = Member.query.filter(
+        Member.is_staff.is_(False),
+        Member.fingerprint_id.isnot(None),
+    )
+    if current_user.role.name_en == 'admin':
+        pass
+    elif current_user.role.name_en == 'owner':
+        query = query.filter(Member.brand_id == current_user.brand_id)
+    else:
+        query = query.filter(Member.branch_id == current_user.branch_id)
+
+    search = (request.args.get('q') or '').strip()
+    if search:
+        query = query.filter(
+            db.or_(
+                Member.name.ilike(f'%{search}%'),
+                Member.phone.ilike(f'%{search}%'),
+                Member.member_import_id.ilike(f'%{search}%'),
+            )
+        )
+
+    candidates = query.order_by(Member.name).limit(200).all()
+
+    return render_template('employees/from_members.html',
+                           candidates=candidates,
+                           branches=branches,
+                           roles=roles,
+                           search=search)
