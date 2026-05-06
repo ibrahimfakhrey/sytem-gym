@@ -814,6 +814,125 @@ def from_members():
         flash(f'تم تحويل {converted} عضو إلى موظفين. تم تجاهل {skipped}.', 'success')
         return redirect(url_for('employees.index') if False else url_for('employees.from_members'))
 
+
+@employees_bp.route('/from-members/<int:member_id>/convert', methods=['POST'])
+@login_required
+def from_member_one(member_id):
+    """
+    Convert a single member to employee via JSON.
+    Accepts: role_id, branch_id, department, is_trainer, base_salary, email, password.
+    Returns JSON with success status and message.
+    """
+    if not (current_user.role and current_user.role.name_en in ('admin', 'owner', 'branch_manager')):
+        return jsonify({'success': False, 'message': 'ليس لديك صلاحية'}), 403
+
+    from app.models.member import Member
+    from app.models.company import Branch
+    import secrets as _secrets
+
+    member = Member.query.get_or_404(member_id)
+
+    if member.is_staff:
+        return jsonify({'success': False, 'message': 'هذا العضو موظف بالفعل'}), 400
+    if not current_user.can_access_brand(member.brand_id):
+        return jsonify({'success': False, 'message': 'ليس لديك صلاحية على هذا العضو'}), 403
+
+    # Allowed branches for current user (within member's brand)
+    if current_user.role.name_en == 'admin':
+        allowed_branches = Branch.query.filter_by(brand_id=member.brand_id, is_active=True).all()
+    elif current_user.role.name_en == 'owner':
+        allowed_branches = Branch.query.filter_by(brand_id=current_user.brand_id, is_active=True).all()
+    else:
+        allowed_branches = Branch.query.filter_by(id=current_user.branch_id, is_active=True).all()
+    allowed_branch_ids = {b.id for b in allowed_branches}
+
+    role_names = ['employee', 'branch_receptionist', 'branch_finance']
+    allowed_role_ids = {r.id for r in Role.query.filter(Role.name_en.in_(role_names)).all()}
+
+    branch_id = request.form.get('branch_id', type=int)
+    role_id = request.form.get('role_id', type=int)
+    department = (request.form.get('department') or '').strip() or None
+    is_trainer = request.form.get('is_trainer') in ('on', 'true', '1')
+    custom_email = (request.form.get('email') or '').strip().lower()
+    custom_password = (request.form.get('password') or '').strip()
+    base_salary_raw = (request.form.get('base_salary') or '').strip()
+
+    if not branch_id or branch_id not in allowed_branch_ids:
+        return jsonify({'success': False, 'message': 'يرجى اختيار فرع صحيح'}), 400
+    if not role_id or role_id not in allowed_role_ids:
+        return jsonify({'success': False, 'message': 'يرجى اختيار دور صحيح'}), 400
+
+    target_branch = Branch.query.get(branch_id)
+    if target_branch.brand_id != member.brand_id:
+        return jsonify({'success': False, 'message': 'الفرع لا يطابق براند العضو'}), 400
+
+    base_salary = None
+    if base_salary_raw:
+        try:
+            base_salary = float(base_salary_raw)
+            if base_salary < 0:
+                raise ValueError()
+        except ValueError:
+            return jsonify({'success': False, 'message': 'مبلغ الراتب غير صالح'}), 400
+
+    # Email
+    if custom_email:
+        email = custom_email
+    else:
+        slug = (member.member_import_id or str(member.id)).strip('0') or str(member.id)
+        email = f'emp_{slug}_{member.brand_id}@gym.local'
+    if User.query.filter_by(email=email).first():
+        if custom_email:
+            return jsonify({'success': False, 'message': f'البريد {email} مستخدم بالفعل'}), 400
+        email = f'emp_{slug}_{member.brand_id}_{_secrets.token_hex(3)}@gym.local'
+
+    password = custom_password or _secrets.token_urlsafe(16)
+
+    new_user = User(
+        name=member.name,
+        email=email,
+        role_id=role_id,
+        brand_id=member.brand_id,
+        branch_id=branch_id,
+        fingerprint_id=member.fingerprint_id,
+        is_trainer=is_trainer,
+        department=department,
+        is_active=True,
+    )
+    new_user.set_password(password)
+    db.session.add(new_user)
+    db.session.flush()
+
+    member.is_staff = True
+    member.staff_user_id = new_user.id
+    member.branch_id = branch_id
+
+    if base_salary is not None and base_salary > 0:
+        today = date.today()
+        salary_record = Salary(
+            user_id=new_user.id,
+            brand_id=member.brand_id,
+            month=today.month,
+            year=today.year,
+            base_salary=base_salary,
+            deductions=0,
+            bonuses=0,
+            net_salary=base_salary,
+            status='pending',
+        )
+        db.session.add(salary_record)
+
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'message': f'تم تحويل {member.name} إلى موظف',
+        'member_id': member.id,
+        'user_id': new_user.id,
+        'email': email,
+        'has_login': bool(custom_password),
+    })
+
     # GET — list candidates
     from app.models.member import Member
     query = Member.query.filter(

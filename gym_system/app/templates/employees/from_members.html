@@ -12,18 +12,18 @@
 
 <div class="alert alert-info">
     <i class="bi bi-info-circle"></i>
-    اختر فرعاً أولاً لعرض أعضائه، ثم حدد من تريد تحويلهم إلى موظفين. سيتم إنشاء حساب موظف لكل واحد
-    باستخدام نفس رقم البصمة، وسيتم تتبع ساعات عملهم تلقائياً.
+    اختر فرعاً أولاً لعرض أعضائه. اضغط على <strong>تحويل</strong> بجانب أي عضو لفتح نموذج سريع
+    وضبط الدور والراتب وتحويله. أو حدد عدة أعضاء واستخدم التحويل الجماعي بالأسفل.
 </div>
 
+<!-- Branch + bulk shared settings -->
 <form method="POST" id="bulk-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-    <!-- Shared employee settings -->
     <div class="card mb-3">
         <div class="card-header">
-            <i class="bi bi-gear"></i>
-            الإعدادات المشتركة (تُطبق على كل المحددين)
+            <i class="bi bi-funnel"></i>
+            اختيار الفرع والإعدادات الجماعية (للتحويل المتعدد)
         </div>
         <div class="card-body">
             <div class="row g-3">
@@ -37,8 +37,8 @@
                     </select>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label">الدور <span class="text-danger">*</span></label>
-                    <select name="role_id" class="form-select" required>
+                    <label class="form-label">الدور <small class="text-muted">(للتحويل الجماعي)</small></label>
+                    <select name="role_id" class="form-select">
                         <option value="">-- اختر --</option>
                         {% for r in roles %}
                         <option value="{{ r.id }}">{{ r.name }}</option>
@@ -46,7 +46,7 @@
                     </select>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label">القسم</label>
+                    <label class="form-label">القسم <small class="text-muted">(للتحويل الجماعي)</small></label>
                     <select name="department" class="form-select">
                         <option value="">--</option>
                         <option value="reception">الاستقبال</option>
@@ -70,9 +70,6 @@
         <div class="card-body py-2">
             <div class="d-flex justify-content-between align-items-center">
                 <div class="d-flex gap-2 mb-0" style="max-width: 400px;">
-                    {% if selected_branch_id %}
-                    <input type="hidden" id="filter-branch-id" value="{{ selected_branch_id }}">
-                    {% endif %}
                     <input type="text" id="search-input" value="{{ search }}" class="form-control form-control-sm"
                            placeholder="ابحث بالاسم أو الهاتف أو رقم البصمة..."
                            onkeydown="if(event.key==='Enter'){event.preventDefault();applySearch();}">
@@ -90,7 +87,7 @@
     <!-- Members table -->
     <div class="card">
         <div class="card-body p-0">
-            <table class="table table-hover mb-0">
+            <table class="table table-hover mb-0" id="members-table">
                 <thead class="table-light">
                     <tr>
                         <th style="width: 40px;"></th>
@@ -99,11 +96,12 @@
                         <th>رقم البصمة</th>
                         <th>رقم في الجهاز</th>
                         <th>البراند</th>
+                        <th style="width: 120px;"></th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for m in candidates %}
-                    <tr>
+                    <tr id="member-row-{{ m.id }}">
                         <td>
                             <input type="checkbox" name="member_ids" value="{{ m.id }}"
                                    class="form-check-input member-checkbox" onchange="updateCount()">
@@ -113,9 +111,16 @@
                         <td><code>{{ m.fingerprint_id or '-' }}</code></td>
                         <td><code class="text-muted">{{ m.member_import_id or '-' }}</code></td>
                         <td><small>{{ m.brand.name if m.brand else '-' }}</small></td>
+                        <td>
+                            <button type="button" class="btn btn-sm btn-success"
+                                    onclick="openConvertModal({{ m.id }}, {{ m.name|tojson }}, {{ (m.fingerprint_id or '')|tojson }})">
+                                <i class="bi bi-person-check"></i>
+                                تحويل
+                            </button>
+                        </td>
                     </tr>
                     {% else %}
-                    <tr><td colspan="6" class="text-center py-4 text-muted">
+                    <tr><td colspan="7" class="text-center py-4 text-muted">
                         {% if selected_branch_id %}
                         لا يوجد أعضاء قابلين للتحويل في هذا الفرع
                         {% else %}
@@ -132,12 +137,126 @@
     <div class="text-end mt-3">
         <button type="submit" class="btn btn-success btn-lg">
             <i class="bi bi-check-circle"></i>
-            تحويل المحددين إلى موظفين
+            تحويل المحددين إلى موظفين (جماعي)
         </button>
     </div>
 </form>
 
+<!-- Convert single member modal -->
+<div class="modal fade" id="convertModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <form id="convert-form" onsubmit="event.preventDefault(); submitConvert();">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="branch_id" id="modal-branch-id">
+
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-person-badge"></i>
+                        تحويل <span id="modal-member-name"></span> إلى موظف
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-light border small mb-3">
+                        <i class="bi bi-fingerprint"></i>
+                        البصمة: <code id="modal-fingerprint">-</code>
+                        <span class="text-muted">— سيتم استخدام نفس الرقم لتسجيل ساعات العمل</span>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">الدور <span class="text-danger">*</span></label>
+                            <select name="role_id" class="form-select" required>
+                                <option value="">-- اختر الدور --</option>
+                                {% for r in roles %}
+                                <option value="{{ r.id }}">{{ r.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">القسم</label>
+                            <select name="department" class="form-select">
+                                <option value="">-- (اختياري) --</option>
+                                <option value="reception">الاستقبال</option>
+                                <option value="training">التدريب</option>
+                                <option value="cleaning">النظافة</option>
+                                <option value="management">الإدارة</option>
+                                <option value="other">أخرى</option>
+                            </select>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">الراتب الأساسي (شهرياً)</label>
+                            <div class="input-group">
+                                <input type="number" name="base_salary" class="form-control" min="0" step="0.01"
+                                       placeholder="0">
+                                <span class="input-group-text">ر.س</span>
+                            </div>
+                            <small class="text-muted">اختياري — سيتم إنشاء سجل راتب للشهر الحالي</small>
+                        </div>
+
+                        <div class="col-md-6 d-flex align-items-end">
+                            <div class="form-check form-switch">
+                                <input type="checkbox" name="is_trainer" id="modal-is-trainer" class="form-check-input" role="switch">
+                                <label for="modal-is-trainer" class="form-check-label">مدرب يقدم كلاسات</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr class="my-3">
+                    <h6 class="text-muted">
+                        <i class="bi bi-shield-lock"></i>
+                        دخول للموقع (اختياري)
+                    </h6>
+                    <p class="text-muted small mb-2">
+                        اتركها فارغة إذا لم يكن الموظف بحاجة لتسجيل الدخول لتطبيق الويب.
+                    </p>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">البريد الإلكتروني</label>
+                            <input type="email" name="email" class="form-control"
+                                   placeholder="(يتم توليده تلقائياً)">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">كلمة المرور</label>
+                            <input type="text" name="password" class="form-control"
+                                   placeholder="(فارغة = لا يدخل للموقع)">
+                        </div>
+                    </div>
+
+                    <div id="modal-error" class="alert alert-danger mt-3 d-none"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-success" id="modal-submit-btn">
+                        <i class="bi bi-check-circle"></i>
+                        تحويل إلى موظف
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container position-fixed top-0 start-0 p-3" style="z-index: 1080;">
+    <div id="convert-toast" class="toast align-items-center text-white border-0" role="alert">
+        <div class="d-flex">
+            <div class="toast-body" id="toast-body"></div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+    </div>
+</div>
+
 <script>
+let currentMemberId = null;
+const convertModalEl = document.getElementById('convertModal');
+const convertModal = new bootstrap.Modal(convertModalEl);
+const toastEl = document.getElementById('convert-toast');
+const convertToast = new bootstrap.Toast(toastEl, { delay: 4000 });
+
 function toggleAll(state) {
     document.querySelectorAll('.member-checkbox').forEach(cb => cb.checked = state);
     updateCount();
@@ -165,6 +284,79 @@ function applySearch() {
         url.searchParams.delete('q');
     }
     window.location = url;
+}
+
+function openConvertModal(memberId, memberName, fingerprint) {
+    const branchSelect = document.getElementById('branch-select');
+    const branchId = branchSelect.value;
+    if (!branchId) {
+        showToast('اختر فرعاً أولاً من الأعلى', 'warning');
+        return;
+    }
+    currentMemberId = memberId;
+    document.getElementById('modal-member-name').textContent = memberName;
+    document.getElementById('modal-fingerprint').textContent = fingerprint || '-';
+    document.getElementById('modal-branch-id').value = branchId;
+
+    // Pre-fill from bulk shared settings as defaults
+    const bulkRole = document.querySelector('#bulk-form select[name="role_id"]').value;
+    const bulkDept = document.querySelector('#bulk-form select[name="department"]').value;
+    const bulkTrainer = document.querySelector('#bulk-form input[name="is_trainer"]').checked;
+
+    const form = document.getElementById('convert-form');
+    form.reset();
+    document.getElementById('modal-branch-id').value = branchId;  // reset cleared it
+    if (bulkRole) form.querySelector('select[name="role_id"]').value = bulkRole;
+    if (bulkDept) form.querySelector('select[name="department"]').value = bulkDept;
+    form.querySelector('input[name="is_trainer"]').checked = bulkTrainer;
+
+    document.getElementById('modal-error').classList.add('d-none');
+    convertModal.show();
+}
+
+async function submitConvert() {
+    if (!currentMemberId) return;
+    const btn = document.getElementById('modal-submit-btn');
+    const errorBox = document.getElementById('modal-error');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> جاري التحويل...';
+    errorBox.classList.add('d-none');
+
+    const form = document.getElementById('convert-form');
+    const data = new FormData(form);
+
+    try {
+        const resp = await fetch(`/employees/from-members/${currentMemberId}/convert`, {
+            method: 'POST',
+            body: data,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        const json = await resp.json();
+        if (!resp.ok || !json.success) {
+            errorBox.textContent = json.message || 'حدث خطأ غير متوقع';
+            errorBox.classList.remove('d-none');
+            return;
+        }
+        // Remove row + close modal + toast
+        const row = document.getElementById(`member-row-${currentMemberId}`);
+        if (row) row.remove();
+        updateCount();
+        convertModal.hide();
+        showToast(json.message + (json.has_login ? ` (البريد: ${json.email})` : ''), 'success');
+    } catch (err) {
+        errorBox.textContent = 'فشل الاتصال بالخادم';
+        errorBox.classList.remove('d-none');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-check-circle"></i> تحويل إلى موظف';
+    }
+}
+
+function showToast(message, type) {
+    const colors = { success: 'bg-success', warning: 'bg-warning', danger: 'bg-danger' };
+    toastEl.className = 'toast align-items-center text-white border-0 ' + (colors[type] || 'bg-primary');
+    document.getElementById('toast-body').textContent = message;
+    convertToast.show();
 }
 </script>
 {% endblock %}
