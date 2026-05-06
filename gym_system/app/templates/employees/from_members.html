@@ -12,7 +12,7 @@
 
 <div class="alert alert-info">
     <i class="bi bi-info-circle"></i>
-    اختر أعضاء من قائمة البصمة لتحويلهم إلى موظفين. سيتم إنشاء حساب موظف لكل واحد
+    اختر فرعاً أولاً لعرض أعضائه، ثم حدد من تريد تحويلهم إلى موظفين. سيتم إنشاء حساب موظف لكل واحد
     باستخدام نفس رقم البصمة، وسيتم تتبع ساعات عملهم تلقائياً.
 </div>
 
@@ -29,10 +29,10 @@
             <div class="row g-3">
                 <div class="col-md-3">
                     <label class="form-label">الفرع <span class="text-danger">*</span></label>
-                    <select name="branch_id" class="form-select" required>
+                    <select name="branch_id" id="branch-select" class="form-select" required onchange="onBranchChange(this.value)">
                         <option value="">-- اختر --</option>
                         {% for b in branches %}
-                        <option value="{{ b.id }}">{{ b.name }}</option>
+                        <option value="{{ b.id }}" {% if selected_branch_id == b.id %}selected{% endif %}>{{ b.name }}</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -69,11 +69,15 @@
     <div class="card mb-2">
         <div class="card-body py-2">
             <div class="d-flex justify-content-between align-items-center">
-                <form method="GET" class="d-flex gap-2 mb-0" style="max-width: 400px;">
-                    <input type="text" name="q" value="{{ search }}" class="form-control form-control-sm"
-                           placeholder="ابحث بالاسم أو الهاتف أو رقم البصمة...">
-                    <button type="submit" class="btn btn-sm btn-outline-primary">بحث</button>
-                </form>
+                <div class="d-flex gap-2 mb-0" style="max-width: 400px;">
+                    {% if selected_branch_id %}
+                    <input type="hidden" id="filter-branch-id" value="{{ selected_branch_id }}">
+                    {% endif %}
+                    <input type="text" id="search-input" value="{{ search }}" class="form-control form-control-sm"
+                           placeholder="ابحث بالاسم أو الهاتف أو رقم البصمة..."
+                           onkeydown="if(event.key==='Enter'){event.preventDefault();applySearch();}">
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="applySearch()">بحث</button>
+                </div>
                 <div>
                     <span id="selected-count" class="badge bg-info">0 محدد</span>
                     <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleAll(true)">تحديد الكل</button>
@@ -112,7 +116,12 @@
                     </tr>
                     {% else %}
                     <tr><td colspan="6" class="text-center py-4 text-muted">
-                        لا يوجد أعضاء قابلين للتحويل
+                        {% if selected_branch_id %}
+                        لا يوجد أعضاء قابلين للتحويل في هذا الفرع
+                        {% else %}
+                        <i class="bi bi-arrow-up-circle"></i>
+                        اختر فرعاً من الأعلى لعرض أعضائه
+                        {% endif %}
                     </td></tr>
                     {% endfor %}
                 </tbody>
@@ -136,6 +145,26 @@ function toggleAll(state) {
 function updateCount() {
     const n = document.querySelectorAll('.member-checkbox:checked').length;
     document.getElementById('selected-count').textContent = n + ' محدد';
+}
+function onBranchChange(branchId) {
+    const url = new URL(window.location);
+    if (branchId) {
+        url.searchParams.set('branch_id', branchId);
+    } else {
+        url.searchParams.delete('branch_id');
+    }
+    url.searchParams.delete('q');
+    window.location = url;
+}
+function applySearch() {
+    const url = new URL(window.location);
+    const q = document.getElementById('search-input').value.trim();
+    if (q) {
+        url.searchParams.set('q', q);
+    } else {
+        url.searchParams.delete('q');
+    }
+    window.location = url;
 }
 </script>
 {% endblock %}
