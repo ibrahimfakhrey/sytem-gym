@@ -58,12 +58,14 @@ def parse_iso_dt(s):
 
 
 def parse_iso_date(s):
-    """Parse YYYY-MM-DD string → date."""
+    """Parse YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS string → date."""
     if not s:
         return None
     try:
-        return datetime.strptime(s, '%Y-%m-%d').date()
-    except (ValueError, TypeError):
+        # Take just the date portion (handles "2024-06-13" and "2024-06-13T00:00:00")
+        date_part = s.split('T')[0].split(' ')[0]
+        return datetime.strptime(date_part, '%Y-%m-%d').date()
+    except (ValueError, TypeError, AttributeError):
         return None
 
 

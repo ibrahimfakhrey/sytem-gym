@@ -141,6 +141,13 @@ class SyncEngine:
         self.config['id_mapping'] = result.get('id_mapping', {})
         self.config['first_sync_done'] = True
         self.config['last_sync'] = result.get('server_time')
+
+        # Set high-water mark to current max ID, so we only fetch *new* scans next time
+        try:
+            self.config['last_attendance_log_id'] = self.reader.get_max_attendance_id()
+        except Exception:
+            pass
+
         self.on_config_save(self.config)
 
         summary = result.get('import_summary', {})
@@ -166,16 +173,16 @@ class SyncEngine:
         known_emp_ids = set(self.config.get('id_mapping', {}).keys())
         new_members = [m for m in all_members if m.get('emp_id') and m['emp_id'] not in known_emp_ids]
 
-        # Read new attendance scans since last sync
+        # Read new attendance scans since last seen ID (auto-increment)
         try:
-            last_sync_ts = self.config.get('last_sync')
-            since_dt = None
-            if last_sync_ts:
-                # Strip tz for comparison with naive .mdb datetime
-                ts = last_sync_ts.replace('Z', '').split('+')[0]
-                since_dt = datetime.fromisoformat(ts)
-            new_attendance = self.reader.read_attendance(since_dt=since_dt)
-        except Exception:
+            since_id = self.config.get('last_attendance_log_id', 0) or 0
+            new_attendance = self.reader.read_attendance(since_id=since_id)
+            # Update high-water-mark
+            if new_attendance:
+                max_id = max(int(r.get('device_log_id') or 0) for r in new_attendance)
+                self.config['last_attendance_log_id'] = max(since_id, max_id)
+        except Exception as e:
+            self.on_status(f'تحذير قراءة سجلات البصمة: {e}', 'warning')
             new_attendance = []
 
         # Push to cloud
