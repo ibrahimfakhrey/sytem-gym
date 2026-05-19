@@ -51,6 +51,12 @@ KSA_TZ = ZoneInfo("Asia/Riyadh")
 PAST_DATE = date(2020, 1, 1)
 FAR_FUTURE_DATE = date(2099, 12, 31)
 
+# Single-tenant lock — this deployment serves exactly one brand + branch.
+# Requests may omit brand_id/branch_id (the server fills them in); if
+# provided, they must match. Branch code BR-8-9.
+LOCKED_BRAND_ID = 8
+LOCKED_BRANCH_ID = 9
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
@@ -94,10 +100,22 @@ def safe_int(v, default=None):
 
 
 def _resolve_branch(brand_id, branch_id):
-    """Return Branch or None. brand_id is required for cross-check."""
-    if not brand_id or not branch_id:
+    """
+    Return the locked Branch (BR-8-9) or None.
+
+    Single-tenant: brand_id/branch_id are optional in requests. If omitted,
+    we use the locked defaults. If provided, they must match LOCKED_BRAND_ID
+    and LOCKED_BRANCH_ID — otherwise the call is rejected.
+    """
+    if brand_id is None:
+        brand_id = LOCKED_BRAND_ID
+    if branch_id is None:
+        branch_id = LOCKED_BRANCH_ID
+    if brand_id != LOCKED_BRAND_ID or branch_id != LOCKED_BRANCH_ID:
         return None
-    return Branch.query.filter_by(id=branch_id, brand_id=brand_id).first()
+    return Branch.query.filter_by(
+        id=LOCKED_BRANCH_ID, brand_id=LOCKED_BRAND_ID
+    ).first()
 
 
 def _emp_id_for(member):
