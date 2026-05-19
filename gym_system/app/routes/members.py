@@ -533,6 +533,14 @@ def convert_to_employee(member_id):
         member.branch_id = branch_id  # also set member's branch to match employee
         db.session.commit()
 
+        # Backfill EmployeeAttendance from existing fingerprint scans (last 60 days)
+        try:
+            from app.routes.fingerprint import backfill_employee_attendance_from_member_scans
+            backfill_employee_attendance_from_member_scans(new_user, branch_id, days=60)
+            db.session.commit()
+        except Exception:
+            db.session.rollback()  # backfill is best-effort; conversion already saved
+
         msg = f'✅ تم تحويل {member.name} إلى موظف. البريد: {email}'
         if not custom_password:
             msg += ' (لم يتم تعيين كلمة مرور — لا يستطيع تسجيل الدخول للموقع)'

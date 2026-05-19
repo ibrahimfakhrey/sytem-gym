@@ -1,0 +1,314 @@
+{% extends "base.html" %}
+
+{% block title %}التحكم بالبصمة — {{ branch.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .fp-scan-row { transition: background-color 0.6s ease-out; }
+    .fp-scan-row.fp-new { background-color: #fff8c4; }
+    .fp-status-card { border-right: 4px solid var(--bs-secondary); }
+    .fp-status-card.online { border-right-color: var(--bs-success); }
+    .fp-status-card.late   { border-right-color: var(--bs-warning); }
+    .fp-status-card.offline{ border-right-color: var(--bs-danger); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-fingerprint"></i>
+        التحكم بالبصمة
+        <small class="text-muted fs-5">— {{ brand.name }} / {{ branch.name }}</small>
+    </h1>
+    <div>
+        <a href="{{ url_for('fingerprint.control_brand', brand_id=brand.id) }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-right"></i>
+            العودة
+        </a>
+    </div>
+</div>
+
+{# ────── Status row ────── #}
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div id="fpBridgeCard" class="card fp-status-card h-100">
+            <div class="card-body">
+                <h6 class="text-muted mb-2"><i class="bi bi-hdd-network"></i> حالة الجسر</h6>
+                <h4 id="fpStatusText" class="mb-1">—</h4>
+                <small id="fpStatusDetail" class="text-muted">جاري التحميل...</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h6 class="text-muted mb-2"><i class="bi bi-clock-history"></i> آخر مزامنة</h6>
+                <h4 id="fpLastSync" class="mb-1">—</h4>
+                <small id="fpLastSyncRecords" class="text-muted">—</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h6 class="text-muted mb-2"><i class="bi bi-people"></i> دخولات اليوم</h6>
+                <h4 class="mb-1">
+                    <span id="fpMembersToday">0</span>
+                    <small class="text-muted">عضو</small>
+                    <span class="mx-2">/</span>
+                    <span id="fpEmployeesToday">0</span>
+                    <small class="text-muted">موظف</small>
+                </h4>
+                <small class="text-muted">{{ branch.branch_code or '—' }}</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ────── Recent scans + members panel ────── #}
+<div class="row g-3">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-broadcast"></i> آخر الدخولات اليوم</h5>
+                <span class="badge bg-success" id="fpLiveBadge"><span class="dot"></span> مباشر</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive" style="max-height: 480px; overflow-y: auto;">
+                    <table class="table table-sm mb-0">
+                        <thead class="sticky-top bg-light">
+                            <tr>
+                                <th>الوقت</th>
+                                <th>الاسم</th>
+                                <th>النوع</th>
+                                <th>الحالة</th>
+                            </tr>
+                        </thead>
+                        <tbody id="fpScansBody">
+                            <tr><td colspan="4" class="text-center text-muted py-4">جاري التحميل...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-person-lines-fill"></i> الأعضاء ({{ members|length }})</h5>
+                <input type="search" id="fpMemberSearch" class="form-control form-control-sm" style="max-width: 200px;" placeholder="بحث...">
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive" style="max-height: 480px; overflow-y: auto;">
+                    <table class="table table-sm mb-0">
+                        <thead class="sticky-top bg-light">
+                            <tr>
+                                <th>الاسم</th>
+                                <th>emp_id</th>
+                                <th>الحالة</th>
+                                <th>إجراء</th>
+                            </tr>
+                        </thead>
+                        <tbody id="fpMembersBody">
+                            {% for m in members %}
+                            <tr data-name="{{ m.name|lower }}" data-emp="{{ m.member_import_id or '' }}">
+                                <td>{{ m.name }}</td>
+                                <td><code class="small">{{ m.member_import_id or m.fingerprint_id }}</code></td>
+                                <td>
+                                    {% if m.is_active %}
+                                    <span class="badge bg-success">مسموح</span>
+                                    {% else %}
+                                    <span class="badge bg-danger">محظور</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if m.is_active %}
+                                    <button class="btn btn-sm btn-outline-danger fp-block-btn" data-member-id="{{ m.id }}">
+                                        <i class="bi bi-slash-circle"></i> حظر
+                                    </button>
+                                    {% else %}
+                                    <button class="btn btn-sm btn-outline-success fp-unblock-btn" data-member-id="{{ m.id }}">
+                                        <i class="bi bi-check-circle"></i> سماح
+                                    </button>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="4" class="text-center text-muted py-4">لا يوجد أعضاء مسجلين بالبصمة</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    const BRAND_ID  = {{ brand.id }};
+    const BRANCH_ID = {{ branch.id }};
+    const FP_URL = '{{ url_for("fingerprint.status") }}'.replace(/\?.*$/, '');
+
+    let seenScanIds = new Set();
+    let firstLoad   = true;
+
+    function fmtTime(iso) {
+        try {
+            const d = new Date(iso);
+            return d.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        } catch (e) { return iso; }
+    }
+
+    function fmtAgo(iso) {
+        if (!iso) return '—';
+        const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+        if (diff < 60) return 'منذ ' + Math.floor(diff) + ' ثانية';
+        if (diff < 3600) return 'منذ ' + Math.floor(diff / 60) + ' دقيقة';
+        if (diff < 86400) return 'منذ ' + Math.floor(diff / 3600) + ' ساعة';
+        return new Date(iso).toLocaleString('ar-EG');
+    }
+
+    async function refreshStatus() {
+        try {
+            const r = await fetch(`/fp/status?brand_id=${BRAND_ID}&branch_id=${BRANCH_ID}`);
+            const data = await r.json();
+            if (!data.success) return;
+
+            const card = document.getElementById('fpBridgeCard');
+            card.classList.remove('online', 'late', 'offline');
+            if (data.bridge) {
+                const cls = data.bridge.status_class === 'success' ? 'online'
+                          : data.bridge.status_class === 'warning' ? 'late' : 'offline';
+                card.classList.add(cls);
+                document.getElementById('fpStatusText').textContent = data.bridge.status_text;
+                document.getElementById('fpStatusDetail').textContent =
+                    (data.bridge.computer_name || '—') + ' · ' + fmtAgo(data.bridge.last_heartbeat);
+            } else {
+                card.classList.add('offline');
+                document.getElementById('fpStatusText').textContent = 'لم يتصل بعد';
+                document.getElementById('fpStatusDetail').textContent = 'لم يتم تسجيل أي اتصال من جهاز البصمة';
+            }
+
+            if (data.last_sync) {
+                document.getElementById('fpLastSync').textContent = fmtAgo(data.last_sync.at);
+                document.getElementById('fpLastSyncRecords').textContent =
+                    (data.last_sync.records || 0) + ' سجل · ' + (data.last_sync.status === 'success' ? '✓' : data.last_sync.status);
+            }
+
+            document.getElementById('fpMembersToday').textContent = data.today.member_scans;
+            document.getElementById('fpEmployeesToday').textContent = data.today.employee_scans;
+        } catch (e) { /* swallow */ }
+    }
+
+    async function refreshScans() {
+        try {
+            const r = await fetch(`/fp/scans/recent?brand_id=${BRAND_ID}&branch_id=${BRANCH_ID}&limit=30`);
+            const data = await r.json();
+            if (!data.success) return;
+
+            const body = document.getElementById('fpScansBody');
+            if (!data.scans.length) {
+                body.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-4">لا توجد دخولات اليوم بعد</td></tr>';
+                seenScanIds.clear();
+                return;
+            }
+
+            const rows = data.scans.map(s => {
+                const isNew = !firstLoad && !seenScanIds.has(s.id);
+                seenScanIds.add(s.id);
+
+                const typeBadge = s.person_type === 'employee'
+                    ? '<span class="badge bg-primary">موظف</span>'
+                    : '<span class="badge bg-info">عضو</span>';
+
+                let statusCell;
+                if (!s.allowed) {
+                    statusCell = `<span class="badge bg-danger">رفض</span> <small class="text-muted">${s.warning || ''}</small>`;
+                } else {
+                    const verb = s.action === 'check_out' ? 'انصراف' : 'دخول';
+                    const cls  = s.action === 'check_out' ? 'bg-warning text-dark' : 'bg-success';
+                    statusCell = `<span class="badge ${cls}">${verb}</span>`;
+                }
+
+                return `<tr class="fp-scan-row ${isNew ? 'fp-new' : ''}" data-id="${s.id}">
+                    <td><small>${fmtTime(s.check_in)}</small></td>
+                    <td>${s.person_name || '—'}</td>
+                    <td>${typeBadge}</td>
+                    <td>${statusCell}</td>
+                </tr>`;
+            }).join('');
+
+            body.innerHTML = rows;
+            firstLoad = false;
+
+            // Strip highlight after the CSS transition runs
+            setTimeout(() => {
+                body.querySelectorAll('.fp-new').forEach(el => el.classList.remove('fp-new'));
+            }, 50);
+        } catch (e) { /* swallow */ }
+    }
+
+    function bindMemberSearch() {
+        const input = document.getElementById('fpMemberSearch');
+        input.addEventListener('input', () => {
+            const q = input.value.trim().toLowerCase();
+            document.querySelectorAll('#fpMembersBody tr[data-name]').forEach(tr => {
+                const matches = !q || tr.dataset.name.includes(q) || tr.dataset.emp.includes(q);
+                tr.style.display = matches ? '' : 'none';
+            });
+        });
+    }
+
+    async function postMemberAction(memberId, action) {
+        const r = await fetch(`/fp/members/${memberId}/${action}`, { method: 'POST' });
+        return r.json();
+    }
+
+    function bindBlockButtons() {
+        document.getElementById('fpMembersBody').addEventListener('click', async (ev) => {
+            const blockBtn = ev.target.closest('.fp-block-btn');
+            const unblockBtn = ev.target.closest('.fp-unblock-btn');
+            const btn = blockBtn || unblockBtn;
+            if (!btn) return;
+
+            const memberId = btn.dataset.memberId;
+            const action = blockBtn ? 'block' : 'unblock';
+            btn.disabled = true;
+            try {
+                const data = await postMemberAction(memberId, action);
+                if (!data.success) {
+                    alert(data.error || 'فشل تنفيذ الإجراء');
+                    btn.disabled = false;
+                    return;
+                }
+                // Swap row contents to reflect new state
+                const tr = btn.closest('tr');
+                const cells = tr.querySelectorAll('td');
+                if (data.is_active) {
+                    cells[2].innerHTML = '<span class="badge bg-success">مسموح</span>';
+                    cells[3].innerHTML = `<button class="btn btn-sm btn-outline-danger fp-block-btn" data-member-id="${memberId}"><i class="bi bi-slash-circle"></i> حظر</button>`;
+                } else {
+                    cells[2].innerHTML = '<span class="badge bg-danger">محظور</span>';
+                    cells[3].innerHTML = `<button class="btn btn-sm btn-outline-success fp-unblock-btn" data-member-id="${memberId}"><i class="bi bi-check-circle"></i> سماح</button>`;
+                }
+            } catch (e) {
+                alert('خطأ في الاتصال');
+                btn.disabled = false;
+            }
+        });
+    }
+
+    bindMemberSearch();
+    bindBlockButtons();
+    refreshStatus();
+    refreshScans();
+    setInterval(refreshStatus, 10000);
+    setInterval(refreshScans,  5000);
+})();
+</script>
+{% endblock %}

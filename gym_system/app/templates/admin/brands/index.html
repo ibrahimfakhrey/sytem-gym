@@ -55,6 +55,10 @@
                                class="btn btn-sm btn-outline-info" title="الأعضاء">
                                 <i class="bi bi-people"></i>
                             </a>
+                            <a href="{{ url_for('fingerprint.control_brand', brand_id=brand.id) }}"
+                               class="btn btn-sm btn-outline-dark" title="التحكم بالبصمة">
+                                <i class="bi bi-fingerprint"></i>
+                            </a>
                         </td>
                     </tr>
                     {% endfor %}

@@ -578,7 +578,7 @@ def attendance():
 @login_required
 def shifts():
     """List all employee shifts"""
-    if not current_user.is_owner and not current_user.is_brand_manager:
+    if not current_user.is_owner and not current_user.is_brand_manager and not current_user.is_branch_manager:
         flash('ليس لديك صلاحية', 'danger')
         return redirect(url_for('dashboard.index'))
 
@@ -621,7 +621,7 @@ def shifts():
 @login_required
 def edit_shift(user_id):
     """Edit shift for a specific employee"""
-    if not current_user.is_owner and not current_user.is_brand_manager:
+    if not current_user.is_owner and not current_user.is_brand_manager and not current_user.is_branch_manager:
         flash('ليس لديك صلاحية', 'danger')
         return redirect(url_for('dashboard.index'))
 
@@ -709,7 +709,7 @@ def edit_shift(user_id):
 @login_required
 def delete_shift(user_id):
     """Remove custom shift (revert to brand default)"""
-    if not current_user.is_owner and not current_user.is_brand_manager:
+    if not current_user.is_owner and not current_user.is_brand_manager and not current_user.is_branch_manager:
         flash('ليس لديك صلاحية', 'danger')
         return redirect(url_for('dashboard.index'))
 
@@ -774,6 +774,7 @@ def from_members():
 
         converted = 0
         skipped = 0
+        new_users_for_backfill = []
         for mid in member_ids:
             member = Member.query.get(mid)
             if not member or member.is_staff or not current_user.can_access_brand(member.brand_id):
@@ -809,8 +810,20 @@ def from_members():
             member.staff_user_id = new_user.id
             member.branch_id = branch_id
             converted += 1
+            # Track for backfill after commit
+            new_users_for_backfill.append(new_user)
 
         db.session.commit()
+
+        # Backfill EmployeeAttendance from past 60 days of MemberAttendance for each
+        try:
+            from app.routes.fingerprint import backfill_employee_attendance_from_member_scans
+            for nu in new_users_for_backfill:
+                backfill_employee_attendance_from_member_scans(nu, nu.branch_id, days=60)
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
         flash(f'تم تحويل {converted} عضو إلى موظفين. تم تجاهل {skipped}.', 'success')
         return redirect(url_for('employees.index') if False else url_for('employees.from_members'))
 
@@ -965,6 +978,14 @@ def from_member_one(member_id):
         db.session.add(salary_record)
 
     db.session.commit()
+
+    # Backfill EmployeeAttendance from past 60 days of MemberAttendance scans
+    try:
+        from app.routes.fingerprint import backfill_employee_attendance_from_member_scans
+        backfill_employee_attendance_from_member_scans(new_user, branch_id, days=60)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
 
     return jsonify({
         'success': True,
