@@ -807,7 +807,99 @@ def _scan_was_allowed(att):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 7. Member block / unblock — called from the control panel buttons
+# 7. Per-fingerprint stop / allow — quick toggle keyed by fingerprint_id.
+#    Returns the same shape as one row of /fp/access-list so the desktop
+#    can apply the change to backup.mdb immediately, without re-pulling
+#    the full access list.
+# ─────────────────────────────────────────────────────────────────────────────
+
+@fingerprint_bp.route('/stop', methods=['POST'])
+@csrf.exempt
+def stop_fingerprint():
+    """Stop one fingerprint immediately. Persists is_active=False."""
+    data = request.get_json(silent=True) or {}
+    fingerprint_id = safe_int(data.get('fingerprint_id'))
+    branch = _resolve_branch(safe_int(data.get('brand_id')),
+                             safe_int(data.get('branch_id')))
+    if not branch:
+        return jsonify({'success': False, 'error': 'invalid brand_id/branch_id'}), 400
+    if fingerprint_id is None:
+        return jsonify({'success': False, 'error': 'fingerprint_id required'}), 400
+
+    member = Member.query.filter_by(
+        brand_id=branch.brand_id, fingerprint_id=fingerprint_id
+    ).first()
+    if not member:
+        return jsonify({'success': False, 'error': 'fingerprint not found'}), 404
+
+    member.is_active = False
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'fingerprint_id': fingerprint_id,
+        'emp_id': _emp_id_for(member),
+        'member_id': member.id,
+        'name': member.name,
+        'allowed': False,
+        'end_date': PAST_DATE.isoformat(),
+        'reason': 'تم الإيقاف',
+        'server_time': ksa_now().isoformat(),
+    })
+
+
+@fingerprint_bp.route('/allow', methods=['POST'])
+@csrf.exempt
+def allow_fingerprint():
+    """
+    Allow one fingerprint. Persists is_active=True.
+
+    The returned `end_date` is the same value /fp/access-list would compute
+    for this member: their subscription end_date for a regular plan, today
+    for a class member inside the window, or 2099-12-31 for staff. If they
+    have no active subscription, end_date will still be 2020-01-01 — sending
+    /fp/allow alone is not enough to grant access to an expired member; you
+    also need a valid subscription.
+    """
+    data = request.get_json(silent=True) or {}
+    fingerprint_id = safe_int(data.get('fingerprint_id'))
+    branch = _resolve_branch(safe_int(data.get('brand_id')),
+                             safe_int(data.get('branch_id')))
+    if not branch:
+        return jsonify({'success': False, 'error': 'invalid brand_id/branch_id'}), 400
+    if fingerprint_id is None:
+        return jsonify({'success': False, 'error': 'fingerprint_id required'}), 400
+
+    member = Member.query.filter_by(
+        brand_id=branch.brand_id, fingerprint_id=fingerprint_id
+    ).first()
+    if not member:
+        return jsonify({'success': False, 'error': 'fingerprint not found'}), 404
+
+    member.is_active = True
+    db.session.commit()
+
+    if member.is_staff:
+        decision = {'allowed': True, 'end_date': FAR_FUTURE_DATE, 'reason': 'موظف'}
+    else:
+        decision = _compute_access(member, ksa_now(), ksa_today(),
+                                   _access_window(branch))
+
+    return jsonify({
+        'success': True,
+        'fingerprint_id': fingerprint_id,
+        'emp_id': _emp_id_for(member),
+        'member_id': member.id,
+        'name': member.name,
+        'allowed': decision['allowed'],
+        'end_date': decision['end_date'].isoformat() if decision['end_date'] else None,
+        'reason': decision['reason'],
+        'server_time': ksa_now().isoformat(),
+    })
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 8. Member block / unblock — called from the control panel buttons
 # ─────────────────────────────────────────────────────────────────────────────
 
 @fingerprint_bp.route('/members/<int:member_id>/block', methods=['POST'])

@@ -21,6 +21,8 @@ Single-tenant HTTP API the desktop fingerprint client uses to keep the gym in sy
 | GET  | `https://gymsystem.pythonanywhere.com/fp/access-list?brand_id=&branch_id=` |
 | GET  | `https://gymsystem.pythonanywhere.com/fp/status?brand_id=&branch_id=` |
 | GET  | `https://gymsystem.pythonanywhere.com/fp/scans/recent?brand_id=&branch_id=&limit=` |
+| POST | `https://gymsystem.pythonanywhere.com/fp/stop` *(per-fingerprint stop)* |
+| POST | `https://gymsystem.pythonanywhere.com/fp/allow` *(per-fingerprint allow)* |
 | POST | `https://gymsystem.pythonanywhere.com/fp/members/<member_id>/block` |
 | POST | `https://gymsystem.pythonanywhere.com/fp/members/<member_id>/unblock` |
 | GET  | `https://gymsystem.pythonanywhere.com/fp/control/<brand_id>` *(HTML)* |
@@ -499,7 +501,96 @@ Rows are ordered newest first, filtered to today only.
 
 ---
 
-### 8. `POST https://gymsystem.pythonanywhere.com/fp/members/<member_id>/block`
+### 8. `POST https://gymsystem.pythonanywhere.com/fp/stop`
+
+Stop one specific fingerprint immediately. Looks up the member by `fingerprint_id` in the locked branch, sets `is_active = False`, and returns the per-member row in the same shape as `/fp/access-list` — so the desktop can write `end_date = 2020-01-01` to that one row in `backup.mdb` immediately, without waiting for the next access-list poll.
+
+**Request body**
+
+```json
+{ "fingerprint_id": 123 }
+```
+
+`brand_id` / `branch_id` are optional (default to the locked pair).
+
+**Response**
+
+```json
+{
+  "success": true,
+  "fingerprint_id": 123,
+  "emp_id": "00000123",
+  "member_id": 42,
+  "name": "أحمد علي",
+  "allowed": false,
+  "end_date": "2020-01-01",
+  "reason": "تم الإيقاف",
+  "server_time": "2026-05-19T08:03:12+03:00"
+}
+```
+
+**Errors**
+
+- `400` `fingerprint_id required` — body missing the field
+- `404` `fingerprint not found` — no member in brand 8 has that fingerprint
+
+**Side effects**
+
+`Member.is_active` is set to `False`. The change is also visible on the next `/fp/access-list` poll, so the desktop will keep seeing `end_date = 2020-01-01` for this member until you call `/fp/allow`.
+
+---
+
+### 9. `POST https://gymsystem.pythonanywhere.com/fp/allow`
+
+Mirror of `/fp/stop` — flips `is_active = True` and returns the access-list row.
+
+**Request body**
+
+```json
+{ "fingerprint_id": 123 }
+```
+
+**Response (member has active subscription)**
+
+```json
+{
+  "success": true,
+  "fingerprint_id": 123,
+  "emp_id": "00000123",
+  "member_id": 42,
+  "name": "أحمد علي",
+  "allowed": true,
+  "end_date": "2026-06-30",
+  "reason": "اشتراك نشط",
+  "server_time": "2026-05-19T08:03:12+03:00"
+}
+```
+
+**Response (member has no active subscription — allow alone is not enough)**
+
+```json
+{
+  "success": true,
+  "fingerprint_id": 123,
+  "emp_id": "00000123",
+  "member_id": 42,
+  "name": "أحمد علي",
+  "allowed": false,
+  "end_date": "2020-01-01",
+  "reason": "لا يوجد اشتراك نشط",
+  "server_time": "2026-05-19T08:03:12+03:00"
+}
+```
+
+`/fp/allow` only flips the manual block flag. The full access decision still runs — if the member has no active subscription, the response will say `allowed: false` and the desktop should keep them blocked. To grant access to someone whose subscription expired, you need a real subscription in the system (handled by the web UI, not this endpoint).
+
+**Errors**
+
+Same as `/fp/stop`.
+
+---
+
+### 10. `POST https://gymsystem.pythonanywhere.com/fp/members/<member_id>/block`
 
 Triggered by the "حظر" button on the control panel — sets `Member.is_active = False`. The desktop picks up the new state on its next `/fp/access-list` poll (within ~60 seconds) and writes `end_date = 2020-01-01` to `backup.mdb` for that member.
 
@@ -519,7 +610,7 @@ Triggered by the "حظر" button on the control panel — sets `Member.is_active
 
 ---
 
-### 9. `POST https://gymsystem.pythonanywhere.com/fp/members/<member_id>/unblock`
+### 11. `POST https://gymsystem.pythonanywhere.com/fp/members/<member_id>/unblock`
 
 Mirror of block — sets `Member.is_active = True`. Same auth requirement.
 
@@ -535,7 +626,7 @@ Mirror of block — sets `Member.is_active = True`. Same auth requirement.
 
 ---
 
-### 10. `GET https://gymsystem.pythonanywhere.com/fp/control/<brand_id>` and `GET https://gymsystem.pythonanywhere.com/fp/control/<brand_id>/<branch_id>`
+### 12. `GET https://gymsystem.pythonanywhere.com/fp/control/<brand_id>` and `GET https://gymsystem.pythonanywhere.com/fp/control/<brand_id>/<branch_id>`
 
 HTML pages, not API. Owner / brand-manager only (Flask-Login session required).
 
