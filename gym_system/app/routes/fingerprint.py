@@ -43,7 +43,7 @@ from app.models.subscription import Subscription
 from app.models.classes import GymClass, ClassBooking
 from app.models.attendance import MemberAttendance, EmployeeAttendance
 from app.models.employee import EmployeeShift, EmployeeSettings, EmployeeLateRule, EmployeeDeduction
-from app.models.fingerprint import BridgeStatus, BridgeSettings, FingerprintSyncLog
+from app.models.fingerprint import BridgeStatus, BridgeSettings, FingerprintSyncLog, FingerprintAccessLog
 
 fingerprint_bp = Blueprint('fingerprint', __name__, url_prefix='/fp')
 
@@ -121,6 +121,53 @@ def _resolve_branch(brand_id, branch_id):
 def _emp_id_for(member):
     """Same key the desktop uses to identify a person in backup.mdb."""
     return member.member_import_id or str(member.fingerprint_id).zfill(8)
+
+
+def _is_web_session():
+    """True if the request is from a logged-in browser session (vs anonymous API call)."""
+    try:
+        from flask_login import current_user as _u
+        return bool(_u and _u.is_authenticated)
+    except Exception:
+        return False
+
+
+def _log_fp_access(member, branch, action, source='api', notes=None):
+    """
+    Append one FingerprintAccessLog row. Picks up the logged-in user if
+    there is one (web/form sources); falls back to an anonymous record
+    otherwise (api/desktop sources).
+    """
+    actor_id = None
+    actor_name = None
+    try:
+        from flask_login import current_user as _u
+        if _u and _u.is_authenticated:
+            actor_id = _u.id
+            actor_name = _u.name
+    except Exception:
+        pass
+
+    ip = None
+    try:
+        ip = request.remote_addr
+    except Exception:
+        pass
+
+    db.session.add(FingerprintAccessLog(
+        brand_id=branch.brand_id,
+        branch_id=branch.id,
+        member_id=member.id,
+        member_name=member.name,
+        fingerprint_id=member.fingerprint_id,
+        member_import_id=member.member_import_id,
+        action=action,
+        source=source,
+        actor_user_id=actor_id,
+        actor_name=actor_name,
+        ip_address=ip,
+        notes=notes,
+    ))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -892,6 +939,8 @@ def stop_fingerprint():
         return jsonify({'success': False, 'error': 'fingerprint not found'}), 404
 
     member.is_active = False
+    _log_fp_access(member, branch, action='stop',
+                   source='web' if _is_web_session() else 'api')
     db.session.commit()
 
     return jsonify({
@@ -936,6 +985,8 @@ def allow_fingerprint():
         return jsonify({'success': False, 'error': 'fingerprint not found'}), 404
 
     member.is_active = True
+    _log_fp_access(member, branch, action='allow',
+                   source='web' if _is_web_session() else 'api')
     db.session.commit()
 
     if member.is_staff:
@@ -1014,3 +1065,52 @@ def control_branch(brand_id, branch_id):
     ).filter(Member.fingerprint_id.isnot(None)).order_by(Member.name).all()
     return render_template('fingerprint/control.html',
                            brand=branch.brand, branch=branch, members=members)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 9. Audit log — every stop/allow action with who/when/from where
+# ─────────────────────────────────────────────────────────────────────────────
+
+@fingerprint_bp.route('/audit', methods=['GET'])
+@login_required
+def audit_log():
+    """Audit trail of every fingerprint access toggle. Owner / brand-manager only."""
+    if not (current_user.is_owner or current_user.is_brand_manager):
+        abort(403)
+
+    action = request.args.get('action', '').strip()  # '', 'stop', 'allow'
+    source = request.args.get('source', '').strip()  # '', 'web', 'api', 'desktop', 'form'
+    q_text = (request.args.get('q') or '').strip()
+    page = request.args.get('page', 1, type=int)
+
+    q = FingerprintAccessLog.query.filter_by(brand_id=LOCKED_BRAND_ID)
+
+    if action in ('stop', 'allow'):
+        q = q.filter_by(action=action)
+    if source in ('web', 'api', 'desktop', 'form'):
+        q = q.filter_by(source=source)
+    if q_text:
+        like = f'%{q_text}%'
+        q = q.filter(
+            db.or_(
+                FingerprintAccessLog.member_name.ilike(like),
+                FingerprintAccessLog.actor_name.ilike(like),
+                FingerprintAccessLog.member_import_id.ilike(like),
+                db.cast(FingerprintAccessLog.fingerprint_id, db.String).ilike(like),
+            )
+        )
+
+    logs = q.order_by(FingerprintAccessLog.created_at.desc()).paginate(
+        page=page, per_page=50, error_out=False
+    )
+
+    # Quick totals for the header
+    totals = {
+        'all':   FingerprintAccessLog.query.filter_by(brand_id=LOCKED_BRAND_ID).count(),
+        'stop':  FingerprintAccessLog.query.filter_by(brand_id=LOCKED_BRAND_ID, action='stop').count(),
+        'allow': FingerprintAccessLog.query.filter_by(brand_id=LOCKED_BRAND_ID, action='allow').count(),
+    }
+
+    return render_template('fingerprint/audit.html',
+                           logs=logs, totals=totals,
+                           action_filter=action, source_filter=source, q_text=q_text)

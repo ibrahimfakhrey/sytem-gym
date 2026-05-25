@@ -21,6 +21,10 @@
         <small class="text-muted fs-5">— {{ brand.name }} / {{ branch.name }}</small>
     </h1>
     <div>
+        <a href="{{ url_for('fingerprint.audit_log') }}" class="btn btn-outline-info">
+            <i class="bi bi-journal-text"></i>
+            سجل النشاط
+        </a>
         <a href="{{ url_for('fingerprint.control_brand', brand_id=brand.id) }}" class="btn btn-outline-secondary">
             <i class="bi bi-arrow-right"></i>
             العودة

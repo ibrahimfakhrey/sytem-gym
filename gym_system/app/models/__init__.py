@@ -8,7 +8,7 @@ from .subscription import (
 )
 from .attendance import MemberAttendance, EmployeeAttendance
 from .finance import Income, Expense, Salary, Refund, ExpenseCategory
-from .fingerprint import FingerprintSyncLog, BridgeStatus, DeviceCommand, BridgeSettings
+from .fingerprint import FingerprintSyncLog, BridgeStatus, DeviceCommand, BridgeSettings, FingerprintAccessLog
 
 # New models
 from .service import ServiceType

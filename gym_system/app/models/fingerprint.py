@@ -295,3 +295,60 @@ class BridgeSettings(db.Model):
                 db.session.add(settings)
                 db.session.commit()
         return settings
+
+
+class FingerprintAccessLog(db.Model):
+    """
+    Audit trail for fingerprint gate-access toggles.
+
+    Every time someone flips a member's access (stop / allow) — whether from
+    the web control panel, the member detail page, or directly via /fp/stop
+    or /fp/allow — one row is written here. Used by /fp/audit so admins can
+    answer 'who toggled whom and when'.
+    """
+    __tablename__ = 'fingerprint_access_logs'
+
+    id = db.Column(db.Integer, primary_key=True)
+    brand_id = db.Column(db.Integer, db.ForeignKey('brands.id'), nullable=False, index=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'), nullable=True)
+
+    member_id = db.Column(db.Integer, db.ForeignKey('members.id'), nullable=True)
+    # Denormalized so the log row survives member deletion.
+    member_name = db.Column(db.String(100))
+    fingerprint_id = db.Column(db.Integer)
+    member_import_id = db.Column(db.String(20))
+
+    # 'stop' (gate denied) or 'allow' (gate permitted)
+    action = db.Column(db.String(10), nullable=False, index=True)
+    # 'web' (logged-in UI), 'api' (anonymous /fp/* call), 'desktop' (bridge), 'form' (old toggle-access route)
+    source = db.Column(db.String(20), default='web')
+
+    actor_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    actor_name = db.Column(db.String(100))  # denormalized
+
+    ip_address = db.Column(db.String(50))
+    notes = db.Column(db.Text)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+    member = db.relationship('Member', foreign_keys=[member_id])
+    actor = db.relationship('User', foreign_keys=[actor_user_id])
+    brand = db.relationship('Brand', foreign_keys=[brand_id])
+    branch = db.relationship('Branch', foreign_keys=[branch_id])
+
+    @property
+    def action_text(self):
+        return 'إيقاف' if self.action == 'stop' else 'تفعيل'
+
+    @property
+    def action_class(self):
+        return 'danger' if self.action == 'stop' else 'success'
+
+    @property
+    def source_text(self):
+        return {
+            'web':     'لوحة التحكم',
+            'api':     'API',
+            'desktop': 'الجهاز',
+            'form':    'نموذج قديم',
+        }.get(self.source, self.source or '—')

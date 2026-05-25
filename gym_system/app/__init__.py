@@ -86,6 +86,16 @@ def create_app(config_name=None):
     csrf.exempt(api_bp)  # API uses API key auth, not CSRF
     csrf.exempt(fingerprint_bp)  # /fp/* is open by design (single-tenant desktop client)
 
+    # Idempotently ensure newly-added tables exist on production.
+    # SQLAlchemy create_all() only creates missing tables — existing ones
+    # are left untouched. Wrap in app_context + try/except so a transient
+    # DB error during boot doesn't crash the whole app.
+    with app.app_context():
+        try:
+            db.create_all()
+        except Exception:
+            pass
+
     # Register error handlers
     register_error_handlers(app)
 
