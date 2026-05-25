@@ -51,12 +51,6 @@ KSA_TZ = ZoneInfo("Asia/Riyadh")
 PAST_DATE = date(2020, 1, 1)
 FAR_FUTURE_DATE = date(2099, 12, 31)
 
-# Single-tenant lock — this deployment serves exactly one brand + branch.
-# Requests may omit brand_id/branch_id (the server fills them in); if
-# provided, they must match. Branch code BR-8-9.
-LOCKED_BRAND_ID = 8
-LOCKED_BRANCH_ID = 9
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
@@ -101,21 +95,15 @@ def safe_int(v, default=None):
 
 def _resolve_branch(brand_id, branch_id):
     """
-    Return the locked Branch (BR-8-9) or None.
+    Validate (brand_id, branch_id) against the branches table.
 
-    Single-tenant: brand_id/branch_id are optional in requests. If omitted,
-    we use the locked defaults. If provided, they must match LOCKED_BRAND_ID
-    and LOCKED_BRANCH_ID — otherwise the call is rejected.
+    Both fields are required and the pair must correspond to a real
+    branch row — that's the only check. No single-tenant lock; callers
+    can target any brand they have data for.
     """
-    if brand_id is None:
-        brand_id = LOCKED_BRAND_ID
-    if branch_id is None:
-        branch_id = LOCKED_BRANCH_ID
-    if brand_id != LOCKED_BRAND_ID or branch_id != LOCKED_BRANCH_ID:
+    if brand_id is None or branch_id is None:
         return None
-    return Branch.query.filter_by(
-        id=LOCKED_BRANCH_ID, brand_id=LOCKED_BRAND_ID
-    ).first()
+    return Branch.query.filter_by(id=branch_id, brand_id=brand_id).first()
 
 
 def _emp_id_for(member):
@@ -1173,17 +1161,33 @@ def lookup():
 @fingerprint_bp.route('/audit', methods=['GET'])
 @login_required
 def audit_log():
-    """Audit trail of every fingerprint access toggle. Owner / brand-manager only."""
+    """
+    Audit trail of every fingerprint access toggle.
+
+    Scoping:
+      - Admin (can_view_all_brands) sees all brands; can narrow with ?brand_id=
+      - Brand-scoped users see only their own brand
+    """
     if not (current_user.is_owner or current_user.is_brand_manager):
         abort(403)
 
     action = request.args.get('action', '').strip()  # '', 'stop', 'allow'
     source = request.args.get('source', '').strip()  # '', 'web', 'api', 'desktop', 'form'
     q_text = (request.args.get('q') or '').strip()
+    brand_filter = request.args.get('brand_id', type=int)
     page = request.args.get('page', 1, type=int)
 
-    q = FingerprintAccessLog.query.filter_by(brand_id=LOCKED_BRAND_ID)
+    base_q = FingerprintAccessLog.query
+    if current_user.can_view_all_brands:
+        if brand_filter:
+            base_q = base_q.filter_by(brand_id=brand_filter)
+    elif current_user.brand_id:
+        base_q = base_q.filter_by(brand_id=current_user.brand_id)
+    else:
+        # User has neither all-brand access nor a brand — show nothing
+        base_q = base_q.filter(db.false())
 
+    q = base_q
     if action in ('stop', 'allow'):
         q = q.filter_by(action=action)
     if source in ('web', 'api', 'desktop', 'form'):
@@ -1203,13 +1207,13 @@ def audit_log():
         page=page, per_page=50, error_out=False
     )
 
-    # Quick totals for the header
     totals = {
-        'all':   FingerprintAccessLog.query.filter_by(brand_id=LOCKED_BRAND_ID).count(),
-        'stop':  FingerprintAccessLog.query.filter_by(brand_id=LOCKED_BRAND_ID, action='stop').count(),
-        'allow': FingerprintAccessLog.query.filter_by(brand_id=LOCKED_BRAND_ID, action='allow').count(),
+        'all':   base_q.count(),
+        'stop':  base_q.filter_by(action='stop').count(),
+        'allow': base_q.filter_by(action='allow').count(),
     }
 
     return render_template('fingerprint/audit.html',
                            logs=logs, totals=totals,
-                           action_filter=action, source_filter=source, q_text=q_text)
+                           action_filter=action, source_filter=source,
+                           q_text=q_text, brand_filter=brand_filter)

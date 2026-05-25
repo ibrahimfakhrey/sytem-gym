@@ -9,10 +9,17 @@
         سجل البصمة
         <small class="text-muted fs-5">— إيقاف وتفعيل وصول الأعضاء</small>
     </h1>
-    <a href="{{ url_for('fingerprint.control_branch', brand_id=8, branch_id=9) }}" class="btn btn-outline-secondary">
+    {% if current_user.brand_id %}
+    <a href="{{ url_for('fingerprint.control_brand', brand_id=current_user.brand_id) }}" class="btn btn-outline-secondary">
         <i class="bi bi-arrow-right"></i>
         العودة للوحة التحكم
     </a>
+    {% else %}
+    <a href="{{ url_for('admin.brands_list') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-right"></i>
+        العودة للبراندات
+    </a>
+    {% endif %}
 </div>
 
 {# ────── Totals ────── #}

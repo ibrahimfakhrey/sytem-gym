@@ -4,7 +4,7 @@ Single-tenant HTTP API the desktop fingerprint client uses to keep the gym in sy
 
 - **Base URL:** `https://gymsystem.pythonanywhere.com`
 - **Base path:** `/fp` → full prefix `https://gymsystem.pythonanywhere.com/fp`
-- **Locked tenant:** this deployment serves **`brand_id = 8`, `branch_id = 9`** (branch code `BR-8-9`) only. The server hard-rejects any other pair.
+- **Multi-tenant:** every call must include both `brand_id` and `branch_id`. The pair is validated against the `branches` table — if it doesn't correspond to a real branch the server returns `400 invalid brand_id/branch_id`. Send the same brand/branch the desktop was provisioned for.
 - **Auth:** none
 - **CSRF:** disabled on the whole blueprint
 - **Encoding:** request and response bodies are JSON (`Content-Type: application/json`)
@@ -37,19 +37,19 @@ Single-tenant HTTP API the desktop fingerprint client uses to keep the gym in sy
 
 ### Request inputs
 
-`brand_id` and `branch_id` are **optional** — this deployment is locked to a single branch.
+`brand_id` and `branch_id` are **required** on every call.
 
-| Field | Type | Where | Behaviour |
-|---|---|---|---|
-| `brand_id`  | int | body (POST) / query (GET) | omit → defaults to `8`. If sent, must equal `8`. |
-| `branch_id` | int | body (POST) / query (GET) | omit → defaults to `9`. If sent, must equal `9`. |
+| Field | Type | Where |
+|---|---|---|
+| `brand_id`  | int | body (POST) / query (GET) |
+| `branch_id` | int | body (POST) / query (GET) |
 
-If you send anything other than `(8, 9)` the server returns:
+The server validates the pair against the `branches` table. If `branch_id` doesn't belong to `brand_id` (or either is missing) you get:
 
 ```json
 { "success": false, "error": "invalid brand_id/branch_id" }
 ```
-with status `400`. Sending `{}` (no IDs at all) is fine and works on the locked branch.
+with status `400`. The desktop should be provisioned once with the correct pair and send it on every request.
 
 ### Response envelope
 
