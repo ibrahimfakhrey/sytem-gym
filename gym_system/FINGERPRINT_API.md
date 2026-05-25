@@ -23,6 +23,7 @@ Single-tenant HTTP API the desktop fingerprint client uses to keep the gym in sy
 | GET  | `https://gymsystem.pythonanywhere.com/fp/to-allow?brand_id=&branch_id=` *(allowed=true subset)* |
 | GET  | `https://gymsystem.pythonanywhere.com/fp/status?brand_id=&branch_id=` |
 | GET  | `https://gymsystem.pythonanywhere.com/fp/scans/recent?brand_id=&branch_id=&limit=` |
+| GET / POST  | `https://gymsystem.pythonanywhere.com/fp/lookup?fingerprint_id=` *(do we have this fingerprint?)* |
 | POST | `https://gymsystem.pythonanywhere.com/fp/stop` *(per-fingerprint stop)* |
 | POST | `https://gymsystem.pythonanywhere.com/fp/allow` *(per-fingerprint allow)* |
 | POST | `https://gymsystem.pythonanywhere.com/fp/members/<member_id>/block` |

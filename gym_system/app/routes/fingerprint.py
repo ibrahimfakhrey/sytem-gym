@@ -1068,7 +1068,106 @@ def control_branch(brand_id, branch_id):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 9. Audit log — every stop/allow action with who/when/from where
+# 9. Lookup — "do you know this fingerprint?" + full decision context
+# ─────────────────────────────────────────────────────────────────────────────
+
+@fingerprint_bp.route('/lookup', methods=['GET', 'POST'])
+@csrf.exempt
+def lookup():
+    """
+    Look up one fingerprint and return whether we have a record for it
+    plus the current access decision.
+
+    Accepts GET (?fingerprint_id=) or POST (JSON body) — same shape either
+    way. brand_id/branch_id default to the locked pair.
+
+    Response always has:  success, found, fingerprint_id
+    When found also has:  person_type, person_id, name, emp_id, is_staff,
+                          is_active, allowed, end_date, reason
+    """
+    if request.method == 'POST':
+        data = request.get_json(silent=True) or {}
+        brand_id = safe_int(data.get('brand_id'))
+        branch_id = safe_int(data.get('branch_id'))
+        fingerprint_id = safe_int(data.get('fingerprint_id'))
+    else:
+        brand_id = safe_int(request.args.get('brand_id'))
+        branch_id = safe_int(request.args.get('branch_id'))
+        fingerprint_id = safe_int(request.args.get('fingerprint_id'))
+
+    branch = _resolve_branch(brand_id, branch_id)
+    if not branch:
+        return jsonify({'success': False, 'error': 'invalid brand_id/branch_id'}), 400
+    if fingerprint_id is None:
+        return jsonify({'success': False, 'error': 'fingerprint_id required'}), 400
+
+    # 1. Try employee (User with this fingerprint)
+    user = User.query.filter_by(
+        branch_id=branch.id, fingerprint_id=fingerprint_id, is_active=True
+    ).first()
+    if not user:
+        user = User.query.filter_by(
+            brand_id=branch.brand_id, branch_id=None,
+            fingerprint_id=fingerprint_id, is_active=True
+        ).first()
+
+    if user:
+        return jsonify({
+            'success': True,
+            'found': True,
+            'fingerprint_id': fingerprint_id,
+            'person_type': 'employee',
+            'person_id': user.id,
+            'name': user.name,
+            'emp_id': str(fingerprint_id).zfill(8),
+            'is_staff': True,
+            'is_active': user.is_active,
+            'allowed': True,
+            'end_date': FAR_FUTURE_DATE.isoformat(),
+            'reason': 'موظف',
+            'server_time': ksa_now().isoformat(),
+        })
+
+    # 2. Try member
+    member = Member.query.filter_by(
+        brand_id=branch.brand_id, fingerprint_id=fingerprint_id
+    ).first()
+
+    if not member:
+        return jsonify({
+            'success': True,
+            'found': False,
+            'fingerprint_id': fingerprint_id,
+            'server_time': ksa_now().isoformat(),
+        })
+
+    # 3. Compute the access decision
+    if not member.is_active:
+        decision = {'allowed': False, 'end_date': PAST_DATE, 'reason': 'محظور من قبل الإدارة'}
+    elif member.is_staff:
+        decision = {'allowed': True, 'end_date': FAR_FUTURE_DATE, 'reason': 'موظف'}
+    else:
+        decision = _compute_access(member, ksa_now(), ksa_today(), _access_window(branch))
+
+    return jsonify({
+        'success': True,
+        'found': True,
+        'fingerprint_id': fingerprint_id,
+        'person_type': 'member',
+        'person_id': member.id,
+        'name': member.name,
+        'emp_id': _emp_id_for(member),
+        'is_staff': member.is_staff,
+        'is_active': member.is_active,
+        'allowed': decision['allowed'],
+        'end_date': decision['end_date'].isoformat() if decision['end_date'] else None,
+        'reason': decision['reason'],
+        'server_time': ksa_now().isoformat(),
+    })
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 10. Audit log — every stop/allow action with who/when/from where
 # ─────────────────────────────────────────────────────────────────────────────
 
 @fingerprint_bp.route('/audit', methods=['GET'])
