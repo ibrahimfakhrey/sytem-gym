@@ -36,8 +36,11 @@
             شكوى
         </a>
         {% if not member.is_blocked %}
-        <form action="{{ url_for('members.toggle_access', member_id=member.id) }}"
-              method="POST" class="d-inline" onsubmit="return confirm('{% if member.is_active %}إيقاف وصول هذا العضو للجيم؟ سيُمنع من الدخول خلال دقيقة.{% else %}استئناف وصول هذا العضو للجيم؟{% endif %}');">
+        <form id="fpAccessToggleForm"
+              action="{{ url_for('members.toggle_access', member_id=member.id) }}"
+              method="POST" class="d-inline"
+              data-fingerprint-id="{{ member.fingerprint_id or '' }}"
+              data-action="{% if member.is_active %}stop{% else %}allow{% endif %}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             {% if member.is_active %}
             <button type="submit" class="btn btn-outline-warning">
@@ -51,6 +54,42 @@
             </button>
             {% endif %}
         </form>
+        <script>
+        (function () {
+            const form = document.getElementById('fpAccessToggleForm');
+            if (!form) return;
+            form.addEventListener('submit', async function (ev) {
+                const fpId = form.dataset.fingerprintId;
+                const action = form.dataset.action;  // 'stop' or 'allow'
+                const confirmMsg = action === 'stop'
+                    ? 'إيقاف وصول هذا العضو للجيم؟ سيُمنع من الدخول خلال دقيقة.'
+                    : 'استئناف وصول هذا العضو للجيم؟';
+                if (!confirm(confirmMsg)) { ev.preventDefault(); return; }
+                // No fingerprint enrolled → fall back to the original toggle-access form
+                if (!fpId) return;
+                ev.preventDefault();
+                const btn = form.querySelector('button[type=submit]');
+                btn.disabled = true;
+                try {
+                    const r = await fetch('/fp/' + action, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ fingerprint_id: Number(fpId) })
+                    });
+                    const data = await r.json();
+                    if (!data.success) {
+                        alert(data.error || 'فشل تنفيذ الإجراء');
+                        btn.disabled = false;
+                        return;
+                    }
+                    window.location.reload();
+                } catch (e) {
+                    alert('خطأ في الاتصال');
+                    btn.disabled = false;
+                }
+            });
+        })();
+        </script>
         {% if not member.is_staff and current_user.role and current_user.role.name_en in ['admin', 'owner', 'branch_manager'] %}
         <a href="{{ url_for('members.convert_to_employee', member_id=member.id) }}" class="btn btn-info">
             <i class="bi bi-person-badge"></i>
