@@ -515,15 +515,14 @@ def _upsert_member_from_mdb(m, brand_id, branch_id, allow_create=True, return_st
 # 4. Access list — what the desktop polls every ~60 seconds
 # ─────────────────────────────────────────────────────────────────────────────
 
-@fingerprint_bp.route('/access-list', methods=['GET'])
-@csrf.exempt
-def access_list():
-    brand_id = safe_int(request.args.get('brand_id'))
-    branch_id = safe_int(request.args.get('branch_id'))
-    branch = _resolve_branch(brand_id, branch_id)
-    if not branch:
-        return jsonify({'success': False, 'error': 'invalid brand_id/branch_id'}), 400
+def _build_access_list(branch):
+    """
+    Compute the per-member access decision for every enrolled member in
+    this branch. Returns (rows, now, window_minutes).
 
+    Each row: { emp_id, fingerprint_id, name, allowed, end_date, reason }.
+    """
+    brand_id = branch.brand_id
     now = ksa_now()
     today = now.date()
     window_minutes = _access_window(branch)
@@ -534,7 +533,7 @@ def access_list():
         Member.member_import_id.isnot(None),
     ).all()
 
-    out = []
+    rows = []
     for m in members:
         if not m.is_active:
             decision = {'allowed': False, 'end_date': PAST_DATE, 'reason': 'محظور من قبل الإدارة'}
@@ -542,20 +541,80 @@ def access_list():
             decision = {'allowed': True, 'end_date': FAR_FUTURE_DATE, 'reason': 'موظف'}
         else:
             decision = _compute_access(m, now, today, window_minutes)
-        out.append({
+        rows.append({
             'emp_id': m.member_import_id,
             'fingerprint_id': m.fingerprint_id,
+            'name': m.name,
             'allowed': decision['allowed'],
             'end_date': decision['end_date'].isoformat() if decision['end_date'] else None,
             'reason': decision['reason'],
         })
 
+    return rows, now, window_minutes
+
+
+@fingerprint_bp.route('/access-list', methods=['GET'])
+@csrf.exempt
+def access_list():
+    branch = _resolve_branch(safe_int(request.args.get('brand_id')),
+                             safe_int(request.args.get('branch_id')))
+    if not branch:
+        return jsonify({'success': False, 'error': 'invalid brand_id/branch_id'}), 400
+    rows, now, window_minutes = _build_access_list(branch)
     return jsonify({
         'success': True,
         'computed_at': now.isoformat(),
         'access_window_minutes': window_minutes,
-        'count': len(out),
-        'members': out,
+        'count': len(rows),
+        'members': rows,
+    })
+
+
+@fingerprint_bp.route('/to-stop', methods=['GET'])
+@csrf.exempt
+def to_stop():
+    """
+    Members the desktop should currently DENY at the gate.
+
+    Identical decision logic to /fp/access-list, just pre-filtered to
+    rows where allowed=false. For each row, write end_date=2020-01-01
+    to that emp_id in backup.mdb.
+    """
+    branch = _resolve_branch(safe_int(request.args.get('brand_id')),
+                             safe_int(request.args.get('branch_id')))
+    if not branch:
+        return jsonify({'success': False, 'error': 'invalid brand_id/branch_id'}), 400
+    rows, now, _ = _build_access_list(branch)
+    stop = [r for r in rows if not r['allowed']]
+    return jsonify({
+        'success': True,
+        'computed_at': now.isoformat(),
+        'count': len(stop),
+        'members': stop,
+    })
+
+
+@fingerprint_bp.route('/to-allow', methods=['GET'])
+@csrf.exempt
+def to_allow():
+    """
+    Members the desktop should currently ALLOW at the gate.
+
+    Identical decision logic to /fp/access-list, just pre-filtered to
+    rows where allowed=true. For each row, write its end_date value
+    to that emp_id in backup.mdb.
+    """
+    branch = _resolve_branch(safe_int(request.args.get('brand_id')),
+                             safe_int(request.args.get('branch_id')))
+    if not branch:
+        return jsonify({'success': False, 'error': 'invalid brand_id/branch_id'}), 400
+    rows, now, _ = _build_access_list(branch)
+    allow = [r for r in rows if r['allowed']]
+    return jsonify({
+        'success': True,
+        'computed_at': now.isoformat(),
+        'count': len(allow),
+        'members': allow,
     })
 
 

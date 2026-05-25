@@ -19,6 +19,8 @@ Single-tenant HTTP API the desktop fingerprint client uses to keep the gym in sy
 | POST | `https://gymsystem.pythonanywhere.com/fp/sync` |
 | POST | `https://gymsystem.pythonanywhere.com/fp/full-sync` |
 | GET  | `https://gymsystem.pythonanywhere.com/fp/access-list?brand_id=&branch_id=` |
+| GET  | `https://gymsystem.pythonanywhere.com/fp/to-stop?brand_id=&branch_id=` *(allowed=false subset)* |
+| GET  | `https://gymsystem.pythonanywhere.com/fp/to-allow?brand_id=&branch_id=` *(allowed=true subset)* |
 | GET  | `https://gymsystem.pythonanywhere.com/fp/status?brand_id=&branch_id=` |
 | GET  | `https://gymsystem.pythonanywhere.com/fp/scans/recent?brand_id=&branch_id=&limit=` |
 | POST | `https://gymsystem.pythonanywhere.com/fp/stop` *(per-fingerprint stop)* |
@@ -360,6 +362,7 @@ GET https://gymsystem.pythonanywhere.com/fp/access-list?brand_id=1&branch_id=2
     {
       "emp_id": "00000123",
       "fingerprint_id": 123,
+      "name": "أحمد علي",
       "allowed": true,
       "end_date": "2026-06-30",
       "reason": "اشتراك نشط"
@@ -367,6 +370,7 @@ GET https://gymsystem.pythonanywhere.com/fp/access-list?brand_id=1&branch_id=2
     {
       "emp_id": "00000124",
       "fingerprint_id": 124,
+      "name": "خالد فهد",
       "allowed": false,
       "end_date": "2020-01-01",
       "reason": "خارج وقت الكلاس"
@@ -374,6 +378,7 @@ GET https://gymsystem.pythonanywhere.com/fp/access-list?brand_id=1&branch_id=2
     {
       "emp_id": "00000130",
       "fingerprint_id": 130,
+      "name": "سارة محمود",
       "allowed": true,
       "end_date": "2099-12-31",
       "reason": "موظف"
@@ -400,6 +405,114 @@ The server runs each member through these checks in order:
 The `access_window_minutes` is per-branch (from `bridge_settings.class_access_window_minutes`, default 15) — how many minutes before a class starts the member is allowed in.
 
 **Only members with both `fingerprint_id` and `member_import_id` set are included.**
+
+---
+
+### 5a. `GET https://gymsystem.pythonanywhere.com/fp/to-stop`
+
+The subset of `/fp/access-list` where `allowed=false` — the people the desktop should currently DENY at the gate. Useful when the desktop just wants the "deny" bucket and doesn't need to scan the full list.
+
+**Query string**
+
+```
+GET https://gymsystem.pythonanywhere.com/fp/to-stop?brand_id=8&branch_id=9
+```
+
+(`brand_id` / `branch_id` optional, locked defaults apply.)
+
+**Response**
+
+```json
+{
+  "success": true,
+  "computed_at": "2026-05-19T08:03:12+03:00",
+  "count": 38,
+  "members": [
+    {
+      "emp_id": "00000124",
+      "fingerprint_id": 124,
+      "name": "خالد فهد",
+      "allowed": false,
+      "end_date": "2020-01-01",
+      "reason": "اشتراك منتهي"
+    },
+    {
+      "emp_id": "00000201",
+      "fingerprint_id": 201,
+      "name": "محمد سعد",
+      "allowed": false,
+      "end_date": "2020-01-01",
+      "reason": "محظور من قبل الإدارة"
+    }
+  ]
+}
+```
+
+**How the desktop uses it:** for each row, write `end_date` (always `2020-01-01` for the stop bucket) to `Employee.end_date` in `backup.mdb` keyed by `emp_id`. The device denies entry on the next scan.
+
+Decision logic is identical to `/fp/access-list` — see the table above. The endpoint is purely a convenience filter.
+
+---
+
+### 5b. `GET https://gymsystem.pythonanywhere.com/fp/to-allow`
+
+Mirror of `/fp/to-stop` — the subset where `allowed=true`. The people the desktop should currently ALLOW at the gate.
+
+**Query string**
+
+```
+GET https://gymsystem.pythonanywhere.com/fp/to-allow?brand_id=8&branch_id=9
+```
+
+**Response**
+
+```json
+{
+  "success": true,
+  "computed_at": "2026-05-19T08:03:12+03:00",
+  "count": 104,
+  "members": [
+    {
+      "emp_id": "00000123",
+      "fingerprint_id": 123,
+      "name": "أحمد علي",
+      "allowed": true,
+      "end_date": "2026-06-30",
+      "reason": "اشتراك نشط"
+    },
+    {
+      "emp_id": "00000130",
+      "fingerprint_id": 130,
+      "name": "سارة محمود",
+      "allowed": true,
+      "end_date": "2099-12-31",
+      "reason": "موظف"
+    },
+    {
+      "emp_id": "00000150",
+      "fingerprint_id": 150,
+      "name": "نورة عبدالله",
+      "allowed": true,
+      "end_date": "2026-05-19",
+      "reason": "كلاس يوغا - 08:30"
+    }
+  ]
+}
+```
+
+**How the desktop uses it:** for each row, write `end_date` (varies — subscription end date, today for class members, or `2099-12-31` for staff) to `Employee.end_date` in `backup.mdb` keyed by `emp_id`.
+
+---
+
+### How to choose between the three list endpoints
+
+| Endpoint | Returns | Use when |
+|---|---|---|
+| `/fp/access-list` | everyone | the desktop wants one round-trip with the full picture and will split locally |
+| `/fp/to-stop` | only `allowed=false` | the desktop only cares about who to block right now |
+| `/fp/to-allow` | only `allowed=true` | the desktop only cares about who to allow right now |
+
+The three endpoints use **identical** decision logic and timestamp ranges — calling `to-stop` + `to-allow` separately gives you the same total set as `access-list`, just in two HTTP calls instead of one.
 
 ---
 
