@@ -38,6 +38,54 @@
 </div>
 {% endif %}
 
+{# ── Brand-wide wipe (admin / owner only) ── #}
+{% if selected_brand and (current_user.is_owner or (current_user.role and current_user.role.name_en in ['admin', 'owner'])) %}
+<div class="alert alert-danger d-flex align-items-center justify-content-between mb-4">
+    <div>
+        <i class="bi bi-exclamation-octagon-fill"></i>
+        <strong>منطقة خطر:</strong>
+        أنت تتصفح أعضاء <strong>{{ selected_brand.name }}</strong>
+        (<span id="brandWipeCount">{{ members.total }}</span> عضو).
+        يمكنك حذفهم جميعاً نهائياً مع كل بياناتهم المرتبطة.
+    </div>
+    <form id="brandWipeForm" action="{{ url_for('members.delete_all') }}" method="POST" class="m-0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="brand_id" value="{{ selected_brand.id }}">
+        <input type="hidden" name="confirm_name" id="brandWipeName" value="">
+        <button type="submit" class="btn btn-dark">
+            <i class="bi bi-trash3-fill"></i>
+            حذف كل أعضاء {{ selected_brand.name }}
+        </button>
+    </form>
+</div>
+<script>
+(function () {
+    const form = document.getElementById('brandWipeForm');
+    if (!form) return;
+    const expectedName = {{ selected_brand.name|tojson }};
+    const total = {{ members.total or 0 }};
+    form.addEventListener('submit', function (ev) {
+        const ok = confirm(
+            '⚠️ تحذير شديد!\n\n' +
+            'سيتم حذف ' + total + ' عضو من البراند "' + expectedName + '" نهائياً، ' +
+            'مع جميع اشتراكاتهم، مدفوعاتهم، فواتيرهم، حضورهم، حجوزاتهم، تقاريرهم الصحية، ' +
+            'شكاواهم، وأي حظر سابق.\n\n' +
+            'لا يمكن التراجع عن هذا الإجراء. هل تريد المتابعة؟'
+        );
+        if (!ok) { ev.preventDefault(); return; }
+        const typed = prompt('للتأكيد النهائي، اكتب اسم البراند بالضبط:\n\n' + expectedName);
+        if (typed === null) { ev.preventDefault(); return; }
+        if (typed.trim() !== expectedName) {
+            alert('الاسم غير مطابق — تم إلغاء العملية.');
+            ev.preventDefault();
+            return;
+        }
+        document.getElementById('brandWipeName').value = typed.trim();
+    });
+})();
+</script>
+{% endif %}
+
 <!-- Search and Filter -->
 <div class="card mb-4">
     <div class="card-body">

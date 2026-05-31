@@ -64,6 +64,14 @@ def index():
     # Base query with brand/branch filtering
     query = apply_branch_filter(Member.query, Member)
 
+    # Optional brand filter for admins (is_owner) browsing a specific brand
+    brand_filter_id = request.args.get('brand_id', type=int)
+    selected_brand = None
+    if brand_filter_id:
+        selected_brand = Brand.query.get(brand_filter_id)
+        if selected_brand and current_user.can_access_brand(brand_filter_id):
+            query = query.filter(Member.brand_id == brand_filter_id)
+
     # Search filter — name / phone / email always, plus fingerprint_id and
     # member_import_id when the input is numeric.
     if search:
@@ -131,7 +139,8 @@ def index():
                           members=members,
                           brands=brands,
                           search=search,
-                          status=status)
+                          status=status,
+                          selected_brand=selected_brand)
 
 
 @members_bp.route('/create', methods=['GET', 'POST'])
@@ -676,6 +685,120 @@ def delete(member_id):
 
     flash(f'🗑️ تم حذف العضو {member_name} وجميع بياناته نهائياً.', 'success')
     return redirect(url_for('members.index'))
+
+
+@members_bp.route('/delete-all', methods=['POST'])
+@login_required
+@members_required
+def delete_all():
+    """
+    Wipe every member in a brand (and everything related to them).
+
+    Caller must POST `brand_id` and `confirm_name` exactly matching
+    Brand.name. Admin or owner only — branch_manager cannot trigger
+    a brand-wide wipe.
+    """
+    brand_id = request.form.get('brand_id', type=int)
+    confirm_name = (request.form.get('confirm_name') or '').strip()
+
+    if not brand_id:
+        flash('برجاء تحديد البراند', 'danger')
+        return redirect(url_for('members.index'))
+
+    brand = Brand.query.get_or_404(brand_id)
+
+    if not current_user.can_access_brand(brand_id):
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('members.index', brand_id=brand_id))
+
+    role_name = current_user.role.name_en if current_user.role else None
+    if not (current_user.is_owner or role_name in ['admin', 'owner']):
+        flash('فقط المدير العام يمكنه الحذف الجماعي', 'danger')
+        return redirect(url_for('members.index', brand_id=brand_id))
+
+    if confirm_name != brand.name:
+        flash('اسم البراند غير مطابق — تم إلغاء العملية.', 'warning')
+        return redirect(url_for('members.index', brand_id=brand_id))
+
+    from app.models.attendance import MemberAttendance
+    from app.models.classes import ClassBooking
+    from app.models.subscription import (
+        SubscriptionFreeze, SubscriptionPayment, RenewalRejection
+    )
+    from app.models.finance import Refund, Invoice, Income
+    from app.models.giftcard import GiftCard
+    from app.models.fingerprint import DeviceCommand, FingerprintAccessLog
+    from app.utils.helpers import delete_uploaded_file
+
+    member_ids = [m.id for m in db.session.query(Member.id).filter_by(brand_id=brand_id).all()]
+    if not member_ids:
+        flash(f'لا يوجد أعضاء في {brand.name} للحذف.', 'info')
+        return redirect(url_for('members.index', brand_id=brand_id))
+
+    count = len(member_ids)
+    photos = [p[0] for p in db.session.query(Member.photo).filter(
+        Member.brand_id == brand_id, Member.photo.isnot(None)).all()]
+
+    sub_ids = [s[0] for s in db.session.query(Subscription.id).filter(
+        Subscription.member_id.in_(member_ids)).all()]
+    payment_ids = []
+    if sub_ids:
+        payment_ids = [p[0] for p in db.session.query(SubscriptionPayment.id).filter(
+            SubscriptionPayment.subscription_id.in_(sub_ids)).all()]
+
+    if sub_ids:
+        SubscriptionFreeze.query.filter(
+            SubscriptionFreeze.subscription_id.in_(sub_ids)
+        ).delete(synchronize_session=False)
+
+        if payment_ids:
+            Income.query.filter(Income.payment_id.in_(payment_ids)).update(
+                {Income.payment_id: None}, synchronize_session=False)
+
+        Income.query.filter(Income.subscription_id.in_(sub_ids)).update(
+            {Income.subscription_id: None}, synchronize_session=False)
+
+        GiftCard.query.filter(GiftCard.subscription_id.in_(sub_ids)).update(
+            {GiftCard.subscription_id: None}, synchronize_session=False)
+
+        Invoice.query.filter(Invoice.subscription_id.in_(sub_ids)).delete(synchronize_session=False)
+        Refund.query.filter(Refund.subscription_id.in_(sub_ids)).delete(synchronize_session=False)
+        SubscriptionPayment.query.filter(SubscriptionPayment.subscription_id.in_(sub_ids)).delete(synchronize_session=False)
+
+    ClassBooking.query.filter(ClassBooking.member_id.in_(member_ids)).delete(synchronize_session=False)
+    MemberAttendance.query.filter(MemberAttendance.member_id.in_(member_ids)).delete(synchronize_session=False)
+    HealthReport.query.filter(HealthReport.member_id.in_(member_ids)).delete(synchronize_session=False)
+    Complaint.query.filter(Complaint.member_id.in_(member_ids)).delete(synchronize_session=False)
+    RenewalRejection.query.filter(RenewalRejection.member_id.in_(member_ids)).delete(synchronize_session=False)
+    DeviceCommand.query.filter(DeviceCommand.member_id.in_(member_ids)).delete(synchronize_session=False)
+    Invoice.query.filter(Invoice.member_id.in_(member_ids)).delete(synchronize_session=False)
+    Refund.query.filter(Refund.member_id.in_(member_ids)).delete(synchronize_session=False)
+
+    GiftCard.query.filter(GiftCard.redeemed_by_member_id.in_(member_ids)).update(
+        {GiftCard.redeemed_by_member_id: None}, synchronize_session=False)
+
+    FingerprintAccessLog.query.filter(FingerprintAccessLog.member_id.in_(member_ids)).update(
+        {FingerprintAccessLog.member_id: None}, synchronize_session=False)
+
+    Subscription.query.filter(Subscription.member_id.in_(member_ids)).delete(synchronize_session=False)
+
+    BlockedMember.query.filter(
+        BlockedMember.brand_id == brand_id,
+        BlockedMember.original_member_id.in_(member_ids)
+    ).delete(synchronize_session=False)
+
+    Member.query.filter(Member.id.in_(member_ids)).delete(synchronize_session=False)
+
+    db.session.commit()
+
+    for p in photos:
+        try:
+            delete_uploaded_file(p)
+        except Exception:
+            pass
+
+    flash(f'🗑️ تم حذف {count} عضو من {brand.name} نهائياً.', 'success')
+    return redirect(url_for('members.index', brand_id=brand_id))
 
 
 @members_bp.route('/blocked/<int:blocked_id>/unblock', methods=['POST'])
