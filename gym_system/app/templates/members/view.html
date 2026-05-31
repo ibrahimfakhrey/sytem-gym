@@ -40,6 +40,8 @@
               action="{{ url_for('members.toggle_access', member_id=member.id) }}"
               method="POST" class="d-inline"
               data-fingerprint-id="{{ member.fingerprint_id or '' }}"
+              data-brand-id="{{ member.brand_id or '' }}"
+              data-branch-id="{{ member.branch_id or '' }}"
               data-action="{% if member.is_active %}stop{% else %}allow{% endif %}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             {% if member.is_active %}
@@ -60,13 +62,15 @@
             if (!form) return;
             form.addEventListener('submit', async function (ev) {
                 const fpId = form.dataset.fingerprintId;
+                const brandId = form.dataset.brandId;
+                const branchId = form.dataset.branchId;
                 const action = form.dataset.action;  // 'stop' or 'allow'
                 const confirmMsg = action === 'stop'
-                    ? 'إيقاف وصول هذا العضو للجيم؟ سيُمنع من الدخول خلال دقيقة.'
-                    : 'استئناف وصول هذا العضو للجيم؟';
+                    ? 'إيقاف وصول هذا العضو للجيم؟ سيُضاف إلى قائمة الإيقاف وسيلتقطه جهاز البصمة عند المزامنة التالية (خلال دقيقة).'
+                    : 'استئناف وصول هذا العضو للجيم؟ سيُضاف إلى قائمة التفعيل وسيلتقطه جهاز البصمة عند المزامنة التالية (خلال دقيقة).';
                 if (!confirm(confirmMsg)) { ev.preventDefault(); return; }
-                // No fingerprint enrolled → fall back to the original toggle-access form
-                if (!fpId) return;
+                // No fingerprint, brand_id, or branch_id → fall back to old form post
+                if (!fpId || !brandId || !branchId) return;
                 ev.preventDefault();
                 const btn = form.querySelector('button[type=submit]');
                 btn.disabled = true;
@@ -74,7 +78,11 @@
                     const r = await fetch('/fp/' + action, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ fingerprint_id: Number(fpId) })
+                        body: JSON.stringify({
+                            brand_id: Number(brandId),
+                            branch_id: Number(branchId),
+                            fingerprint_id: Number(fpId)
+                        })
                     });
                     const data = await r.json();
                     if (!data.success) {
@@ -82,6 +90,10 @@
                         btn.disabled = false;
                         return;
                     }
+                    const successMsg = action === 'stop'
+                        ? '✅ تمت إضافة العضو إلى قائمة الإيقاف. سيقوم جهاز البصمة بمنعه من الدخول خلال دقيقة.'
+                        : '✅ تمت إضافة العضو إلى قائمة التفعيل. سيقوم جهاز البصمة بالسماح له بالدخول خلال دقيقة.';
+                    alert(successMsg);
                     window.location.reload();
                 } catch (e) {
                     alert('خطأ في الاتصال');
@@ -100,6 +112,34 @@
             <i class="bi bi-slash-circle"></i>
             حظر دائم
         </a>
+        {% endif %}
+        {% if current_user.is_owner or (current_user.role and current_user.role.name_en in ['admin', 'owner', 'branch_manager']) %}
+        <form id="memberDeleteForm"
+              action="{{ url_for('members.delete', member_id=member.id) }}"
+              method="POST" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-dark">
+                <i class="bi bi-trash"></i>
+                حذف نهائي
+            </button>
+        </form>
+        <script>
+        (function () {
+            const form = document.getElementById('memberDeleteForm');
+            if (!form) return;
+            form.addEventListener('submit', function (ev) {
+                const ok = confirm(
+                    '⚠️ حذف نهائي للعضو {{ member.name|e }}؟\n\n' +
+                    'سيتم حذف كل البيانات المرتبطة به: الاشتراكات، المدفوعات، الفواتير، ' +
+                    'الحضور، الحجوزات، التقارير الصحية، الشكاوى، وأي حظر سابق.\n\n' +
+                    'لا يمكن التراجع عن هذا الإجراء.'
+                );
+                if (!ok) { ev.preventDefault(); return; }
+                const ok2 = confirm('تأكيد نهائي — هل أنت متأكد من الحذف؟');
+                if (!ok2) { ev.preventDefault(); }
+            });
+        })();
+        </script>
         {% endif %}
     </div>
 </div>

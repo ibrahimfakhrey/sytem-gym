@@ -64,15 +64,18 @@ def index():
     # Base query with brand/branch filtering
     query = apply_branch_filter(Member.query, Member)
 
-    # Search filter
+    # Search filter — name / phone / email always, plus fingerprint_id and
+    # member_import_id when the input is numeric.
     if search:
-        query = query.filter(
-            db.or_(
-                Member.name.ilike(f'%{search}%'),
-                Member.phone.ilike(f'%{search}%'),
-                Member.email.ilike(f'%{search}%')
-            )
-        )
+        clauses = [
+            Member.name.ilike(f'%{search}%'),
+            Member.phone.ilike(f'%{search}%'),
+            Member.email.ilike(f'%{search}%'),
+            Member.member_import_id.ilike(f'%{search}%'),
+        ]
+        if search.strip().isdigit():
+            clauses.append(Member.fingerprint_id == int(search.strip()))
+        query = query.filter(db.or_(*clauses))
 
     # Status filter
     if status == 'active':
@@ -577,6 +580,102 @@ def toggle_access(member_id):
         flash(f'⛔ تم إيقاف وصول {member.name} للجيم. سيُمنع من الدخول خلال دقيقة.', 'warning')
 
     return redirect(url_for('members.view', member_id=member_id))
+
+
+@members_bp.route('/<int:member_id>/delete', methods=['POST'])
+@login_required
+@members_required
+def delete(member_id):
+    """
+    Hard delete a member and everything related to them.
+
+    Removes: subscriptions (+ freezes, payments), invoices, refunds, attendance,
+    class bookings, health reports, complaints, renewal rejections, device
+    commands, blocked-member records, and the photo file. Income rows and
+    fingerprint access logs are kept for audit, but FKs are nulled.
+    """
+    member = Member.query.get_or_404(member_id)
+
+    if not current_user.can_access_brand(member.brand_id):
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('members.view', member_id=member_id))
+
+    # Only owner / admin / branch_manager may hard-delete
+    role_name = current_user.role.name_en if current_user.role else None
+    if not (current_user.is_owner or role_name in ['admin', 'owner', 'branch_manager']):
+        flash('فقط المدير يمكنه الحذف النهائي', 'danger')
+        return redirect(url_for('members.view', member_id=member_id))
+
+    # Local imports to avoid circular references
+    from app.models.attendance import MemberAttendance
+    from app.models.classes import ClassBooking
+    from app.models.subscription import (
+        SubscriptionFreeze, SubscriptionPayment, RenewalRejection
+    )
+    from app.models.finance import Refund, Invoice, Income
+    from app.models.giftcard import GiftCard
+    from app.models.fingerprint import DeviceCommand, FingerprintAccessLog
+    from app.utils.helpers import delete_uploaded_file
+
+    member_name = member.name
+    photo_path = member.photo
+    sub_ids = [s.id for s in Subscription.query.filter_by(member_id=member.id).all()]
+
+    # 1. Children that reference the subscriptions
+    if sub_ids:
+        SubscriptionFreeze.query.filter(SubscriptionFreeze.subscription_id.in_(sub_ids)).delete(synchronize_session=False)
+        # Preserve income (financial ledger) but unlink subscription/payment
+        payment_ids = [p.id for p in SubscriptionPayment.query.filter(SubscriptionPayment.subscription_id.in_(sub_ids)).all()]
+        if payment_ids:
+            Income.query.filter(Income.payment_id.in_(payment_ids)).update(
+                {Income.payment_id: None}, synchronize_session=False)
+        Income.query.filter(Income.subscription_id.in_(sub_ids)).update(
+            {Income.subscription_id: None}, synchronize_session=False)
+        GiftCard.query.filter(GiftCard.subscription_id.in_(sub_ids)).update(
+            {GiftCard.subscription_id: None}, synchronize_session=False)
+        Invoice.query.filter(Invoice.subscription_id.in_(sub_ids)).delete(synchronize_session=False)
+        Refund.query.filter(Refund.subscription_id.in_(sub_ids)).delete(synchronize_session=False)
+        SubscriptionPayment.query.filter(SubscriptionPayment.subscription_id.in_(sub_ids)).delete(synchronize_session=False)
+
+    # 2. Direct member children — delete
+    ClassBooking.query.filter_by(member_id=member.id).delete(synchronize_session=False)
+    MemberAttendance.query.filter_by(member_id=member.id).delete(synchronize_session=False)
+    HealthReport.query.filter_by(member_id=member.id).delete(synchronize_session=False)
+    Complaint.query.filter_by(member_id=member.id).delete(synchronize_session=False)
+    RenewalRejection.query.filter_by(member_id=member.id).delete(synchronize_session=False)
+    DeviceCommand.query.filter_by(member_id=member.id).delete(synchronize_session=False)
+    Invoice.query.filter_by(member_id=member.id).delete(synchronize_session=False)
+    Refund.query.filter_by(member_id=member.id).delete(synchronize_session=False)
+
+    # 3. Unlink (preserve gift card history)
+    GiftCard.query.filter_by(redeemed_by_member_id=member.id).update(
+        {GiftCard.redeemed_by_member_id: None}, synchronize_session=False)
+
+    # 4. Preserve audit log rows — name/fingerprint already denormalized
+    FingerprintAccessLog.query.filter_by(member_id=member.id).update(
+        {FingerprintAccessLog.member_id: None}, synchronize_session=False)
+
+    # 5. Subscriptions themselves
+    Subscription.query.filter_by(member_id=member.id).delete(synchronize_session=False)
+
+    # 6. Any blocked-member rows that point back to this member
+    BlockedMember.query.filter_by(
+        brand_id=member.brand_id, original_member_id=member.id
+    ).delete(synchronize_session=False)
+
+    # 7. The member row
+    db.session.delete(member)
+    db.session.commit()
+
+    # 8. Photo file from disk (after commit so DB roll-back doesn't orphan)
+    if photo_path:
+        try:
+            delete_uploaded_file(photo_path)
+        except Exception:
+            pass
+
+    flash(f'🗑️ تم حذف العضو {member_name} وجميع بياناته نهائياً.', 'success')
+    return redirect(url_for('members.index'))
 
 
 @members_bp.route('/blocked/<int:blocked_id>/unblock', methods=['POST'])
