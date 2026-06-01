@@ -64,6 +64,16 @@ def ksa_today():
     return ksa_now().date()
 
 
+def _utc_to_ksa_iso(dt):
+    """Convert a naive UTC datetime (DB column default) to a KSA-timezone ISO string."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        from datetime import timezone
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(KSA_TZ).isoformat()
+
+
 def parse_iso_dt(s):
     if not s:
         return None
@@ -142,7 +152,7 @@ def _log_fp_access(member, branch, action, source='api', notes=None):
     except Exception:
         pass
 
-    db.session.add(FingerprintAccessLog(
+    log_row = FingerprintAccessLog(
         brand_id=branch.brand_id,
         branch_id=branch.id,
         member_id=member.id,
@@ -155,7 +165,10 @@ def _log_fp_access(member, branch, action, source='api', notes=None):
         actor_name=actor_name,
         ip_address=ip,
         notes=notes,
-    ))
+        created_at=datetime.utcnow(),
+    )
+    db.session.add(log_row)
+    return log_row
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -568,6 +581,26 @@ def _build_access_list(branch):
         Member.member_import_id.isnot(None),
     ).all()
 
+    # Latest stop/allow timestamp per member, looked up in one query.
+    last_change_by_member = {}
+    if members:
+        member_ids = [m.id for m in members]
+        latest = (
+            db.session.query(
+                FingerprintAccessLog.member_id,
+                FingerprintAccessLog.action,
+                db.func.max(FingerprintAccessLog.created_at).label('ts'),
+            )
+            .filter(FingerprintAccessLog.member_id.in_(member_ids))
+            .group_by(FingerprintAccessLog.member_id, FingerprintAccessLog.action)
+            .all()
+        )
+        # Keep only the most recent action per member.
+        for mid, action, ts in latest:
+            prev = last_change_by_member.get(mid)
+            if not prev or (ts and ts > prev[1]):
+                last_change_by_member[mid] = (action, ts)
+
     rows = []
     for m in members:
         if not m.is_active:
@@ -576,6 +609,8 @@ def _build_access_list(branch):
             decision = {'allowed': True, 'end_date': FAR_FUTURE_DATE, 'reason': 'موظف'}
         else:
             decision = _compute_access(m, now, today, window_minutes)
+
+        last = last_change_by_member.get(m.id)
         rows.append({
             'emp_id': m.member_import_id,
             'fingerprint_id': m.fingerprint_id,
@@ -583,6 +618,8 @@ def _build_access_list(branch):
             'allowed': decision['allowed'],
             'end_date': decision['end_date'].isoformat() if decision['end_date'] else None,
             'reason': decision['reason'],
+            'last_action': last[0] if last else None,
+            'last_changed_at': _utc_to_ksa_iso(last[1]) if last else None,
         })
 
     return rows, now, window_minutes
@@ -927,8 +964,8 @@ def stop_fingerprint():
         return jsonify({'success': False, 'error': 'fingerprint not found'}), 404
 
     member.is_active = False
-    _log_fp_access(member, branch, action='stop',
-                   source='web' if _is_web_session() else 'api')
+    log_row = _log_fp_access(member, branch, action='stop',
+                             source='web' if _is_web_session() else 'api')
     db.session.commit()
 
     return jsonify({
@@ -940,6 +977,9 @@ def stop_fingerprint():
         'allowed': False,
         'end_date': PAST_DATE.isoformat(),
         'reason': 'تم الإيقاف',
+        'action': 'stop',
+        'pressed_at': _utc_to_ksa_iso(log_row.created_at),
+        'changed_at': _utc_to_ksa_iso(log_row.created_at),
         'server_time': ksa_now().isoformat(),
     })
 
@@ -973,8 +1013,8 @@ def allow_fingerprint():
         return jsonify({'success': False, 'error': 'fingerprint not found'}), 404
 
     member.is_active = True
-    _log_fp_access(member, branch, action='allow',
-                   source='web' if _is_web_session() else 'api')
+    log_row = _log_fp_access(member, branch, action='allow',
+                             source='web' if _is_web_session() else 'api')
     db.session.commit()
 
     if member.is_staff:
@@ -992,6 +1032,9 @@ def allow_fingerprint():
         'allowed': decision['allowed'],
         'end_date': decision['end_date'].isoformat() if decision['end_date'] else None,
         'reason': decision['reason'],
+        'action': 'allow',
+        'pressed_at': _utc_to_ksa_iso(log_row.created_at),
+        'changed_at': _utc_to_ksa_iso(log_row.created_at),
         'server_time': ksa_now().isoformat(),
     })
 
