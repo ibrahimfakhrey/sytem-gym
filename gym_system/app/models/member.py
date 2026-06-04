@@ -59,6 +59,26 @@ class Member(db.Model):
         return f'<Member {self.name}>'
 
     @property
+    def whatsapp_phone(self):
+        """Phone normalized for wa.me — digits-only, KSA (966) default country code."""
+        if not self.phone:
+            return ''
+        digits = ''.join(ch for ch in self.phone if ch.isdigit())
+        if not digits:
+            return ''
+        # 00966... → 966...
+        if digits.startswith('00'):
+            digits = digits[2:]
+        # Already KSA-prefixed
+        if digits.startswith('966'):
+            return digits
+        # Local KSA format starting with 0 (e.g. 05XXXXXXXX) → drop the 0, prepend 966
+        if digits.startswith('0'):
+            return '966' + digits.lstrip('0')
+        # Bare local (e.g. 5XXXXXXXX) → prepend 966
+        return '966' + digits
+
+    @property
     def active_subscription(self):
         """Get current active subscription"""
         from .subscription import Subscription

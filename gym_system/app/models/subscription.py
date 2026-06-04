@@ -107,6 +107,7 @@ class Subscription(db.Model):
     stopped_by = db.Column(db.Integer, db.ForeignKey('users.id'))
 
     notes = db.Column(db.Text)
+    proof_image = db.Column(db.String(255))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
 

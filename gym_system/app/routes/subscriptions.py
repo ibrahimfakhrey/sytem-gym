@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_required, current_user
 from flask_wtf import FlaskForm
+from flask_wtf.file import FileField, FileAllowed
 from wtforms import SelectField, DecimalField, TextAreaField, DateField, StringField, BooleanField, IntegerField
 from wtforms.validators import DataRequired, Optional
 from datetime import date, timedelta, datetime
@@ -16,7 +17,7 @@ from app.models.offer import PromotionalOffer
 from app.models.giftcard import GiftCard
 from app.models.fingerprint import DeviceCommand
 from app.utils.decorators import members_required
-from app.utils.helpers import pagination_args, apply_branch_filter, check_entity_access
+from app.utils.helpers import pagination_args, apply_branch_filter, check_entity_access, save_uploaded_file
 
 subscriptions_bp = Blueprint('subscriptions', __name__)
 
@@ -36,6 +37,10 @@ class SubscriptionForm(FlaskForm):
     ], validators=[DataRequired()])
     paid_amount = DecimalField('المبلغ المدفوع', validators=[DataRequired()])
     notes = TextAreaField('ملاحظات')
+    proof_image = FileField('صورة إثبات الدفع', validators=[
+        Optional(),
+        FileAllowed(['png', 'jpg', 'jpeg', 'gif'], 'الصور فقط (png/jpg/jpeg/gif)')
+    ])
 
 
 class RenewalForm(FlaskForm):
@@ -424,6 +429,13 @@ def create():
         )
         db.session.add(subscription)
         db.session.flush()
+
+        # Save proof-of-payment image (optional)
+        proof_file = form.proof_image.data
+        if proof_file and getattr(proof_file, 'filename', ''):
+            saved_path = save_uploaded_file(proof_file, folder='subscriptions')
+            if saved_path:
+                subscription.proof_image = saved_path
 
         # Create payment record
         if paid_amount > 0:

@@ -34,7 +34,7 @@ def create_app(config_name=None):
     csrf.init_app(app)
 
     # Create upload folders if they don't exist
-    upload_folders = ['logos', 'members', 'receipts']
+    upload_folders = ['logos', 'members', 'receipts', 'subscriptions']
     for folder in upload_folders:
         folder_path = os.path.join(app.config['UPLOAD_FOLDER'], folder)
         os.makedirs(folder_path, exist_ok=True)
@@ -93,6 +93,19 @@ def create_app(config_name=None):
     with app.app_context():
         try:
             db.create_all()
+        except Exception:
+            pass
+        try:
+            from sqlalchemy import text
+            with db.engine.connect() as conn:
+                cols = [r[1] for r in conn.exec_driver_sql(
+                    "PRAGMA table_info(subscriptions)"
+                ).fetchall()]
+                if 'proof_image' not in cols:
+                    conn.exec_driver_sql(
+                        "ALTER TABLE subscriptions ADD COLUMN proof_image VARCHAR(255)"
+                    )
+                    conn.commit()
         except Exception:
             pass
 

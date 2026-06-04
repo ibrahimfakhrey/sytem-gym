@@ -384,8 +384,30 @@
                             </button>
                         </form>
                         {% endif %}
+
+                        {% if member.whatsapp_phone %}
+                        <a href="https://wa.me/{{ member.whatsapp_phone }}"
+                           target="_blank" rel="noopener"
+                           class="btn btn-sm mt-2"
+                           style="background:#25D366; border-color:#25D366; color:#fff;">
+                            <i class="bi bi-whatsapp"></i>
+                            واتساب
+                        </a>
+                        {% endif %}
                     </div>
                 </div>
+
+                {% if sub.proof_image %}
+                <hr>
+                <div>
+                    <h6 class="mb-2"><i class="bi bi-image"></i> صورة إثبات الدفع</h6>
+                    <a href="{{ url_for('static', filename=sub.proof_image) }}" target="_blank" rel="noopener">
+                        <img src="{{ url_for('static', filename=sub.proof_image) }}"
+                             alt="إثبات الدفع"
+                             style="max-height:220px; border-radius:8px; border:1px solid #dee2e6;">
+                    </a>
+                </div>
+                {% endif %}
                 {% else %}
                 <div class="text-center py-4">
                     <i class="bi bi-card-x display-4 text-muted"></i>
@@ -416,6 +438,7 @@
                                 <th>إلى</th>
                                 <th>المبلغ</th>
                                 <th>الحالة</th>
+                                <th>إثبات الدفع</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -426,6 +449,17 @@
                                 <td>{{ sub.end_date.strftime('%Y-%m-%d') }}</td>
                                 <td>{{ "{:,.0f}".format(sub.amount_paid or 0) }} ر.س</td>
                                 <td><span class="badge bg-{{ sub.status_class }}">{{ sub.status_text }}</span></td>
+                                <td>
+                                    {% if sub.proof_image %}
+                                    <a href="{{ url_for('static', filename=sub.proof_image) }}" target="_blank" rel="noopener">
+                                        <img src="{{ url_for('static', filename=sub.proof_image) }}"
+                                             alt="إثبات"
+                                             style="height:36px; border-radius:4px; border:1px solid #dee2e6;">
+                                    </a>
+                                    {% else %}
+                                    <span class="text-muted small">—</span>
+                                    {% endif %}
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
