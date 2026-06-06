@@ -134,23 +134,27 @@
             </div>
             <div class="card-body">
                 {% if available_spots > 0 %}
-                <form action="{{ url_for('classes.book', class_id=gym_class.id) }}" method="post">
+                <form action="{{ url_for('classes.book', class_id=gym_class.id) }}" method="post" id="bookingForm">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="booking_date" value="{{ booking_date.strftime('%Y-%m-%d') }}">
+                    <input type="hidden" name="member_id" id="memberId" value="">
 
                     <div class="mb-3">
                         <label class="form-label">البحث عن عضو</label>
-                        <input type="text" class="form-control" id="memberSearch" placeholder="اسم أو رقم الهاتف...">
+                        <input type="text" class="form-control" id="memberSearch"
+                               placeholder="اسم / هاتف / رقم بصمة..." autocomplete="off">
+                        <div id="searchResults" class="list-group mt-2 d-none" style="max-height:260px; overflow-y:auto;"></div>
                     </div>
 
-                    <div class="mb-3">
-                        <label class="form-label">العضو</label>
-                        <select name="member_id" id="memberSelect" class="form-select" required>
-                            <option value="">اختر العضو...</option>
-                        </select>
+                    <div id="selectedMember" class="alert alert-success alert-permanent d-none justify-content-between align-items-center mb-3">
+                        <div>
+                            <i class="bi bi-person-check"></i>
+                            <strong id="selectedMemberText"></strong>
+                        </div>
+                        <button type="button" class="btn-close ms-2" aria-label="إلغاء" onclick="clearSelectedMember()"></button>
                     </div>
 
-                    <button type="submit" class="btn btn-primary w-100">
+                    <button type="submit" class="btn btn-primary w-100" id="bookBtn" disabled>
                         <i class="bi bi-plus-lg"></i>
                         حجز
                     </button>
@@ -189,33 +193,94 @@
 
 {% block extra_js %}
 <script>
-let searchTimeout;
+const CLASS_ID = {{ gym_class.id }};
 const searchInput = document.getElementById('memberSearch');
-const memberSelect = document.getElementById('memberSelect');
+const searchResults = document.getElementById('searchResults');
+const memberIdField = document.getElementById('memberId');
+const selectedMember = document.getElementById('selectedMember');
+const selectedMemberText = document.getElementById('selectedMemberText');
+const bookBtn = document.getElementById('bookBtn');
+let searchTimeout;
+
+function escapeHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+}
+
+function showResults() { searchResults.classList.remove('d-none'); }
+function hideResults() { searchResults.classList.add('d-none'); }
+function showSelected() { selectedMember.classList.remove('d-none'); selectedMember.classList.add('d-flex'); }
+function hideSelected() { selectedMember.classList.add('d-none'); selectedMember.classList.remove('d-flex'); }
+
+function renderResults(data) {
+    if (!Array.isArray(data) || data.length === 0) {
+        searchResults.innerHTML = '<div class="list-group-item text-muted text-center">لا توجد نتائج</div>';
+        showResults();
+        return;
+    }
+    searchResults.innerHTML = '';
+    data.forEach(m => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'list-group-item list-group-item-action text-end';
+        const label = `${m.name} - ${m.phone || '—'}`;
+        const importIdSuffix = m.member_import_id ? ` · ${escapeHtml(m.member_import_id)}` : '';
+        btn.innerHTML = `
+            <strong>${escapeHtml(m.name)}</strong>
+            <div class="small text-muted">${escapeHtml(m.phone || '—')}${importIdSuffix}</div>
+        `;
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            pickMember(m.id, label);
+        });
+        searchResults.appendChild(btn);
+    });
+    showResults();
+}
+
+function pickMember(id, label) {
+    memberIdField.value = id;
+    selectedMemberText.textContent = label;
+    showSelected();
+    hideResults();
+    searchInput.value = '';
+    bookBtn.disabled = false;
+}
+
+function clearSelectedMember() {
+    memberIdField.value = '';
+    hideSelected();
+    bookBtn.disabled = true;
+    searchInput.focus();
+}
 
 if (searchInput) {
     searchInput.addEventListener('input', function() {
         clearTimeout(searchTimeout);
-        const query = this.value;
-
-        if (query.length < 2) {
-            memberSelect.innerHTML = '<option value="">اختر العضو...</option>';
-            return;
-        }
-
+        const query = this.value.trim();
+        if (query.length < 2) { hideResults(); return; }
         searchTimeout = setTimeout(() => {
-            fetch(`/classes/api/search-members?q=${encodeURIComponent(query)}`)
-                .then(response => response.json())
-                .then(data => {
-                    memberSelect.innerHTML = '<option value="">اختر العضو...</option>';
-                    data.forEach(member => {
-                        const option = document.createElement('option');
-                        option.value = member.id;
-                        option.textContent = `${member.name} - ${member.phone}`;
-                        memberSelect.appendChild(option);
-                    });
+            fetch(`/classes/api/search-members?q=${encodeURIComponent(query)}&class_id=${CLASS_ID}`)
+                .then(r => r.json())
+                .then(renderResults)
+                .catch(() => {
+                    searchResults.innerHTML = '<div class="list-group-item text-danger text-center">خطأ في البحث</div>';
+                    showResults();
                 });
-        }, 300);
+        }, 250);
+    });
+}
+
+// Guard the form: only the submit button (bookBtn) may submit it.
+const bookingForm = document.getElementById('bookingForm');
+if (bookingForm) {
+    bookingForm.addEventListener('submit', (e) => {
+        if (!memberIdField.value) {
+            e.preventDefault();
+            alert('يرجى اختيار العضو أولاً');
+        }
     });
 }
 </script>

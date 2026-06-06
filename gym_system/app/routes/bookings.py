@@ -217,41 +217,61 @@ def class_bookings(class_id):
 @login_required
 @members_required
 def search_members_api():
-    """Search members for booking"""
+    """Search members for booking.
+
+    Matches /members search coverage (name / phone / email /
+    member_import_id, plus fingerprint_id when numeric), scoped to the
+    current user's brand+branch via apply_branch_filter. If `class_id`
+    is provided, the result is further constrained to that class's
+    brand and branch.
+    """
     from flask import jsonify
     from app.models.subscription import Subscription
-    
-    query = request.args.get('q', '')
-    
-    if not query or len(query) < 2:
+    from app.models.classes import GymClass
+
+    q = (request.args.get('q') or '').strip()
+    class_id = request.args.get('class_id', type=int)
+
+    if len(q) < 2:
         return jsonify([])
-    
+
     try:
-        # Simple search - all active members in brand/branch
-        members_query = apply_branch_filter(Member.query, Member).filter(
-            db.or_(
-                Member.name.ilike(f'%{query}%'),
-                Member.phone.ilike(f'%{query}%')
-            )
-        )
-        
-        members = members_query.limit(10).all()
-        
-        # Check each member for active subscription
+        members_query = apply_branch_filter(Member.query, Member)
+
+        # Further scope to a specific class's brand/branch when provided
+        if class_id:
+            cls = GymClass.query.get(class_id)
+            if not cls or not check_entity_access(cls):
+                return jsonify([])
+            members_query = members_query.filter(Member.brand_id == cls.brand_id)
+            if cls.branch_id:
+                members_query = members_query.filter(
+                    db.or_(Member.branch_id == cls.branch_id, Member.branch_id.is_(None))
+                )
+
+        clauses = [
+            Member.name.ilike(f'%{q}%'),
+            Member.phone.ilike(f'%{q}%'),
+            Member.email.ilike(f'%{q}%'),
+            Member.member_import_id.ilike(f'%{q}%'),
+        ]
+        if q.isdigit():
+            clauses.append(Member.fingerprint_id == int(q))
+
+        members = members_query.filter(db.or_(*clauses)).limit(15).all()
+
         results = []
         for m in members:
             has_active = Subscription.query.filter(
                 Subscription.member_id == m.id,
-                Subscription.status == 'active'
+                Subscription.status == 'active',
             ).first() is not None
-            
             results.append({
                 'id': m.id,
                 'name': m.name,
                 'phone': m.phone or '',
-                'has_active_subscription': has_active
+                'has_active_subscription': has_active,
             })
-        
         return jsonify(results)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -364,12 +384,14 @@ def create():
             flash('الحصة ممتلئة', 'warning')
             return render_template('bookings/create.html', form=form, member=member)
 
-        # Check for duplicate booking
-        existing = Booking.query.filter_by(
-            member_id=member.id,
-            class_id=session.id,
-            booking_date=form.session_date.data,
-            status='confirmed'
+        # Check for duplicate booking — a class_bookings row defaults to
+        # status='booked' and becomes 'attended' on check-in. Both states
+        # count as an existing booking; only 'cancelled' / 'no_show' free up the slot.
+        existing = Booking.query.filter(
+            Booking.member_id == member.id,
+            Booking.class_id == session.id,
+            Booking.booking_date == form.session_date.data,
+            Booking.status.in_(['booked', 'attended']),
         ).first()
 
         if existing:

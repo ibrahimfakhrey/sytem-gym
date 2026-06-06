@@ -197,7 +197,7 @@ def edit(class_id):
         flash('تم تحديث الكلاس بنجاح', 'success')
         return redirect(url_for('classes.index'))
 
-    return render_template('classes/form.html', form=form, gym_class=gym_class, brand=gym_class.brand)
+    return render_template('classes/form.html', form=form, gym_class=gym_class, brand=Brand.query.get(gym_class.brand_id))
 
 
 @classes_bp.route('/<int:class_id>/delete', methods=['POST'])
@@ -374,21 +374,50 @@ def calendar():
 @classes_bp.route('/api/search-members')
 @login_required
 def search_members():
-    """Search members for booking"""
-    query = request.args.get('q', '')
-    brand_id = current_user.brand_id if not current_user.is_owner else request.args.get('brand_id', type=int)
+    """Search members for booking.
 
-    if not query or len(query) < 2:
+    Same field coverage as /members search (name / phone / email /
+    member_import_id, plus fingerprint_id when numeric).
+
+    If `class_id` is passed, the result is scoped to that class's
+    brand AND branch. Otherwise it falls back to the current user's
+    brand/branch scope via apply_branch_filter.
+    """
+    q = (request.args.get('q') or '').strip()
+    class_id = request.args.get('class_id', type=int)
+
+    if len(q) < 2:
         return jsonify([])
 
-    members = Member.query.filter(
-        Member.brand_id == brand_id,
-        (Member.name.ilike(f'%{query}%') | Member.phone.ilike(f'%{query}%'))
-    ).limit(10).all()
+    members_query = Member.query
+
+    # Scope: prefer the class's brand/branch if provided
+    if class_id:
+        cls = GymClass.query.get(class_id)
+        if not cls or not check_entity_access(cls):
+            return jsonify([])
+        members_query = members_query.filter(Member.brand_id == cls.brand_id)
+        if cls.branch_id:
+            members_query = members_query.filter(
+                db.or_(Member.branch_id == cls.branch_id, Member.branch_id.is_(None))
+            )
+    else:
+        members_query = apply_branch_filter(members_query, Member)
+
+    clauses = [
+        Member.name.ilike(f'%{q}%'),
+        Member.phone.ilike(f'%{q}%'),
+        Member.email.ilike(f'%{q}%'),
+        Member.member_import_id.ilike(f'%{q}%'),
+    ]
+    if q.isdigit():
+        clauses.append(Member.fingerprint_id == int(q))
+
+    members = members_query.filter(db.or_(*clauses)).limit(15).all()
 
     return jsonify([{
         'id': m.id,
         'name': m.name,
-        'phone': m.phone,
-        'member_id': m.member_id
+        'phone': m.phone or '',
+        'member_import_id': m.member_import_id or '',
     } for m in members])
