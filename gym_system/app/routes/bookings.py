@@ -424,17 +424,15 @@ def cancel(booking_id):
     """Cancel a booking"""
     booking = Booking.query.get_or_404(booking_id)
 
-    if not current_user.can_access_brand(booking.brand_id):
+    # Brand/branch lives on the parent class, not on ClassBooking itself.
+    if not check_entity_access(booking.gym_class):
         flash('ليس لديك صلاحية', 'danger')
         return redirect(url_for('bookings.index'))
 
     if booking.status == 'cancelled':
         flash('الحجز ملغي بالفعل', 'warning')
     else:
-        booking.status = 'cancelled'
-        booking.cancelled_at = datetime.utcnow()
-        booking.cancelled_by = current_user.id
-        db.session.commit()
+        booking.cancel()  # sets status='cancelled', cancelled_at, and commits
         flash('تم إلغاء الحجز', 'success')
 
     return redirect(url_for('bookings.index'))

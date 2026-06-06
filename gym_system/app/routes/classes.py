@@ -215,19 +215,30 @@ def delete(class_id):
         flash('ليس لديك صلاحية', 'danger')
         return redirect(url_for('classes.index'))
 
-    # Check for future bookings
+    # Refuse if there are upcoming bookings
     future_bookings = gym_class.bookings.filter(
         ClassBooking.booking_date >= date.today(),
         ClassBooking.status == 'booked'
     ).count()
-
     if future_bookings > 0:
         flash(f'لا يمكن حذف الكلاس - يوجد {future_bookings} حجز مستقبلي', 'danger')
         return redirect(url_for('classes.index'))
 
+    # Historical bookings (past, attended, cancelled, no_show) reference this
+    # class with class_id NOT NULL. SQLAlchemy's default behaviour on a dynamic
+    # relationship is to set the FK to NULL on the children, which violates
+    # the NOT NULL constraint. Wipe them in one bulk DELETE before removing
+    # the parent.
+    total_bookings = gym_class.bookings.count()
+    gym_class.bookings.delete(synchronize_session=False)
+
     db.session.delete(gym_class)
     db.session.commit()
-    flash('تم حذف الكلاس', 'success')
+
+    if total_bookings:
+        flash(f'تم حذف الكلاس و {total_bookings} حجز مرتبط به', 'success')
+    else:
+        flash('تم حذف الكلاس', 'success')
     return redirect(url_for('classes.index'))
 
 
