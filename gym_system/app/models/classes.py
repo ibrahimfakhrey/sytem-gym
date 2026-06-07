@@ -35,6 +35,8 @@ class GymClass(db.Model):
     bookings = db.relationship('ClassBooking', backref='gym_class', lazy='dynamic')
     trainer = db.relationship('User', backref='classes_taught')
     service_type = db.relationship('ServiceType', backref='gym_classes')
+    brand = db.relationship('Brand', foreign_keys=[brand_id])
+    branch = db.relationship('Branch', foreign_keys=[branch_id])
 
     def __repr__(self):
         return f'<GymClass {self.name}>'

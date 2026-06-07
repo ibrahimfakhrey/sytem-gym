@@ -369,7 +369,7 @@ def create():
         # Apply promotional offer
         if form.offer_id.data and form.offer_id.data != 0:
             offer = PromotionalOffer.query.get(form.offer_id.data)
-            if offer and offer.can_use:
+            if offer and offer.is_valid:
                 if offer.discount_type == 'percentage':
                     offer_discount = float(plan.price) * (float(offer.discount_value) / 100)
                 else:
