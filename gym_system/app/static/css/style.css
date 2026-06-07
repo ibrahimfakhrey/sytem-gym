@@ -27,7 +27,7 @@
     --card-bg: #ffffff;
     --text-primary: #2d3436;
     --text-secondary: #636e72;
-    --text-muted: #b2bec3;
+    --text-muted: #6b7280;  /* ≥4.5:1 on white — WCAG AA */
     --border-color: #e2e8f0;
     --border-light: #f1f3f4;
 
@@ -467,6 +467,28 @@ main {
 .table-responsive {
     border-radius: var(--radius-lg);
     overflow: hidden;
+}
+
+/* Per-row icon-action buttons (table action columns). Bumped to ≥44px so
+   destructive actions meet WCAG 2.5.5 / Apple HIG touch-target guidelines
+   without bloating row height on desktop. */
+.row-action-btn {
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Highlighted filter <select> — used on /classes index to draw attention
+   to the brand/day/service filters. Token-driven; previously inline hex. */
+.form-select-emphasized {
+    border-color: var(--accent-color);
+    border-width: 2px;
+}
+.form-select-emphasized:focus {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 0.2rem rgba(233, 69, 96, 0.18);
 }
 
 .table {

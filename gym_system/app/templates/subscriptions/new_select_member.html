@@ -77,17 +77,20 @@
                             </span>
                         </td>
                         <td>
-                            {% if member.has_active_subscription %}
-                                <span class="badge bg-{{ 'danger' if member.days_remaining <= 2 else ('warning' if member.days_remaining <= 7 else 'secondary') }}">
-                                    {{ member.days_remaining }} يوم
+                            {% set sub = active_subs.get(member.id) %}
+                            {% if sub %}
+                                {% set days = (sub.end_date - today).days %}
+                                <span class="badge bg-{{ 'danger' if days <= 2 else ('warning' if days <= 7 else 'secondary') }}">
+                                    {{ days }} يوم
                                 </span>
                             {% else %}
                                 <span class="text-muted">-</span>
                             {% endif %}
                         </td>
                         <td>
-                            {% if member.has_active_subscription %}
-                                <a href="{{ url_for('subscriptions.renew', subscription_id=member.active_subscription.id) }}" class="btn btn-sm btn-success">
+                            {% set sub = active_subs.get(member.id) %}
+                            {% if sub %}
+                                <a href="{{ url_for('subscriptions.renew', subscription_id=sub.id) }}" class="btn btn-sm btn-success">
                                     <i class="bi bi-arrow-repeat"></i> تجديد
                                 </a>
                             {% else %}

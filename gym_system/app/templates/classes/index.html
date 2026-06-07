@@ -20,8 +20,8 @@
         <form method="get" class="row g-3 align-items-end">
             {% if brands %}
             <div class="col-md-3">
-                <label class="form-label">البراند</label>
-                <select name="brand_id" class="form-select border-danger" style="border-color: #dc3545 !important; border-width: 2px;" onchange="this.form.submit()">
+                <label for="filter-brand" class="form-label">البراند</label>
+                <select id="filter-brand" name="brand_id" class="form-select form-select-emphasized" onchange="this.form.submit()">
                     {% for b in brands %}
                     <option value="{{ b.id }}" {% if brand.id == b.id %}selected{% endif %}>{{ b.name }}</option>
                     {% endfor %}
@@ -29,8 +29,8 @@
             </div>
             {% endif %}
             <div class="col-md-{% if brands %}3{% else %}4{% endif %}">
-                <label class="form-label">اليوم</label>
-                <select name="day" class="form-select border-danger" style="border-color: #dc3545 !important; border-width: 2px;" onchange="this.form.submit()">
+                <label for="filter-day" class="form-label">اليوم</label>
+                <select id="filter-day" name="day" class="form-select form-select-emphasized" onchange="this.form.submit()">
                     <option value="">كل الأيام</option>
                     <option value="0" {% if day_filter == 0 %}selected{% endif %}>السبت</option>
                     <option value="1" {% if day_filter == 1 %}selected{% endif %}>الأحد</option>
@@ -42,8 +42,8 @@
                 </select>
             </div>
             <div class="col-md-{% if brands %}3{% else %}4{% endif %}">
-                <label class="form-label">نوع الخدمة</label>
-                <select name="service" class="form-select border-danger" style="border-color: #dc3545 !important; border-width: 2px;" onchange="this.form.submit()">
+                <label for="filter-service" class="form-label">نوع الخدمة</label>
+                <select id="filter-service" name="service" class="form-select form-select-emphasized" onchange="this.form.submit()">
                     <option value="">الكل</option>
                     {% for st in service_types %}
                     <option value="{{ st.id }}" {% if service_filter == st.id %}selected{% endif %}>{{ st.name }}</option>
@@ -128,23 +128,26 @@
                             {% endif %}
                         </td>
                         <td>
-                            <div class="btn-group">
+                            <div class="btn-group row-action-group" role="group" aria-label="إجراءات الكلاس">
                                 <a href="{{ url_for('classes.bookings', class_id=cls.id) }}"
-                                   class="btn btn-sm btn-outline-info" title="الحجوزات">
-                                    <i class="bi bi-people"></i>
+                                   class="btn btn-outline-info row-action-btn"
+                                   aria-label="حجوزات {{ cls.name }}" title="الحجوزات">
+                                    <i class="bi bi-people" aria-hidden="true"></i>
                                 </a>
                                 <a href="{{ url_for('classes.edit', class_id=cls.id) }}"
-                                   class="btn btn-sm btn-outline-primary" title="تعديل">
-                                    <i class="bi bi-pencil"></i>
+                                   class="btn btn-outline-primary row-action-btn"
+                                   aria-label="تعديل {{ cls.name }}" title="تعديل">
+                                    <i class="bi bi-pencil" aria-hidden="true"></i>
                                 </a>
-                                <form action="{{ url_for('classes.delete', class_id=cls.id) }}"
-                                      method="POST" class="d-inline"
-                                      onsubmit="return confirm('هل تريد حذف الكلاس &quot;{{ cls.name }}&quot;؟ لا يمكن التراجع.');">
-                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="حذف">
-                                        <i class="bi bi-trash"></i>
-                                    </button>
-                                </form>
+                                <button type="button"
+                                        class="btn btn-outline-danger row-action-btn"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#deleteClassModal"
+                                        data-class-id="{{ cls.id }}"
+                                        data-class-name="{{ cls.name }}"
+                                        aria-label="حذف {{ cls.name }}" title="حذف">
+                                    <i class="bi bi-trash" aria-hidden="true"></i>
+                                </button>
                             </div>
                         </td>
                     </tr>
@@ -170,4 +173,54 @@
     </div>
 </div>
 {% endif %}
+
+<!-- Delete-class confirmation modal — shared across all rows. The
+     data-class-id / data-class-name attributes on each trash button
+     fill in the title and the form action when the modal opens. -->
+<div class="modal fade" id="deleteClassModal" tabindex="-1"
+     aria-labelledby="deleteClassModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteClassModalLabel">
+                    <i class="bi bi-exclamation-triangle text-danger" aria-hidden="true"></i>
+                    حذف الكلاس
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-1">هل تريد حذف الكلاس <strong id="deleteClassName"></strong>؟</p>
+                <p class="text-muted small mb-0">لا يمكن التراجع. سيتم حذف جميع حجوزات هذا الكلاس.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                <form id="deleteClassForm" method="POST" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash" aria-hidden="true"></i> حذف نهائي
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    const modal = document.getElementById('deleteClassModal');
+    if (!modal) return;
+    const nameEl = document.getElementById('deleteClassName');
+    const form = document.getElementById('deleteClassForm');
+    modal.addEventListener('show.bs.modal', function (event) {
+        const trigger = event.relatedTarget;
+        if (!trigger) return;
+        const classId = trigger.getAttribute('data-class-id');
+        const className = trigger.getAttribute('data-class-name') || '';
+        nameEl.textContent = className;
+        form.action = `/classes/${classId}/delete`;
+    });
+})();
+</script>
 {% endblock %}

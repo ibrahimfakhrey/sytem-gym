@@ -239,11 +239,26 @@ def new_select_member():
 
     members = query.order_by(Member.name).paginate(page=page, per_page=per_page, error_out=False)
 
+    # Eager-load active subs for the visible rows in one round-trip to kill the
+    # N+1 caused by `member.has_active_subscription` / `member.active_subscription`
+    # in the template.
+    visible_ids = [m.id for m in members.items]
+    active_subs = {}
+    if visible_ids:
+        for sub in Subscription.query.filter(
+            Subscription.member_id.in_(visible_ids),
+            Subscription.status == 'active',
+            Subscription.end_date >= today,
+        ).all():
+            active_subs[sub.member_id] = sub
+
     return render_template(
         'subscriptions/new_select_member.html',
         members=members,
         search=search,
         days_window=days_window,
+        active_subs=active_subs,
+        today=today,
     )
 
 

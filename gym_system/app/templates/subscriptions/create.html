@@ -26,31 +26,31 @@
                     {{ form.hidden_tag() }}
 
                     <div class="mb-3">
-                        <label class="form-label">نوع الخدمة</label>
+                        <label for="service-type-select" class="form-label">نوع الخدمة</label>
                         {{ form.service_type_id(class="form-select", id="service-type-select") }}
                         <small class="text-muted">اختر نوع النشاط (جيم، مسبح، كاراتيه...)</small>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label">باقة الاشتراك *</label>
+                        <label for="plan-select" class="form-label">باقة الاشتراك *</label>
                         {{ form.plan_id(class="form-select", id="plan-select") }}
                     </div>
 
                     <!-- Sessions count for session-based services (like swimming education) -->
                     <div class="mb-3" id="sessions-count-container" style="display: none;">
-                        <label class="form-label">عدد الحصص *</label>
+                        <label for="sessions-count" class="form-label">عدد الحصص *</label>
                         {{ form.sessions_count(class="form-control", type="number", min="1", max="100", id="sessions-count") }}
                         <small class="text-muted">عدد الحصص المتاحة للعضو (مثلاً 8 حصص)</small>
                     </div>
 
                     <div class="row" id="dates-container">
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">تاريخ البدء</label>
+                            <label for="start-date" class="form-label">تاريخ البدء</label>
                             <input type="date" class="form-control" id="start-date" value="{{ today }}" readonly>
                             <small class="text-muted">يبدأ من اليوم</small>
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">تاريخ الانتهاء</label>
+                            <label for="end-date" class="form-label">تاريخ الانتهاء</label>
                             <input type="date" class="form-control" id="end-date" readonly>
                             <small class="text-muted">يحسب تلقائياً حسب الباقة</small>
                         </div>
@@ -61,23 +61,60 @@
 
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">سعر الباقة</label>
+                            <label for="original-price" class="form-label">سعر الباقة</label>
                             <input type="text" class="form-control" id="original-price" readonly>
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">الخصم</label>
+                            <label for="discount" class="form-label">الخصم اليدوي</label>
                             {{ form.discount(class="form-control", type="number", min="0", step="0.01", id="discount", placeholder="0") }}
                         </div>
                     </div>
 
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">المبلغ النهائي</label>
-                            <input type="text" class="form-control bg-light" id="final-amount" readonly>
+                            <label for="offer-select" class="form-label">
+                                <i class="bi bi-tags"></i>
+                                العرض الترويجي
+                            </label>
+                            <select name="offer_id" id="offer-select" class="form-select">
+                                {% for value, label in form.offer_id.choices %}
+                                {% set offer_obj = offers|selectattr('id', 'equalto', value)|first %}
+                                <option value="{{ value }}"
+                                        data-type="{{ offer_obj.discount_type if offer_obj else '' }}"
+                                        data-value="{{ offer_obj.discount_value if offer_obj else 0 }}">
+                                    {{ label }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            {% if not offers %}
+                            <small class="text-muted">لا توجد عروض ترويجية نشطة لهذا البراند</small>
+                            {% endif %}
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">المبلغ المدفوع *</label>
+                            <label for="gift-card-code" class="form-label">
+                                <i class="bi bi-gift"></i>
+                                كود كرت الإهداء
+                            </label>
+                            <div class="input-group">
+                                {{ form.gift_card_code(class="form-control text-uppercase", id="gift-card-code", placeholder="GC-XXXX") }}
+                                <button type="button" class="btn btn-outline-secondary" id="gift-card-check">
+                                    تحقق
+                                </button>
+                            </div>
+                            <small id="gift-card-feedback" class="d-block mt-1" aria-live="polite"></small>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="final-amount" class="form-label">المبلغ النهائي</label>
+                            <input type="text" class="form-control bg-light" id="final-amount" readonly>
+                            <small class="text-muted" id="discount-breakdown"></small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="amount-paid" class="form-label">المبلغ المدفوع *</label>
                             {{ form.paid_amount(class="form-control", type="number", min="0", step="0.01", id="amount-paid") }}
+                            <small class="text-muted">إذا استخدمت كرت إهداء يكفي المبلغ المتبقي فقط</small>
                         </div>
                     </div>
 
@@ -87,25 +124,25 @@
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label">طريقة الدفع *</label>
+                        <label for="payment_method" class="form-label">طريقة الدفع *</label>
                         {{ form.payment_method(class="form-control") }}
                         <div class="form-text">يجب اختيار طريقة الدفع قبل إنشاء الاشتراك</div>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label">ملاحظات</label>
+                        <label for="notes" class="form-label">ملاحظات</label>
                         {{ form.notes(class="form-control", rows="2", placeholder="أي ملاحظات إضافية...") }}
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label">
+                        <label for="proof-image-input" class="form-label">
                             <i class="bi bi-image"></i>
                             صورة إثبات الدفع (اختياري)
                         </label>
                         {{ form.proof_image(class="form-control", accept="image/*", id="proof-image-input") }}
                         <small class="text-muted">PNG / JPG / JPEG / GIF — حد أقصى 16 ميجابايت</small>
                         <div class="mt-2" id="proof-image-preview" style="display:none;">
-                            <img src="" alt="معاينة" style="max-height:160px; border-radius:8px; border:1px solid #dee2e6;">
+                            <img src="" alt="معاينة" style="max-height:160px; border-radius:8px; border:1px solid var(--border-color);">
                         </div>
                     </div>
 
@@ -305,6 +342,25 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initial filter
     filterPlansByServiceType();
 
+    // Offer + gift-card elements
+    const offerSelect = document.getElementById('offer-select');
+    const giftCardCodeInput = document.getElementById('gift-card-code');
+    const giftCardCheckBtn = document.getElementById('gift-card-check');
+    const giftCardFeedback = document.getElementById('gift-card-feedback');
+    const discountBreakdown = document.getElementById('discount-breakdown');
+    // Live gift-card balance after server validation (0 = none/invalid)
+    let giftCardBalance = 0;
+
+    function computeOfferDiscount(price) {
+        if (!offerSelect || !offerSelect.value || offerSelect.value === '0') return 0;
+        const opt = offerSelect.options[offerSelect.selectedIndex];
+        const type = opt.dataset.type;
+        const value = parseFloat(opt.dataset.value) || 0;
+        if (type === 'percentage') return price * (value / 100);
+        if (type === 'fixed' || type === 'amount') return Math.min(value, price);
+        return 0;
+    }
+
     function updateCalculations() {
         const planId = planSelect.value;
         if (!planId || !plans[planId]) return;
@@ -317,15 +373,30 @@ document.addEventListener('DOMContentLoaded', function() {
         start.setDate(start.getDate() + plan.duration);
         endDate.value = start.toISOString().split('T')[0];
 
-        // Calculate final amount
+        // Final amount = price − manual discount − offer discount − gift-card amount
         const discountVal = parseFloat(discount.value) || 0;
-        const final = plan.price - discountVal;
+        const offerDiscount = computeOfferDiscount(plan.price);
+        const subtotal = Math.max(0, plan.price - discountVal - offerDiscount);
+        const gcApplied = Math.min(giftCardBalance, subtotal);
+        const final = Math.max(0, subtotal - gcApplied);
         finalAmount.value = final.toLocaleString('ar-SA') + ' ر.س';
 
-        // Check remaining
+        // Breakdown line under the final-amount field
+        const parts = [];
+        if (discountVal > 0) parts.push(`خصم يدوي ${discountVal.toLocaleString('ar-SA')}`);
+        if (offerDiscount > 0) parts.push(`عرض ${offerDiscount.toLocaleString('ar-SA')}`);
+        if (gcApplied > 0) parts.push(`كرت ${gcApplied.toLocaleString('ar-SA')}`);
+        discountBreakdown.textContent = parts.join(' · ');
+
+        // Auto-fill the cash field with the new total when the user changes
+        // plan/offer/gift-card (but not while they're typing in it).
+        if (document.activeElement !== amountPaid) {
+            amountPaid.value = final;
+        }
+
+        // Remaining-to-pay alert
         const paid = parseFloat(amountPaid.value) || 0;
         const remaining = final - paid;
-
         if (remaining > 0) {
             remainingAlert.style.display = 'block';
             remainingAmount.textContent = remaining.toLocaleString('ar-SA');
@@ -353,6 +424,49 @@ document.addEventListener('DOMContentLoaded', function() {
 
     discount.addEventListener('input', updateCalculations);
     amountPaid.addEventListener('input', updateCalculations);
+    if (offerSelect) offerSelect.addEventListener('change', updateCalculations);
+
+    // Gift-card validation via the brand's existing /gift-cards/api/check endpoint
+    if (giftCardCheckBtn && giftCardCodeInput) {
+        giftCardCheckBtn.addEventListener('click', function() {
+            const code = (giftCardCodeInput.value || '').trim().toUpperCase();
+            if (!code) {
+                giftCardFeedback.textContent = '';
+                giftCardBalance = 0;
+                updateCalculations();
+                return;
+            }
+            giftCardFeedback.textContent = 'جاري التحقق...';
+            giftCardFeedback.className = 'd-block mt-1 text-muted';
+            fetch(`/gift-cards/api/check/${encodeURIComponent(code)}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.valid && data.remaining_amount > 0) {
+                        giftCardBalance = parseFloat(data.remaining_amount);
+                        giftCardFeedback.textContent = `كرت صالح — الرصيد: ${giftCardBalance.toLocaleString('ar-SA')} ر.س`;
+                        giftCardFeedback.className = 'd-block mt-1 text-success';
+                    } else {
+                        giftCardBalance = 0;
+                        giftCardFeedback.textContent = data.message || 'كرت غير صالح';
+                        giftCardFeedback.className = 'd-block mt-1 text-danger';
+                    }
+                    updateCalculations();
+                })
+                .catch(() => {
+                    giftCardBalance = 0;
+                    giftCardFeedback.textContent = 'تعذّر التحقق من الكرت';
+                    giftCardFeedback.className = 'd-block mt-1 text-danger';
+                });
+        });
+        // Reset balance if the code is edited after a successful check
+        giftCardCodeInput.addEventListener('input', function() {
+            if (giftCardBalance > 0) {
+                giftCardBalance = 0;
+                giftCardFeedback.textContent = '';
+                updateCalculations();
+            }
+        });
+    }
 
     // Initial calculation
     if (planSelect.value) {

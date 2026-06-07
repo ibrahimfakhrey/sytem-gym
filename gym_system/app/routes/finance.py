@@ -7,6 +7,7 @@ from datetime import date, datetime
 
 from app import db
 from app.models.company import Brand
+from app.models.user import User
 from app.models.finance import Income, Expense, Salary, Refund, ExpenseCategory
 from app.models.daily_closing import DailyClosing
 from app.models.subscription import Subscription, SubscriptionPayment
@@ -235,16 +236,16 @@ def sales_transactions():
         brands = Brand.query.filter_by(is_active=True).all()
 
     # Get subscription plans for service filter
-    from app.models.subscription import SubscriptionPlan
+    from app.models.subscription import Plan
     if current_user.can_view_all_brands:
         if brand_id:
-            services = SubscriptionPlan.query.filter_by(
+            services = Plan.query.filter_by(
                 brand_id=brand_id, is_active=True
             ).all()
         else:
-            services = SubscriptionPlan.query.filter_by(is_active=True).all()
+            services = Plan.query.filter_by(is_active=True).all()
     else:
-        services = SubscriptionPlan.query.filter_by(
+        services = Plan.query.filter_by(
             brand_id=current_user.brand_id, is_active=True
         ).all()
 
@@ -498,13 +499,18 @@ def expenses_create():
             created_by=current_user.id
         )
 
-        # Check if approval is required
-        if expense.requires_approval():
+        # Approval policy: if the creator can already approve expenses,
+        # auto-approve. Otherwise the row lands in the pending queue handled
+        # by /finance/expenses/pending.
+        can_approve = bool(current_user.role and current_user.role.can_approve_expenses)
+        if can_approve:
+            expense.status = 'approved'
+            expense.approved_by = current_user.id
+            expense.approved_at = datetime.utcnow()
+            flash_msg = 'تم تسجيل المصروف بنجاح'
+        else:
             expense.status = 'pending'
             flash_msg = 'تم تسجيل المصروف وهو بانتظار الموافقة'
-        else:
-            expense.status = 'approved'
-            flash_msg = 'تم تسجيل المصروف بنجاح'
 
         # Handle receipt image
         if 'receipt_image' in request.files:
@@ -517,7 +523,7 @@ def expenses_create():
         db.session.add(expense)
         db.session.commit()
 
-        flash('تم تسجيل المصروف بنجاح', 'success')
+        flash(flash_msg, 'success' if can_approve else 'info')
         return redirect(url_for('finance.expenses'))
 
     return render_template('finance/expense_form.html', form=form, brand=brand)
