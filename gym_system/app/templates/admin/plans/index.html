@@ -123,8 +123,16 @@
                             <div class="btn-group">
                                 <a href="{{ url_for('admin.plans_edit', plan_id=plan.id) }}"
                                    class="btn btn-sm btn-outline-primary" title="تعديل">
-                                    <i class="bi bi-pencil"></i>
+                                    <i class="bi bi-pencil"></i> تعديل
                                 </a>
+                                <button type="button" class="btn btn-sm btn-outline-danger"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#deletePlanModal"
+                                        data-plan-id="{{ plan.id }}"
+                                        data-plan-name="{{ plan.name }}"
+                                        data-plan-used="{{ plan.subscriptions.count() }}">
+                                    <i class="bi bi-trash"></i> حذف
+                                </button>
                             </div>
                         </td>
                     </tr>
@@ -205,4 +213,53 @@
     </div>
 </div>
 {% endif %}
+
+{# GYM-14 delete-plan modal — kept at the root of the content block so the
+   .modal-backdrop doesn't fight the .card/.table-responsive overflow chain
+   (that was producing a "page flicker" when the trigger was clicked). #}
+<div class="modal fade" id="deletePlanModal" tabindex="-1" aria-labelledby="deletePlanModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deletePlanModalLabel">
+                    <i class="bi bi-exclamation-triangle text-danger" aria-hidden="true"></i>
+                    حذف الباقة
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-1">هل تريد حذف الباقة <strong id="deletePlanName"></strong>؟</p>
+                <p class="text-muted small mb-0" id="deletePlanWarning"></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                <form id="deletePlanForm" method="POST" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash" aria-hidden="true"></i> تأكيد
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    var modal = document.getElementById('deletePlanModal');
+    if (!modal) return;
+    modal.addEventListener('show.bs.modal', function (e) {
+        var t = e.relatedTarget; if (!t) return;
+        document.getElementById('deletePlanName').textContent = t.getAttribute('data-plan-name') || '';
+        var used = parseInt(t.getAttribute('data-plan-used') || '0', 10);
+        document.getElementById('deletePlanWarning').textContent =
+            used > 0
+                ? 'هذه الباقة مرتبطة بـ ' + used + ' اشتراك، سيتم تعطيلها فقط (لن تظهر في النماذج الجديدة).'
+                : 'لا يوجد اشتراك مرتبط بها — سيتم حذفها نهائياً.';
+        document.getElementById('deletePlanForm').action = '/admin/plans/' + t.getAttribute('data-plan-id') + '/delete';
+    });
+})();
+</script>
 {% endblock %}

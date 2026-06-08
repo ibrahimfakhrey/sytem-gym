@@ -30,6 +30,27 @@
                 <h4>{{ complaint.subject }}</h4>
                 <hr>
                 <p style="white-space: pre-wrap;">{{ complaint.description }}</p>
+                {# GYM-21 attachments #}
+                {% set attachments = complaint.attachments.all() %}
+                {% if attachments %}
+                <hr>
+                <h6 class="text-muted"><i class="bi bi-paperclip"></i> المرفقات ({{ attachments|length }})</h6>
+                <div class="d-flex flex-wrap gap-2">
+                    {% for a in attachments %}
+                    <a href="{{ url_for('static', filename=a.filename) }}" target="_blank" rel="noopener"
+                       class="border rounded p-2 text-decoration-none d-inline-flex align-items-center gap-2"
+                       style="max-width: 220px;">
+                        {% if a.filename.lower().endswith('.pdf') %}
+                        <i class="bi bi-file-pdf text-danger fs-4"></i>
+                        {% else %}
+                        <img src="{{ url_for('static', filename=a.filename) }}" alt="" loading="lazy"
+                             style="width:40px; height:40px; object-fit:cover; border-radius:4px;">
+                        {% endif %}
+                        <span class="small text-truncate">{{ a.original_name or 'مرفق' }}</span>
+                    </a>
+                    {% endfor %}
+                </div>
+                {% endif %}
             </div>
             <div class="card-footer text-muted small">
                 <i class="bi bi-clock"></i>

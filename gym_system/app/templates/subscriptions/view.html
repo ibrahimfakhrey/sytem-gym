@@ -154,6 +154,23 @@
                     إيقاف الاشتراك
                 </a>
                 {% endif %}
+
+                {# GYM-20 — gift free days. Visible to brand owner + admin. #}
+                {% if current_user.is_owner or (current_user.role and current_user.role.name_en == 'owner') %}
+                <button type="button" class="btn btn-outline-success w-100 mb-2"
+                        data-bs-toggle="modal" data-bs-target="#extendDaysModal">
+                    <i class="bi bi-gift"></i>
+                    إضافة أيام مجانية
+                </button>
+                {% endif %}
+
+                {# GYM-15 — quick link to printable invoice #}
+                <a href="{{ url_for('subscriptions.invoice', subscription_id=subscription.id) }}"
+                   target="_blank" rel="noopener"
+                   class="btn btn-outline-primary w-100 mb-2">
+                    <i class="bi bi-receipt"></i>
+                    عرض الفاتورة
+                </a>
                 {% if subscription.status == 'frozen' %}
                 <form method="POST" action="{{ url_for('subscriptions.unfreeze', subscription_id=subscription.id) }}" class="mb-2">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -182,4 +199,47 @@
         </div>
     </div>
 </div>
+
+{# GYM-20 extend-days modal #}
+{% if current_user.is_owner or (current_user.role and current_user.role.name_en == 'owner') %}
+<div class="modal fade" id="extendDaysModal" tabindex="-1" aria-labelledby="extendDaysModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form method="POST" action="{{ url_for('subscriptions.extend', subscription_id=subscription.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="extendDaysModalLabel">
+                        <i class="bi bi-gift text-success" aria-hidden="true"></i>
+                        إضافة أيام مجانية
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted">
+                        ينتهي الاشتراك حالياً في
+                        <strong>{{ subscription.end_date.strftime('%Y-%m-%d') }}</strong>.
+                    </p>
+                    <div class="mb-3">
+                        <label for="extend-days" class="form-label">عدد الأيام *</label>
+                        <input type="number" id="extend-days" name="days" min="1" max="90"
+                               class="form-control" required>
+                        <small class="text-muted">الحد الأقصى 90 يوم.</small>
+                    </div>
+                    <div class="mb-1">
+                        <label for="extend-reason" class="form-label">السبب (اختياري)</label>
+                        <input type="text" id="extend-reason" name="reason" maxlength="120"
+                               class="form-control" placeholder="مثلاً: تعويض فترة الإغلاق">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-check2-circle"></i> تأكيد الإضافة
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
 {% endblock %}

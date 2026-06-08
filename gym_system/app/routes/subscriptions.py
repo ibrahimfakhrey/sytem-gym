@@ -17,7 +17,7 @@ from app.models.offer import PromotionalOffer
 from app.models.giftcard import GiftCard
 from app.models.fingerprint import DeviceCommand
 from app.utils.decorators import members_required
-from app.utils.helpers import pagination_args, apply_branch_filter, check_entity_access, save_uploaded_file
+from app.utils.helpers import pagination_args, apply_branch_filter, check_entity_access, save_uploaded_file, resolve_owner_branch_filter
 
 subscriptions_bp = Blueprint('subscriptions', __name__)
 
@@ -121,8 +121,9 @@ def index():
     expiring = request.args.get('expiring', type=int)
     service_type_id = request.args.get('service_type_id', type=int)
 
-    # Base query
-    query = apply_branch_filter(Subscription.query, Subscription)
+    # Base query — honor GYM-12 owner branch picker
+    query = apply_branch_filter(Subscription.query, Subscription,
+                                branch_filter_id=resolve_owner_branch_filter())
 
     # Status filter
     if status:
@@ -483,8 +484,14 @@ def create():
             if subscription.service_type:
                 service_type_name = subscription.service_type.name
 
+            # GYM-15 — snapshot branch on the invoice
+            branch_for_invoice = subscription.branch or (member.branch if hasattr(member, 'branch') else None)
             invoice = Invoice(
                 brand_id=member.brand_id,
+                branch_id=getattr(branch_for_invoice, 'id', None),
+                branch_name=getattr(branch_for_invoice, 'name', None),
+                branch_phone=getattr(branch_for_invoice, 'phone', None),
+                branch_address=getattr(branch_for_invoice, 'address', None),
                 subscription_id=subscription.id,
                 payment_id=payment.id,
                 member_id=member.id,
@@ -989,6 +996,56 @@ def reject_renewal(subscription_id):
         return redirect(url_for('members.view', member_id=subscription.member_id))
 
     return render_template('subscriptions/reject_renewal.html', form=form, subscription=subscription)
+
+
+@subscriptions_bp.route('/<int:subscription_id>/extend', methods=['POST'])
+@login_required
+@members_required
+def extend(subscription_id):
+    """GYM-20: brand owner (or admin) gifts free days to a subscription.
+
+    Hard-capped at 90 days per gift to avoid finger-slip extensions of years.
+    The original_end_date is preserved (auditable), the gift is appended to
+    notes with the operator's name + date.
+    """
+    subscription = Subscription.query.get_or_404(subscription_id)
+    if not check_entity_access(subscription):
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('subscriptions.index'))
+
+    # Permission gate: only brand owners and admins can gift days
+    is_admin = current_user.is_owner
+    is_brand_owner = current_user.role and current_user.role.name_en == 'owner'
+    if not (is_admin or is_brand_owner):
+        flash('فقط مالك البراند يمكنه إضافة أيام مجانية', 'danger')
+        return redirect(url_for('subscriptions.view', subscription_id=subscription_id))
+
+    try:
+        days = int(request.form.get('days', '0'))
+    except (TypeError, ValueError):
+        days = 0
+    if days < 1 or days > 90:
+        flash('عدد الأيام يجب أن يكون بين 1 و 90', 'warning')
+        return redirect(url_for('subscriptions.view', subscription_id=subscription_id))
+
+    reason = (request.form.get('reason') or '').strip()
+
+    subscription.end_date = subscription.end_date + timedelta(days=days)
+    if subscription.status == 'expired' and subscription.end_date >= date.today():
+        subscription.status = 'active'
+
+    note_parts = [
+        f'+{days} يوم مجاني بواسطة {current_user.name}',
+        f'في {date.today().isoformat()}',
+    ]
+    if reason:
+        note_parts.append(f'سبب: {reason}')
+    suffix = ' — '.join(note_parts)
+    subscription.notes = (subscription.notes + '\n' + suffix) if subscription.notes else suffix
+
+    db.session.commit()
+    flash(f'تمت إضافة {days} يوم مجاني. ينتهي الاشتراك الآن في {subscription.end_date.isoformat()}', 'success')
+    return redirect(url_for('subscriptions.view', subscription_id=subscription_id))
 
 
 @subscriptions_bp.route('/<int:subscription_id>/invoice')

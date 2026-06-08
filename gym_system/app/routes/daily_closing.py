@@ -143,6 +143,67 @@ def verify(closing_id):
     return redirect(url_for('daily_closing.view', closing_id=closing.id))
 
 
+@daily_closing_bp.route('/report')
+@login_required
+def report():
+    """GYM-17: detailed daily-closing report — period totals + per-branch
+    breakdown + cash-variance highlights. Honors the owner branch picker.
+    """
+    from sqlalchemy import func
+    from app.utils.helpers import apply_branch_filter, resolve_owner_branch_filter
+    if not (current_user.role and current_user.role.can_view_daily_closing):
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('dashboard.index'))
+
+    today = date.today()
+    start_str = request.args.get('start_date', (today - timedelta(days=30)).isoformat())
+    end_str = request.args.get('end_date', today.isoformat())
+    try:
+        start_date = date.fromisoformat(start_str)
+        end_date = date.fromisoformat(end_str)
+    except ValueError:
+        start_date, end_date = today - timedelta(days=30), today
+
+    base = apply_branch_filter(DailyClosing.query, DailyClosing,
+                               branch_filter_id=resolve_owner_branch_filter())
+    closings = base.filter(
+        DailyClosing.closing_date >= start_date,
+        DailyClosing.closing_date <= end_date,
+    ).order_by(DailyClosing.closing_date.desc(),
+               DailyClosing.branch_id.asc()).all()
+
+    # Aggregates
+    def _f(x): return float(x or 0)
+    totals = {
+        'sales': sum(_f(c.total_sales) for c in closings),
+        'cash': sum(_f(c.cash_amount) for c in closings),
+        'card': sum(_f(c.card_amount) for c in closings),
+        'transfer': sum(_f(c.transfer_amount) for c in closings),
+        'expenses': sum(_f(c.total_expenses) for c in closings),
+        'variance': sum(_f(c.cash_difference) for c in closings),
+        'count': len(closings),
+        'verified': sum(1 for c in closings if c.status == 'verified'),
+        'rejected': sum(1 for c in closings if c.status == 'rejected'),
+    }
+    # Per-branch breakdown
+    from collections import defaultdict
+    per_branch = defaultdict(lambda: {'count': 0, 'sales': 0.0, 'variance': 0.0, 'branch': None})
+    for c in closings:
+        key = c.branch_id or 0
+        per_branch[key]['count'] += 1
+        per_branch[key]['sales'] += _f(c.total_sales)
+        per_branch[key]['variance'] += _f(c.cash_difference)
+        per_branch[key]['branch'] = c.branch if hasattr(c, 'branch') else None
+    per_branch_list = list(per_branch.values())
+
+    return render_template('daily_closing/report.html',
+                          closings=closings,
+                          totals=totals,
+                          per_branch=per_branch_list,
+                          start_date=start_date,
+                          end_date=end_date)
+
+
 @daily_closing_bp.route('/pending')
 @login_required
 def pending():

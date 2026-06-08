@@ -100,16 +100,26 @@ def members_list():
     except:
         filter_date = date.today()
 
-    # Base query
-    query = apply_branch_filter(MemberAttendance.query, MemberAttendance)
+    # Base query — honor GYM-12 owner branch picker
+    from app.utils.helpers import resolve_owner_branch_filter
+    query = apply_branch_filter(MemberAttendance.query, MemberAttendance,
+                                branch_filter_id=resolve_owner_branch_filter())
 
     # Date filter
     query = query.filter(db.func.date(MemberAttendance.check_in) == filter_date)
 
     # Pagination
-    attendance = query.order_by(MemberAttendance.check_in.desc()).paginate(
+    attendances = query.order_by(MemberAttendance.check_in.desc()).paginate(
         page=page, per_page=per_page, error_out=False
     )
+
+    # Stats for the filtered date (template expects stats.total/fingerprint/manual)
+    stats_query = apply_branch_filter(MemberAttendance.query, MemberAttendance) \
+        .filter(db.func.date(MemberAttendance.check_in) == filter_date)
+    total = stats_query.count()
+    fingerprint = stats_query.filter(MemberAttendance.source == 'fingerprint').count()
+    manual = total - fingerprint
+    stats = {'total': total, 'fingerprint': fingerprint, 'manual': manual}
 
     # Get brands for filter
     brands = None
@@ -117,7 +127,8 @@ def members_list():
         brands = Brand.query.filter_by(is_active=True).all()
 
     return render_template('attendance/history.html',
-                          attendance=attendance,
+                          attendances=attendances,
+                          stats=stats,
                           brands=brands,
                           date_filter=date_filter)
 

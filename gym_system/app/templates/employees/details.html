@@ -112,6 +112,60 @@
                 {% endif %}
             </div>
         </div>
+
+        <!-- GYM-18: salary ledger -->
+        <div class="card mt-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-cash-coin text-primary"></i> سجل الرواتب</span>
+                <span class="badge bg-primary">{{ salaries|length }}</span>
+            </div>
+            <div class="card-body p-0">
+                {% if salaries %}
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>الشهر</th>
+                                <th class="text-center">الصافي</th>
+                                <th class="text-center">الحالة</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for s in salaries %}
+                            <tr>
+                                <td>
+                                    {{ s.month_name }} {{ s.year }}
+                                    {% if s.paid_date %}
+                                    <div class="small text-muted">دُفع {{ s.paid_date.strftime('%Y-%m-%d') }}</div>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">{{ "{:,.0f}".format(s.net_salary) }} ر.س</td>
+                                <td class="text-center">
+                                    {% if s.status == 'paid' %}
+                                    <span class="badge bg-success">مدفوع</span>
+                                    {% elif current_user.is_owner or current_user.is_brand_manager %}
+                                    <button type="button" class="btn btn-sm btn-success"
+                                            data-bs-toggle="modal" data-bs-target="#paySalaryModal"
+                                            data-salary-id="{{ s.id }}"
+                                            data-employee-name="{{ employee.name }}"
+                                            data-month-year="{{ s.month_name }} {{ s.year }}"
+                                            data-net-salary="{{ '{:,.0f}'.format(s.net_salary) }}">
+                                        <i class="bi bi-check2-circle"></i> ادفع
+                                    </button>
+                                    {% else %}
+                                    <span class="badge bg-{{ s.status_class }}">{{ s.status_text }}</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted text-center py-3 mb-0">لا توجد سجلات رواتب بعد</p>
+                {% endif %}
+            </div>
+        </div>
     </div>
 
     <!-- Attendance History -->
@@ -199,4 +253,54 @@
         </div>
     </div>
 </div>
+
+{# Pay-salary modal — shared across rows on this employee's salary card #}
+{% if current_user.is_owner or current_user.is_brand_manager %}
+<div class="modal fade" id="paySalaryModal" tabindex="-1" aria-labelledby="paySalaryModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="paySalaryModalLabel">
+                    <i class="bi bi-cash-coin text-success" aria-hidden="true"></i>
+                    تأكيد دفع الراتب
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-2">سيتم تسجيل دفع راتب <strong id="paySalaryEmployee"></strong>
+                    عن شهر <strong id="paySalaryPeriod"></strong>
+                    بمبلغ <strong id="paySalaryNet"></strong> ر.س.</p>
+                <p class="text-muted small mb-0">
+                    سينعكس ذلك في سجل المصروفات تحت بند "رواتب" ويظهر الراتب لدى الموظف كمدفوع.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                <form id="paySalaryForm" method="POST" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-check2-circle"></i> تأكيد الدفع
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    var modal = document.getElementById('paySalaryModal');
+    if (!modal) return;
+    modal.addEventListener('show.bs.modal', function (e) {
+        var t = e.relatedTarget; if (!t) return;
+        document.getElementById('paySalaryEmployee').textContent = t.getAttribute('data-employee-name') || '';
+        document.getElementById('paySalaryPeriod').textContent = t.getAttribute('data-month-year') || '';
+        document.getElementById('paySalaryNet').textContent = t.getAttribute('data-net-salary') || '0';
+        document.getElementById('paySalaryForm').action = '/finance/salaries/' + t.getAttribute('data-salary-id') + '/pay';
+    });
+})();
+</script>
 {% endblock %}

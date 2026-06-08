@@ -41,7 +41,109 @@
     </div>
 </div>
 
-<!-- Recent Attendance -->
+<!-- My salary + my attendance row -->
+<div class="row g-3 mb-3">
+    <!-- GYM-18: my salary ledger -->
+    <div class="col-lg-6">
+        <div class="card h-100" id="my-salaries">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-cash-coin text-success"></i> سجل رواتبي</span>
+                {% if pending_salaries_count > 0 %}
+                <span class="badge bg-warning">{{ pending_salaries_count }} غير مدفوع</span>
+                {% endif %}
+            </div>
+            <div class="card-body p-0">
+                {% if my_salaries %}
+                {% if last_paid_salary %}
+                <div class="px-3 pt-3">
+                    <small class="text-muted">آخر راتب مدفوع:</small>
+                    <strong class="ms-1">{{ "{:,.0f}".format(last_paid_salary.net_salary) }} ر.س</strong>
+                    <small class="text-muted">— {{ last_paid_salary.month_name }} {{ last_paid_salary.year }}
+                        {% if last_paid_salary.paid_date %}
+                        ({{ last_paid_salary.paid_date.strftime('%Y-%m-%d') }})
+                        {% endif %}
+                    </small>
+                </div>
+                {% endif %}
+                <div class="table-responsive mt-2">
+                    <table class="table table-sm mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>الشهر</th>
+                                <th class="text-center">الصافي</th>
+                                <th class="text-center">الحالة</th>
+                                <th class="text-center">الدفع</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for s in my_salaries %}
+                            <tr>
+                                <td>{{ s.month_name }} {{ s.year }}</td>
+                                <td class="text-center">{{ "{:,.0f}".format(s.net_salary) }} ر.س</td>
+                                <td class="text-center">
+                                    <span class="badge bg-{{ s.status_class }}">{{ s.status_text }}</span>
+                                </td>
+                                <td class="text-center small text-muted">
+                                    {{ s.paid_date.strftime('%Y-%m-%d') if s.paid_date else '—' }}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted text-center py-4 mb-0">لا توجد سجلات رواتب بعد</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- My attendance history -->
+    <div class="col-lg-6">
+        <div class="card h-100" id="my-attendance">
+            <div class="card-header">
+                <i class="bi bi-calendar-week text-info"></i>
+                حضوري الأخير
+            </div>
+            <div class="card-body p-0">
+                {% if my_recent_attendance %}
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>التاريخ</th>
+                                <th class="text-center">حضور</th>
+                                <th class="text-center">انصراف</th>
+                                <th class="text-center">الحالة</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for att in my_recent_attendance %}
+                            <tr>
+                                <td>{{ att.date.strftime('%Y-%m-%d') }}</td>
+                                <td class="text-center">{{ att.check_in.strftime('%H:%M') if att.check_in else '—' }}</td>
+                                <td class="text-center">{{ att.check_out.strftime('%H:%M') if att.check_out else '—' }}</td>
+                                <td class="text-center">
+                                    {% if att.is_late %}
+                                    <span class="badge bg-warning">متأخر</span>
+                                    {% else %}
+                                    <span class="badge bg-success">في الموعد</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted text-center py-4 mb-0">لا يوجد سجل حضور بعد</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Today's branch check-ins (member traffic the employee sees on the floor) -->
 <div class="card">
     <div class="card-header">
         <i class="bi bi-clock-history"></i>

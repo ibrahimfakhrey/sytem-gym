@@ -10,7 +10,7 @@ from app.models.member import Member
 from app.models.subscription import Subscription
 from app.models.attendance import MemberAttendance, EmployeeAttendance
 from app.models.finance import Income, Expense
-from app.models.fingerprint import FingerprintSyncLog
+from app.models.fingerprint import FingerprintSyncLog, BridgeStatus
 from app.models.complaint import Complaint
 from app.models.daily_closing import DailyClosing
 from app.models.user import User
@@ -964,11 +964,94 @@ def finance_admin():
                           pending_expenses=pending_expenses)
 
 
+@dashboard_bp.route('/my/salary')
+@login_required
+def my_salary():
+    """Standalone page: the employee's own salary history."""
+    from app.models.finance import Salary
+    salaries = Salary.query.filter_by(user_id=current_user.id).order_by(
+        Salary.year.desc(), Salary.month.desc()
+    ).limit(36).all()
+    last_paid_salary = next((s for s in salaries if s.status == 'paid'), None)
+    pending_salaries_count = sum(1 for s in salaries if s.status != 'paid')
+    paid_total_ytd = sum(
+        float(s.net_salary) for s in salaries
+        if s.status == 'paid' and s.year == date.today().year
+    )
+    return render_template('dashboard/my_salary.html',
+                          salaries=salaries,
+                          last_paid_salary=last_paid_salary,
+                          pending_salaries_count=pending_salaries_count,
+                          paid_total_ytd=paid_total_ytd)
+
+
+@dashboard_bp.route('/my/attendance')
+@login_required
+def my_attendance():
+    """Standalone page: the employee's own attendance history."""
+    from app.models.attendance import EmployeeAttendance
+    today = date.today()
+    month_start = today.replace(day=1)
+
+    rows = EmployeeAttendance.query.filter(
+        EmployeeAttendance.user_id == current_user.id,
+    ).order_by(EmployeeAttendance.date.desc()).limit(90).all()
+
+    month_count = sum(1 for r in rows if r.date >= month_start)
+    late_count = sum(1 for r in rows if r.is_late)
+    return render_template('dashboard/my_attendance.html',
+                          rows=rows,
+                          month_count=month_count,
+                          late_count=late_count)
+
+
 @dashboard_bp.route('/employee')
 @login_required
 def employee():
-    """Employee/Coach dashboard - personal info only"""
-    return render_template('dashboard/employee.html')
+    """Employee/Coach dashboard — personal info: my salary, my attendance,
+    today's check-ins my team handled."""
+    from app.models.attendance import EmployeeAttendance, MemberAttendance
+    from app.models.finance import Salary
+
+    today = date.today()
+    month_start = today.replace(day=1)
+
+    # My attendance — last 30 days summary + month count
+    my_attendance_count = EmployeeAttendance.query.filter(
+        EmployeeAttendance.user_id == current_user.id,
+        EmployeeAttendance.date >= month_start,
+    ).count()
+    my_recent_attendance = EmployeeAttendance.query.filter(
+        EmployeeAttendance.user_id == current_user.id,
+    ).order_by(EmployeeAttendance.date.desc()).limit(10).all()
+
+    # My salary history (GYM-18) — show the employee what they were paid
+    my_salaries = Salary.query.filter_by(user_id=current_user.id).order_by(
+        Salary.year.desc(), Salary.month.desc()
+    ).limit(12).all()
+    last_paid_salary = next((s for s in my_salaries if s.status == 'paid'), None)
+    pending_salaries_count = sum(1 for s in my_salaries if s.status != 'paid')
+
+    # Today's member check-ins this branch handled (so the employee sees what
+    # the gym did today)
+    today_attendance_q = MemberAttendance.query.filter(
+        db.func.date(MemberAttendance.check_in) == today,
+    )
+    if current_user.brand_id:
+        today_attendance_q = today_attendance_q.filter(MemberAttendance.brand_id == current_user.brand_id)
+    if current_user.branch_id:
+        today_attendance_q = today_attendance_q.filter(MemberAttendance.branch_id == current_user.branch_id)
+    today_attendance = today_attendance_q.count()
+    recent_attendance = today_attendance_q.order_by(MemberAttendance.check_in.desc()).limit(10).all()
+
+    return render_template('dashboard/employee.html',
+                          today_attendance=today_attendance,
+                          recent_attendance=recent_attendance,
+                          my_attendance=my_attendance_count,
+                          my_recent_attendance=my_recent_attendance,
+                          my_salaries=my_salaries,
+                          last_paid_salary=last_paid_salary,
+                          pending_salaries_count=pending_salaries_count)
 
 
 def get_brand_stats(brand_id, start_date, end_date):
@@ -1239,6 +1322,33 @@ def build_user_alerts():
             'icon': 'person-x',
             'title': f'{absent_employees} موظف غائب اليوم',
             'link': url_for('employees.attendance')
+        })
+
+    # 9. Bridge offline - any branch whose desktop bridge hasn't pinged in >5 min
+    cutoff = datetime.utcnow() - timedelta(minutes=5)
+    bridge_q = BridgeStatus.query.filter(
+        db.or_(BridgeStatus.last_heartbeat == None,
+               BridgeStatus.last_heartbeat < cutoff)
+    )
+    if user_branch_id:
+        bridge_q = bridge_q.filter(BridgeStatus.branch_id == user_branch_id)
+    elif not is_owner and user_brand_id:
+        bridge_q = bridge_q.filter(BridgeStatus.brand_id == user_brand_id)
+    offline_bridges = bridge_q.all()
+    if offline_bridges:
+        first = offline_bridges[0]
+        last_seen = first.last_heartbeat.strftime('%Y-%m-%d %H:%M') if first.last_heartbeat else 'لم يسجل'
+        title = (f'برنامج البصمة غير متصل ({len(offline_bridges)} فرع)' if len(offline_bridges) > 1
+                 else f'برنامج البصمة غير متصل — آخر اتصال: {last_seen}')
+        try:
+            link = url_for('bridge.index')
+        except Exception:
+            link = '/bridge'
+        alerts.append({
+            'type': 'danger',
+            'icon': 'plug',
+            'title': title,
+            'link': link,
         })
 
     return alerts

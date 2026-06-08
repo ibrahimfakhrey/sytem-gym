@@ -314,11 +314,18 @@ def details(user_id):
         user_id=user_id
     ).order_by(EmployeeDeduction.deduction_date.desc()).limit(20).all()
 
+    # GYM-18: surface the salary ledger so the employee can see when each
+    # month was paid (or whether it's still pending in finance's queue).
+    salaries = Salary.query.filter_by(user_id=user_id).order_by(
+        Salary.year.desc(), Salary.month.desc()
+    ).limit(24).all()
+
     return render_template('employees/details.html',
                           employee=employee,
                           attendance=attendance,
                           rewards=rewards,
                           deductions=deductions,
+                          salaries=salaries,
                           start_date=start_date,
                           end_date=end_date)
 

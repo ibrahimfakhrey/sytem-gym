@@ -40,6 +40,22 @@ class ComplaintCategory(db.Model):
         db.session.commit()
 
 
+class ComplaintAttachment(db.Model):
+    """GYM-21: optional file attachments uploaded with a complaint."""
+    __tablename__ = 'complaint_attachments'
+
+    id = db.Column(db.Integer, primary_key=True)
+    complaint_id = db.Column(db.Integer, db.ForeignKey('complaints.id'), nullable=False)
+    filename = db.Column(db.String(255), nullable=False)        # path under app/static
+    original_name = db.Column(db.String(255))                   # client-provided
+    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    complaint = db.relationship('Complaint', backref=db.backref('attachments', lazy='dynamic'))
+
+    def __repr__(self):
+        return f'<ComplaintAttachment {self.id}>'
+
+
 class Complaint(db.Model):
     """Customer complaints"""
     __tablename__ = 'complaints'

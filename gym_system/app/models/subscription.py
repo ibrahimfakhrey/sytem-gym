@@ -122,6 +122,10 @@ class Subscription(db.Model):
     payments = db.relationship('SubscriptionPayment', backref='subscription', lazy='dynamic')
     attendance = db.relationship('MemberAttendance', backref='subscription', lazy='dynamic')
     service_type = db.relationship('ServiceType', backref='subscriptions', foreign_keys=[service_type_id])
+    # Needed by GYM-15 invoice snapshot. `brand` already exists as a backref
+    # from Brand.subscriptions (see app/models/company.py:43); only `branch`
+    # is new here.
+    branch = db.relationship('Branch', foreign_keys=[branch_id])
 
     def __repr__(self):
         return f'<Subscription {self.id} - {self.member.name if self.member else "N/A"}>'

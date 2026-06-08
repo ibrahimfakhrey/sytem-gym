@@ -43,22 +43,26 @@
                             {% endif %}
                         </td>
                         <td>
-                            <a href="{{ url_for('admin.brands_edit', brand_id=brand.id) }}"
-                               class="btn btn-sm btn-outline-primary" title="تعديل">
-                                <i class="bi bi-pencil"></i>
-                            </a>
-                            <a href="{{ url_for('admin.branches_list', brand_id=brand.id) }}"
-                               class="btn btn-sm btn-outline-secondary" title="الفروع">
-                                <i class="bi bi-geo-alt"></i>
-                            </a>
-                            <a href="{{ url_for('members.index') }}?brand_id={{ brand.id }}"
-                               class="btn btn-sm btn-outline-info" title="الأعضاء">
-                                <i class="bi bi-people"></i>
-                            </a>
-                            <a href="{{ url_for('fingerprint.control_brand', brand_id=brand.id) }}"
-                               class="btn btn-sm btn-outline-dark" title="التحكم بالبصمة">
-                                <i class="bi bi-fingerprint"></i>
-                            </a>
+                            <div class="d-flex flex-wrap gap-1">
+                                <a href="{{ url_for('admin.brands_edit', brand_id=brand.id) }}"
+                                   class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-pencil"></i> تعديل
+                                </a>
+                                <a href="{{ url_for('admin.branches_list', brand_id=brand.id) }}"
+                                   class="btn btn-sm btn-outline-secondary">
+                                    <i class="bi bi-geo-alt"></i> الفروع
+                                </a>
+                                <a href="{{ url_for('members.index') }}?brand_id={{ brand.id }}"
+                                   class="btn btn-sm btn-outline-info">
+                                    <i class="bi bi-people"></i> الأعضاء
+                                </a>
+                                {% if current_user.is_owner %}
+                                <a href="{{ url_for('fingerprint.control_brand', brand_id=brand.id) }}"
+                                   class="btn btn-sm btn-outline-dark">
+                                    <i class="bi bi-fingerprint"></i> البصمة
+                                </a>
+                                {% endif %}
+                            </div>
                         </td>
                     </tr>
                     {% endfor %}

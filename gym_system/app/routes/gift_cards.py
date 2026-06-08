@@ -2,8 +2,8 @@
 from flask import Blueprint, render_template, request, flash, redirect, url_for
 from flask_login import login_required, current_user
 from flask_wtf import FlaskForm
-from wtforms import StringField, DecimalField, DateField
-from wtforms.validators import DataRequired, Optional
+from wtforms import StringField, DecimalField, DateField, TextAreaField
+from wtforms.validators import DataRequired, Optional, Length
 from datetime import datetime, date, timedelta
 import secrets
 
@@ -17,6 +17,11 @@ class GiftCardForm(FlaskForm):
     """Form for creating gift card"""
     original_amount = DecimalField('المبلغ', validators=[DataRequired()])
     expires_at = DateField('تاريخ الانتهاء', validators=[Optional()])
+    # GYM-13: optional gift personalisation. Recipient gets a card to print
+    # / share via WhatsApp.
+    recipient_name = StringField('اسم المُهدى إليه', validators=[Optional(), Length(max=100)])
+    recipient_phone = StringField('رقم المُهدى إليه', validators=[Optional(), Length(max=20)])
+    message = TextAreaField('وصف / رسالة', validators=[Optional()])
 
 
 @gift_cards_bp.route('/')
@@ -92,6 +97,9 @@ def create():
             original_amount=form.original_amount.data,
             remaining_amount=form.original_amount.data,
             expires_at=form.expires_at.data,
+            recipient_name=(form.recipient_name.data or None),
+            recipient_phone=(form.recipient_phone.data or None),
+            message=(form.message.data or None),
             created_by=current_user.id
         )
         db.session.add(gift_card)
@@ -144,6 +152,18 @@ def deactivate(gift_card_id):
 
 
 # API for checking gift card
+@gift_cards_bp.route('/<int:gift_card_id>/print')
+@login_required
+def print_card(gift_card_id):
+    """GYM-13: printable + shareable gift-card view."""
+    gift_card = GiftCard.query.get_or_404(gift_card_id)
+    if not (current_user.is_owner or
+            (current_user.brand_id and current_user.brand_id == gift_card.brand_id)):
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('gift_cards.index'))
+    return render_template('gift_cards/print.html', gift_card=gift_card)
+
+
 @gift_cards_bp.route('/api/check/<code>')
 @login_required
 def check_code(code):

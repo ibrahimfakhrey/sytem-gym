@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>كرت إهداء - {{ gift_card.code }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Cairo', sans-serif; background:#f1f3f5; padding:30px; }
+        @media print {
+            body { background:white; padding:0; }
+            .no-print { display:none !important; }
+        }
+        .gc-card {
+            max-width: 640px; margin: 0 auto;
+            background: linear-gradient(135deg, #0f3460 0%, #1a1a2e 50%, #e94560 100%);
+            color: #fff;
+            border-radius: 24px;
+            padding: 36px;
+            box-shadow: 0 24px 60px rgba(0,0,0,0.15);
+            position: relative;
+            overflow: hidden;
+        }
+        .gc-card::after {
+            content:""; position:absolute; inset:auto -60px -60px auto;
+            width:240px; height:240px; border-radius:50%;
+            background: rgba(255,255,255,0.08);
+        }
+        .gc-label { letter-spacing:.2em; font-size:.75rem; opacity:.8; text-transform:uppercase; }
+        .gc-amount { font-size: 3.5rem; font-weight: 700; line-height:1; margin-top:.25rem; }
+        .gc-amount small { font-size:1.2rem; opacity:.7; margin-inline-start:.4rem; }
+        .gc-code {
+            font-family: monospace; letter-spacing:.4em; font-size:1.6rem;
+            background: rgba(255,255,255,0.15); padding:.5rem 1rem; border-radius:.5rem;
+            display:inline-block;
+        }
+        .gc-message {
+            background: rgba(255,255,255,0.12); padding:1rem 1.25rem;
+            border-radius:1rem; line-height:1.8;
+        }
+        .gc-meta { font-size:.85rem; opacity:.8; }
+        .actions { max-width:640px; margin:1.5rem auto 0; display:flex; gap:.5rem; flex-wrap:wrap; }
+    </style>
+</head>
+<body>
+
+<div class="gc-card">
+    <div class="d-flex justify-content-between align-items-start mb-4">
+        <div>
+            <div class="gc-label">كرت إهداء</div>
+            <h3 class="mb-0 fw-bold">{{ gift_card.brand.name if gift_card.brand else '' }}</h3>
+        </div>
+        <i class="bi bi-gift fs-1 opacity-75" aria-hidden="true"></i>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-end flex-wrap gap-3 mb-4">
+        <div>
+            <div class="gc-label">القيمة</div>
+            <div class="gc-amount">{{ "{:,.0f}".format(gift_card.original_amount) }}<small>ر.س</small></div>
+        </div>
+        <div class="text-end">
+            <div class="gc-label">الكود</div>
+            <div class="gc-code">{{ gift_card.code }}</div>
+        </div>
+    </div>
+
+    {% if gift_card.recipient_name %}
+    <div class="mb-3">
+        <div class="gc-label">إلى</div>
+        <strong>{{ gift_card.recipient_name }}</strong>
+        {% if gift_card.recipient_phone %}<span class="ms-2 opacity-75 small">{{ gift_card.recipient_phone }}</span>{% endif %}
+    </div>
+    {% endif %}
+
+    {% if gift_card.message %}
+    <div class="gc-message mb-3">{{ gift_card.message }}</div>
+    {% endif %}
+
+    <div class="d-flex justify-content-between gc-meta">
+        <div>تاريخ الإصدار: {{ gift_card.created_at.strftime('%Y-%m-%d') }}</div>
+        {% if gift_card.expires_at %}<div>صالح حتى: {{ gift_card.expires_at.strftime('%Y-%m-%d') }}</div>{% endif %}
+    </div>
+</div>
+
+<div class="actions no-print">
+    <button class="btn btn-primary" onclick="window.print()">
+        <i class="bi bi-printer"></i> طباعة
+    </button>
+    {% if gift_card.recipient_phone %}
+    {% set wa_phone = gift_card.recipient_phone|replace('+','')|replace(' ','')|replace('-','') %}
+    {% if wa_phone.startswith('0') and not wa_phone.startswith('00') %}{% set wa_phone = '966' + wa_phone.lstrip('0') %}{% endif %}
+    <a class="btn btn-success" target="_blank" rel="noopener"
+       href="https://wa.me/{{ wa_phone }}?text={{ ('كرت إهداء بقيمة ' + '{:,.0f}'.format(gift_card.original_amount) + ' ر.س. الكود: ' + gift_card.code)|urlencode }}">
+        <i class="bi bi-whatsapp"></i> إرسال عبر واتساب
+    </a>
+    {% endif %}
+    <a class="btn btn-secondary" href="{{ url_for('gift_cards.view', gift_card_id=gift_card.id) }}">
+        رجوع
+    </a>
+</div>
+
+</body>
+</html>

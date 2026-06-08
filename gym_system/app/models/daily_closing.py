@@ -51,6 +51,8 @@ class DailyClosing(db.Model):
     # Relationships
     submitter = db.relationship('User', foreign_keys=[submitted_by], backref='daily_closings_submitted')
     verifier = db.relationship('User', foreign_keys=[verified_by], backref='daily_closings_verified')
+    branch = db.relationship('Branch', foreign_keys=[branch_id])
+    brand = db.relationship('Brand', foreign_keys=[brand_id])
 
     # Unique constraint: one closing per branch per day
     __table_args__ = (

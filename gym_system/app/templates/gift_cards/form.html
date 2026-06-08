@@ -3,19 +3,43 @@
 {% block content %}
 <div class="page-header"><h1><i class="bi bi-gift"></i> إنشاء كرت إهداء</h1></div>
 <div class="row">
-    <div class="col-lg-6">
+    <div class="col-lg-7">
         <div class="card">
             <div class="card-body">
                 <form method="POST">
                     {{ form.hidden_tag() }}
-                    <div class="mb-3">
-                        <label class="form-label">المبلغ (ر.س) *</label>
-                        {{ form.original_amount(class="form-control", type="number", min="1", step="0.01") }}
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="original_amount" class="form-label">المبلغ (ر.س) *</label>
+                            {{ form.original_amount(class="form-control", type="number", min="1", step="0.01", id="original_amount") }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="expires_at" class="form-label">تاريخ انتهاء الصلاحية</label>
+                            {{ form.expires_at(class="form-control", type="date", id="expires_at") }}
+                        </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">تاريخ انتهاء الصلاحية</label>
-                        {{ form.expires_at(class="form-control", type="date") }}
+
+                    <hr class="my-4">
+                    <h6 class="text-muted mb-3"><i class="bi bi-person-heart"></i> تفاصيل المُهدى إليه (اختياري)</h6>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="recipient_name" class="form-label">الاسم</label>
+                            {{ form.recipient_name(class="form-control", id="recipient_name", placeholder="مثلاً: أحمد علي") }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="recipient_phone" class="form-label">رقم الهاتف</label>
+                            {{ form.recipient_phone(class="form-control", id="recipient_phone", placeholder="05XXXXXXXX") }}
+                        </div>
                     </div>
+
+                    <div class="mb-3">
+                        <label for="message" class="form-label">وصف / رسالة</label>
+                        {{ form.message(class="form-control", id="message", rows=3, placeholder="مثلاً: هدية بمناسبة عيد ميلادك...") }}
+                        <small class="text-muted">يظهر في الكرت القابل للطباعة والمشاركة عبر واتساب.</small>
+                    </div>
+
                     <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> إنشاء الكرت</button>
                     <a href="{{ url_for('gift_cards.index') }}" class="btn btn-secondary">إلغاء</a>
                 </form>

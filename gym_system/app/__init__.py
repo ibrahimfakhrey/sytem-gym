@@ -34,7 +34,7 @@ def create_app(config_name=None):
     csrf.init_app(app)
 
     # Create upload folders if they don't exist
-    upload_folders = ['logos', 'members', 'receipts', 'subscriptions']
+    upload_folders = ['logos', 'members', 'receipts', 'subscriptions', 'complaints']
     for folder in upload_folders:
         folder_path = os.path.join(app.config['UPLOAD_FOLDER'], folder)
         os.makedirs(folder_path, exist_ok=True)
@@ -61,6 +61,7 @@ def create_app(config_name=None):
     from .routes.employees import employees_bp
     from .routes.bookings import bookings_bp
     from .routes.invoices import invoices_bp
+    from .routes.day_pass import day_pass_bp  # GYM-23
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(dashboard_bp)
@@ -83,6 +84,7 @@ def create_app(config_name=None):
     app.register_blueprint(employees_bp)
     app.register_blueprint(bookings_bp, url_prefix='/bookings')
     app.register_blueprint(invoices_bp, url_prefix='/invoices')
+    app.register_blueprint(day_pass_bp)  # /day-pass/* — GYM-23
     csrf.exempt(api_bp)  # API uses API key auth, not CSRF
     csrf.exempt(fingerprint_bp)  # /fp/* is open by design (single-tenant desktop client)
 
@@ -98,6 +100,7 @@ def create_app(config_name=None):
         try:
             from sqlalchemy import text
             with db.engine.connect() as conn:
+                # subscriptions.proof_image (proof-of-payment image)
                 cols = [r[1] for r in conn.exec_driver_sql(
                     "PRAGMA table_info(subscriptions)"
                 ).fetchall()]
@@ -105,7 +108,32 @@ def create_app(config_name=None):
                     conn.exec_driver_sql(
                         "ALTER TABLE subscriptions ADD COLUMN proof_image VARCHAR(255)"
                     )
-                    conn.commit()
+                # invoices.branch_id / branch_name / branch_phone / branch_address  (GYM-15)
+                inv_cols = [r[1] for r in conn.exec_driver_sql(
+                    "PRAGMA table_info(invoices)"
+                ).fetchall()]
+                for col, ddl in (
+                    ('branch_id',      'INTEGER'),
+                    ('branch_name',    'VARCHAR(120)'),
+                    ('branch_phone',   'VARCHAR(40)'),
+                    ('branch_address', 'VARCHAR(200)'),
+                ):
+                    if col not in inv_cols:
+                        conn.exec_driver_sql(f"ALTER TABLE invoices ADD COLUMN {col} {ddl}")
+                # complaint_attachments (GYM-21)
+                try:
+                    conn.exec_driver_sql(
+                        "CREATE TABLE IF NOT EXISTS complaint_attachments ("
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                        "complaint_id INTEGER NOT NULL, "
+                        "filename VARCHAR(255) NOT NULL, "
+                        "original_name VARCHAR(255), "
+                        "uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP, "
+                        "FOREIGN KEY(complaint_id) REFERENCES complaints(id))"
+                    )
+                except Exception:
+                    pass
+                conn.commit()
         except Exception:
             pass
 
@@ -125,6 +153,33 @@ def create_app(config_name=None):
             }
         except Exception:
             return {'roles': []}
+
+    @app.context_processor
+    def inject_owner_branch_picker():
+        """Expose `owner_branches` (list) + `owner_branch_filter_id` (int|None)
+        to every authenticated template so any owner-facing page can render
+        the GYM-12 branch picker without each route remembering to pass it in.
+        """
+        try:
+            from flask_login import current_user
+            from .models.company import Branch
+            from .utils.helpers import resolve_owner_branch_filter
+            # Only brand-level owners see this picker. Employees, branch
+            # roles, and admins are excluded (admins have their own brand
+            # picker on each page; branch roles already scope themselves).
+            if (current_user and current_user.is_authenticated
+                    and current_user.is_brand_manager
+                    and current_user.brand_id
+                    and not current_user.branch_id):
+                return {
+                    'owner_branches': Branch.query.filter_by(
+                        brand_id=current_user.brand_id, is_active=True
+                    ).order_by(Branch.name).all(),
+                    'owner_branch_filter_id': resolve_owner_branch_filter(),
+                }
+        except Exception:
+            pass
+        return {'owner_branches': None, 'owner_branch_filter_id': None}
 
     return app
 

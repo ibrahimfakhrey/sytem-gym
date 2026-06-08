@@ -91,22 +91,24 @@
                         </td>
                         <td>
                             {% if current_user.is_owner or (user.role and current_user.role and user.role.role_level < current_user.role.role_level) %}
-                            <a href="{{ url_for('admin.users_edit', user_id=user.id) }}" class="btn btn-sm btn-outline-primary" title="تعديل">
-                                <i class="bi bi-pencil"></i>
-                            </a>
-                            {% if user.id != current_user.id %}
-                            <button type="button" class="btn btn-sm btn-outline-warning" title="إعادة تعيين كلمة المرور"
-                                    data-bs-toggle="modal" data-bs-target="#resetPasswordModal"
-                                    data-user-id="{{ user.id }}" data-user-name="{{ user.name }}">
-                                <i class="bi bi-key"></i>
-                            </button>
-                            <form method="POST" action="{{ url_for('admin.users_delete', user_id=user.id) }}" class="d-inline" onsubmit="return confirm('هل أنت متأكد من حذف المستخدم {{ user.name }}؟ لا يمكن التراجع عن هذا الإجراء.');">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <button type="submit" class="btn btn-sm btn-outline-danger" title="حذف">
-                                    <i class="bi bi-trash"></i>
+                            <div class="d-flex flex-wrap gap-1">
+                                <a href="{{ url_for('admin.users_edit', user_id=user.id) }}" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-pencil"></i> تعديل
+                                </a>
+                                {% if user.id != current_user.id %}
+                                <button type="button" class="btn btn-sm btn-outline-warning"
+                                        data-bs-toggle="modal" data-bs-target="#resetPasswordModal"
+                                        data-user-id="{{ user.id }}" data-user-name="{{ user.name }}">
+                                    <i class="bi bi-key"></i> كلمة المرور
                                 </button>
-                            </form>
-                            {% endif %}
+                                <form method="POST" action="{{ url_for('admin.users_delete', user_id=user.id) }}" class="d-inline" onsubmit="return confirm('هل أنت متأكد من حذف المستخدم {{ user.name }}؟ لا يمكن التراجع عن هذا الإجراء.');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <i class="bi bi-trash"></i> حذف
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </div>
                             {% endif %}
                         </td>
                     </tr>

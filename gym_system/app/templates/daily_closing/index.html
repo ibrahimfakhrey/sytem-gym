@@ -9,10 +9,15 @@
         <span class="badge bg-warning">{{ pending_count }} بانتظار التحقق</span>
         {% endif %}
     </h1>
-    <a href="{{ url_for('daily_closing.create', brand_id=brand.id) }}" class="btn btn-primary">
-        <i class="bi bi-plus-lg"></i>
-        إقفال اليوم
-    </a>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('daily_closing.report') }}" class="btn btn-outline-primary">
+            <i class="bi bi-clipboard-data"></i> تقرير الفترة
+        </a>
+        <a href="{{ url_for('daily_closing.create', brand_id=brand.id) }}" class="btn btn-primary">
+            <i class="bi bi-plus-lg"></i>
+            إقفال اليوم
+        </a>
+    </div>
 </div>
 
 <div class="card">

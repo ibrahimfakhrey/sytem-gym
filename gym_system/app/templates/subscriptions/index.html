@@ -89,7 +89,7 @@
                     <tr>
                         <td>{{ sub.id }}</td>
                         <td>
-                            <a href="{{ url_for('members.view', member_id=sub.member.id) }}">
+                            <a href="{{ url_for('subscriptions.view', subscription_id=sub.id) }}">
                                 {{ sub.member.name }}
                             </a>
                             <br><small class="text-muted">{{ sub.member.phone }}</small>
@@ -113,28 +113,30 @@
                             <span class="badge bg-{{ sub.status_class }}">{{ sub.status_text }}</span>
                         </td>
                         <td>
-                            <a href="{{ url_for('members.view', member_id=sub.member.id) }}"
-                               class="btn btn-sm btn-outline-primary">
-                                <i class="bi bi-eye"></i>
-                            </a>
-                            <a href="{{ url_for('subscriptions.renew', subscription_id=sub.id) }}"
-                               class="btn btn-sm btn-outline-success">
-                                <i class="bi bi-arrow-repeat"></i>
-                            </a>
-                            {% if sub.status == 'active' and sub.freeze_count < sub.plan.max_freezes %}
-                            <a href="{{ url_for('subscriptions.freeze', subscription_id=sub.id) }}"
-                               class="btn btn-sm btn-outline-warning">
-                                <i class="bi bi-snow"></i>
-                            </a>
-                            {% elif sub.status == 'frozen' %}
-                            <form action="{{ url_for('subscriptions.unfreeze', subscription_id=sub.id) }}"
-                                  method="POST" class="d-inline">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <button type="submit" class="btn btn-sm btn-success">
-                                    <i class="bi bi-play"></i>
-                                </button>
-                            </form>
-                            {% endif %}
+                            <div class="d-flex flex-wrap gap-1">
+                                <a href="{{ url_for('subscriptions.view', subscription_id=sub.id) }}"
+                                   class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-eye"></i> عرض
+                                </a>
+                                <a href="{{ url_for('subscriptions.renew', subscription_id=sub.id) }}"
+                                   class="btn btn-sm btn-outline-success">
+                                    <i class="bi bi-arrow-repeat"></i> تجديد
+                                </a>
+                                {% if sub.status == 'active' and sub.freeze_count < sub.plan.max_freezes %}
+                                <a href="{{ url_for('subscriptions.freeze', subscription_id=sub.id) }}"
+                                   class="btn btn-sm btn-outline-warning">
+                                    <i class="bi bi-snow"></i> تجميد
+                                </a>
+                                {% elif sub.status == 'frozen' %}
+                                <form action="{{ url_for('subscriptions.unfreeze', subscription_id=sub.id) }}"
+                                      method="POST" class="d-inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-success">
+                                        <i class="bi bi-play"></i> إلغاء التجميد
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </div>
                         </td>
                     </tr>
                     {% endfor %}

@@ -251,6 +251,12 @@ class Salary(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     approved_by = db.Column(db.Integer, db.ForeignKey('users.id'))
 
+    # Relationships
+    # NB: Salary.user is provided as a backref from User.salaries (see
+    # app/models/user.py). Don't redefine here or SQLAlchemy will complain
+    # about a duplicate property.
+    approver = db.relationship('User', foreign_keys=[approved_by])
+
     __table_args__ = (
         db.UniqueConstraint('user_id', 'month', 'year', name='unique_salary'),
     )
@@ -319,6 +325,13 @@ class Invoice(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     brand_id = db.Column(db.Integer, db.ForeignKey('brands.id'), nullable=False)
+    # GYM-15: branch the invoice was issued by. Snapshot of name+phone+address
+    # taken at issue time so renaming the branch later doesn't rewrite old
+    # invoices.
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'), nullable=True)
+    branch_name = db.Column(db.String(120))
+    branch_phone = db.Column(db.String(40))
+    branch_address = db.Column(db.String(200))
     subscription_id = db.Column(db.Integer, db.ForeignKey('subscriptions.id'), nullable=False)
     payment_id = db.Column(db.Integer, db.ForeignKey('subscription_payments.id'), nullable=False)
     member_id = db.Column(db.Integer, db.ForeignKey('members.id'), nullable=False)

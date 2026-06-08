@@ -80,14 +80,18 @@
                             {% endif %}
                         </td>
                         <td>
-                            <a href="{{ url_for('admin.branches_edit', branch_id=branch.id) }}"
-                               class="btn btn-sm btn-outline-primary" title="تعديل">
-                                <i class="bi bi-pencil"></i>
-                            </a>
-                            <a href="{{ url_for('fingerprint.control_branch', brand_id=brand.id, branch_id=branch.id) }}"
-                               class="btn btn-sm btn-outline-dark" title="التحكم بالبصمة">
-                                <i class="bi bi-fingerprint"></i>
-                            </a>
+                            <div class="d-flex flex-wrap gap-1">
+                                <a href="{{ url_for('admin.branches_edit', branch_id=branch.id) }}"
+                                   class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-pencil"></i> تعديل
+                                </a>
+                                {% if current_user.is_owner %}
+                                <a href="{{ url_for('fingerprint.control_branch', brand_id=brand.id, branch_id=branch.id) }}"
+                                   class="btn btn-sm btn-outline-dark">
+                                    <i class="bi bi-fingerprint"></i> البصمة
+                                </a>
+                                {% endif %}
+                            </div>
                         </td>
                     </tr>
                     {% endfor %}

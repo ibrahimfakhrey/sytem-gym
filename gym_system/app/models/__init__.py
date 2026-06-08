@@ -20,3 +20,4 @@ from .daily_closing import DailyClosing
 from .offer import PromotionalOffer
 from .employee import EmployeeSettings, EmployeeShift, EmployeeReward, EmployeeDeduction, EmployeeLateRule
 from .blocked_member import BlockedMember
+from .day_pass import DayPass, DayPassPrice  # GYM-23

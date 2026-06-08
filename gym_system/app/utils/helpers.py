@@ -5,21 +5,29 @@ from flask import current_app
 from werkzeug.utils import secure_filename
 
 
-def allowed_file(filename):
-    """Check if file extension is allowed"""
+def allowed_file(filename, allowed=None):
+    """Check if file extension is allowed.
+
+    `allowed` overrides the default config-driven allow-list. Used by callers
+    that need to accept non-image types (e.g. complaint attachments allowing
+    PDFs).
+    """
     if '.' not in filename:
         return False
     ext = filename.rsplit('.', 1)[1].lower()
+    if allowed is not None:
+        return ext in allowed
     return ext in current_app.config.get('ALLOWED_EXTENSIONS', {'png', 'jpg', 'jpeg', 'gif'})
 
 
-def save_uploaded_file(file, folder='uploads'):
+def save_uploaded_file(file, folder='uploads', allowed=None):
     """
     Save uploaded file with unique name
 
     Args:
         file: FileStorage object
         folder: subfolder name (logos, members, receipts)
+        allowed: optional set of allowed extensions; overrides config default
 
     Returns:
         Relative path to saved file or None
@@ -27,7 +35,7 @@ def save_uploaded_file(file, folder='uploads'):
     if not file or file.filename == '':
         return None
 
-    if not allowed_file(file.filename):
+    if not allowed_file(file.filename, allowed=allowed):
         return None
 
     # Generate unique filename
@@ -143,12 +151,15 @@ def pagination_args(request, default_per_page=20):
     return page, per_page
 
 
-def apply_branch_filter(query, model, user=None):
+def apply_branch_filter(query, model, user=None, branch_filter_id=None):
     """
     Apply brand/branch filtering based on current user's role.
 
-    - admin (is_owner) → no filter, sees everything
-    - owner (brand-level) → filter by brand_id only
+    - admin (is_owner) → no filter, sees everything; an optional
+      `branch_filter_id` lets admin tools (and the GYM-12 owner picker)
+      pin to a specific branch
+    - owner (brand-level) → filter by brand_id only, optionally further
+      pinned by `branch_filter_id` to *one of their own brand's branches*
     - branch roles (branch_id set) → filter by brand_id AND branch_id
 
     Includes records with NULL branch_id (legacy data).
@@ -159,6 +170,8 @@ def apply_branch_filter(query, model, user=None):
     user = user or _current_user
 
     if user.is_owner:  # admin sees all
+        if branch_filter_id and hasattr(model, 'branch_id'):
+            query = query.filter(model.branch_id == branch_filter_id)
         return query
 
     # Filter by brand
@@ -170,8 +183,47 @@ def apply_branch_filter(query, model, user=None):
         query = query.filter(
             db.or_(model.branch_id == user.branch_id, model.branch_id.is_(None))
         )
+        return query
+
+    # Brand-level owner with an explicit "view as branch" override
+    if branch_filter_id and hasattr(model, 'branch_id'):
+        query = query.filter(model.branch_id == branch_filter_id)
 
     return query
+
+
+def resolve_owner_branch_filter():
+    """Resolve the GYM-12 'view-as-branch' filter for the current user.
+
+    Returns an integer branch_id if the current user is a brand-level owner
+    who has selected one of *their own* branches via ?branch_id= (or had it
+    stashed in their session); returns None otherwise. Admins / branch-level
+    users get None — admins manage scope via brand picker, branch users are
+    already scoped.
+    """
+    from flask import request, session
+    from flask_login import current_user as _current_user
+
+    user = _current_user
+    # Only the brand owner role uses this picker. Admins manage scope via
+    # the brand dropdown; branch-level users are already scoped; plain
+    # employees / coaches don't have a picker at all and must NOT inherit a
+    # session value that the owner happened to stash earlier.
+    if (user.is_owner or not user.brand_id or user.branch_id
+            or not user.is_brand_manager):
+        return None
+
+    raw = request.args.get('branch_id', type=int)
+    if raw == 0:  # explicit "all branches" reset
+        session.pop('owner_branch_filter', None)
+        return None
+    if raw:
+        from app.models.company import Branch
+        branch = Branch.query.filter_by(id=raw, brand_id=user.brand_id).first()
+        if branch:
+            session['owner_branch_filter'] = branch.id
+            return branch.id
+    return session.get('owner_branch_filter')
 
 
 def check_entity_access(entity, user=None):

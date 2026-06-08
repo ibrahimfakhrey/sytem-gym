@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}تذكرة يومية جديدة{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-ticket-perforated text-primary"></i> تذكرة يومية جديدة</h1>
+    <a href="{{ url_for('day_pass.index') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-right"></i> رجوع
+    </a>
+</div>
+
+{% if not activities %}
+<div class="alert alert-warning">
+    <i class="bi bi-exclamation-triangle"></i>
+    لا توجد أنشطة بأسعار مفعّلة.
+    {% if current_user.is_owner or current_user.is_brand_manager %}
+    اذهب إلى <a href="{{ url_for('day_pass.prices_list') }}">صفحة الأسعار</a> لإضافتها.
+    {% else %}
+    اطلب من المالك ضبط الأسعار من قائمة "أسعار التذاكر اليومية".
+    {% endif %}
+</div>
+{% else %}
+
+<form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="brand_id" value="{{ brand_id }}">
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card mb-3">
+                <div class="card-header"><i class="bi bi-person"></i> بيانات العميل</div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="customer_name" class="form-label">الاسم *</label>
+                            <input type="text" id="customer_name" name="customer_name" class="form-control" required maxlength="120">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="customer_phone" class="form-label">رقم الهاتف</label>
+                            <input type="text" id="customer_phone" name="customer_phone" class="form-control" placeholder="05XXXXXXXX">
+                        </div>
+                        <div class="col-md-2 mb-3">
+                            <label for="customer_age" class="form-label">العمر</label>
+                            <input type="number" id="customer_age" name="customer_age" class="form-control" min="1" max="120">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header"><i class="bi bi-stopwatch"></i> النشاط والوقت</div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="service_type_id" class="form-label">النشاط *</label>
+                        <select id="service_type_id" name="service_type_id" class="form-select" required>
+                            <option value="">— اختر النشاط —</option>
+                            {% for a in activities %}
+                            <option value="{{ a.id }}" data-price="{{ a.price }}">
+                                {{ a.name }} — {{ "{:,.0f}".format(a.price) }} ر.س
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="valid_from" class="form-label">من الساعة</label>
+                            <input type="time" id="valid_from" name="valid_from" class="form-control">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="valid_until" class="form-label">إلى الساعة</label>
+                            <input type="time" id="valid_until" name="valid_until" class="form-control">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header"><i class="bi bi-cash-coin"></i> الدفع</div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="payment_method" class="form-label">طريقة الدفع</label>
+                            <select id="payment_method" name="payment_method" class="form-select">
+                                <option value="cash">نقدي</option>
+                                <option value="card">بطاقة</option>
+                                <option value="transfer">تحويل</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="price-display" class="form-label">السعر</label>
+                            <input id="price-display" type="text" class="form-control bg-light text-center fw-bold" readonly value="—">
+                        </div>
+                    </div>
+                    <div class="mb-1">
+                        <label for="notes" class="form-label">ملاحظات</label>
+                        <textarea id="notes" name="notes" class="form-control" rows="2"></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card sticky-top" style="top: 12px;">
+                <div class="card-header">المختصر</div>
+                <div class="card-body">
+                    <p class="mb-1 small text-muted">السعر المختار</p>
+                    <h3 id="summary-price" class="text-success">— ر.س</h3>
+                    <hr>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-check2-circle"></i> إصدار التذكرة
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+<script>
+(function () {
+    var sel = document.getElementById('service_type_id');
+    var disp = document.getElementById('price-display');
+    var summary = document.getElementById('summary-price');
+    if (!sel) return;
+    sel.addEventListener('change', function () {
+        var opt = sel.options[sel.selectedIndex];
+        var price = parseFloat(opt && opt.dataset && opt.dataset.price) || 0;
+        var formatted = price > 0 ? new Intl.NumberFormat('ar-SA').format(price) + ' ر.س' : '—';
+        disp.value = formatted;
+        summary.textContent = formatted;
+    });
+})();
+</script>
+
+{% endif %}
+{% endblock %}

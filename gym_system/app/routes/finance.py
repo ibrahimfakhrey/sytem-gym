@@ -703,6 +703,134 @@ def salaries_list():
                           year=year)
 
 
+@finance_bp.route('/salaries/generate', methods=['POST'])
+@login_required
+@finance_required
+def salaries_generate():
+    """One-click salary-row generator for a given month/year.
+
+    For every active user in scope with a base salary_amount > 0, insert a
+    Salary row if one doesn't already exist for (user, month, year). Owners
+    use this once a month to seed pending salaries that they then 'تأكيد الدفع'
+    individually.
+    """
+    from app.models.user import User
+    try:
+        month = int(request.form.get('month', date.today().month))
+        year = int(request.form.get('year', date.today().year))
+    except (TypeError, ValueError):
+        month, year = date.today().month, date.today().year
+
+    # Brand scope — admins can pass an explicit brand, everyone else gets theirs.
+    if current_user.can_view_all_brands:
+        brand_id = request.form.get('brand_id', type=int)
+    else:
+        brand_id = current_user.brand_id
+
+    users_q = User.query.filter(
+        User.is_active == True,
+        User.salary_amount != None,
+        User.salary_amount > 0,
+    )
+    if brand_id:
+        users_q = users_q.filter(User.brand_id == brand_id)
+    candidates = users_q.all()
+
+    inserted = 0
+    skipped = 0
+    for u in candidates:
+        exists = Salary.query.filter_by(user_id=u.id, month=month, year=year).first()
+        if exists:
+            skipped += 1
+            continue
+        base = float(u.salary_amount)
+        db.session.add(Salary(
+            user_id=u.id,
+            brand_id=u.brand_id,
+            month=month, year=year,
+            base_salary=base,
+            deductions=0, bonuses=0,
+            net_salary=base,
+            status='pending',
+        ))
+        inserted += 1
+    db.session.commit()
+
+    if inserted:
+        flash(f'تم إنشاء {inserted} راتب جديد لـ {month}/{year} ({skipped} موجود بالفعل)', 'success')
+    else:
+        flash(f'لا يوجد رواتب جديدة لإنشائها — كل الموظفين لديهم سجل لـ {month}/{year}', 'info')
+    return redirect(url_for('finance.salaries_list', month=month, year=year))
+
+
+@finance_bp.route('/salaries/<int:salary_id>/pay', methods=['POST'])
+@login_required
+@finance_required
+def salary_pay(salary_id):
+    """Mark a Salary as paid AND post a matching رواتب expense in one txn.
+
+    GYM-18: salaries previously had a 'paid' status but nothing in the route
+    layer ever flipped it. Accountants were creating a manual رواتب expense
+    and the employee's salary card stayed perpetually 'pending'. Both happen
+    here atomically — the salary row becomes the source of truth for *when*
+    a salary was paid, the Expense row keeps the books balanced.
+    """
+    from app.models.employee import EmployeeReward, EmployeeDeduction
+    salary = Salary.query.get_or_404(salary_id)
+    if not check_entity_access(salary):
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('finance.salaries_list'))
+    if salary.status == 'paid':
+        flash('هذا الراتب مدفوع بالفعل', 'info')
+        return redirect(url_for('finance.salaries_list', month=salary.month, year=salary.year))
+
+    # Recompute net at pay time (catches rewards/deductions added after the
+    # Salary row was first written).
+    from calendar import monthrange
+    period_start = date(salary.year, salary.month, 1)
+    period_end = date(salary.year, salary.month, monthrange(salary.year, salary.month)[1])
+    total_rewards = float(db.session.query(db.func.coalesce(db.func.sum(EmployeeReward.amount), 0)).filter(
+        EmployeeReward.user_id == salary.user_id,
+        EmployeeReward.is_active == True,
+        db.or_(
+            db.and_(EmployeeReward.is_recurring == False,
+                    EmployeeReward.effective_date >= period_start,
+                    EmployeeReward.effective_date <= period_end),
+            EmployeeReward.is_recurring == True,
+        ),
+    ).scalar() or 0)
+    total_deductions = float(db.session.query(db.func.coalesce(db.func.sum(EmployeeDeduction.amount), 0)).filter(
+        EmployeeDeduction.user_id == salary.user_id,
+        EmployeeDeduction.deduction_date >= period_start,
+        EmployeeDeduction.deduction_date <= period_end,
+    ).scalar() or 0)
+    net = float(salary.base_salary) + total_rewards - total_deductions
+
+    salary.status = 'paid'
+    salary.paid_date = date.today()
+    salary.approved_by = current_user.id
+    salary.net_salary = net
+
+    employee = salary.user if hasattr(salary, 'user') else None
+    employee_name = getattr(employee, 'name', f'موظف #{salary.user_id}')
+    expense = Expense(
+        brand_id=salary.brand_id,
+        branch_id=getattr(employee, 'branch_id', None),
+        category_name='رواتب',
+        amount=net,
+        description=f'راتب {employee_name} - {salary.month_name} {salary.year}',
+        date=salary.paid_date,
+        status='approved',
+        approved_by=current_user.id,
+        approved_at=datetime.utcnow(),
+        created_by=current_user.id,
+    )
+    db.session.add(expense)
+    db.session.commit()
+    flash(f'تم تأكيد دفع راتب {employee_name} وتسجيله كمصروف', 'success')
+    return redirect(url_for('finance.salaries_list', month=salary.month, year=salary.year))
+
+
 @finance_bp.route('/refunds')
 @login_required
 @finance_required

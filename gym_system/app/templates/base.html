@@ -153,6 +153,32 @@
                         </li>
                         {% endif %}
 
+                        {# GYM-23 day-pass — visible to everyone with an account. #}
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint and request.endpoint.startswith('day_pass.') %}active{% endif %}"
+                               href="{{ url_for('day_pass.index') }}">
+                                <i class="bi bi-ticket-perforated"></i>
+                                التذاكر اليومية
+                            </a>
+                        </li>
+
+                        {# Personal — visible to everyone with an account.
+                           Each item goes to its own page. #}
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint == 'dashboard.my_salary' %}active{% endif %}"
+                               href="{{ url_for('dashboard.my_salary') }}">
+                                <i class="bi bi-cash-coin"></i>
+                                راتبي
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint == 'dashboard.my_attendance' %}active{% endif %}"
+                               href="{{ url_for('dashboard.my_attendance') }}">
+                                <i class="bi bi-calendar-week"></i>
+                                حضوري
+                            </a>
+                        </li>
+
                         {% if current_user.role and current_user.role.can_manage_classes %}
                         <li class="nav-item">
                             <a class="nav-link {% if request.endpoint and 'classes' in request.endpoint %}active{% endif %}"
@@ -224,6 +250,12 @@
                                             الإقفال اليومي
                                         </a>
                                     </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="{{ url_for('daily_closing.report') }}">
+                                            <i class="bi bi-clipboard-data"></i>
+                                            تقرير الإقفال
+                                        </a>
+                                    </li>
                                     {% endif %}
                                 </ul>
                             </div>
@@ -285,6 +317,17 @@
                                href="{{ url_for('admin.brands_list') }}">
                                 <i class="bi bi-building"></i>
                                 البراندات
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        {# Brand owner: link straight to their brand's branch list #}
+                        {% if current_user.is_brand_manager and current_user.brand_id %}
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint and 'branches' in request.endpoint %}active{% endif %}"
+                               href="{{ url_for('admin.branches_list', brand_id=current_user.brand_id) }}">
+                                <i class="bi bi-geo-alt"></i>
+                                الفروع
                             </a>
                         </li>
                         {% endif %}
@@ -364,6 +407,31 @@
                 </div>
                 {% endif %}
                 {% endwith %}
+
+                <!-- GYM-12 owner "view-as-branch" picker (only renders for
+                     brand-level owners; sticks via session). -->
+                {% if owner_branches %}
+                <form method="get" class="owner-branch-picker mb-3 d-flex align-items-center gap-2">
+                    {% for k, v in request.args.items() if k != 'branch_id' %}
+                    <input type="hidden" name="{{ k }}" value="{{ v }}">
+                    {% endfor %}
+                    <label for="owner-branch-select" class="form-label mb-0 fw-semibold text-muted small">
+                        <i class="bi bi-buildings"></i> عرض الفرع:
+                    </label>
+                    <select id="owner-branch-select" name="branch_id" class="form-select form-select-sm"
+                            style="max-width:260px;" onchange="this.form.submit()">
+                        <option value="0">جميع الفروع</option>
+                        {% for b in owner_branches %}
+                        <option value="{{ b.id }}" {% if owner_branch_filter_id == b.id %}selected{% endif %}>
+                            {{ b.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    {% if owner_branch_filter_id %}
+                    <span class="badge bg-info-subtle text-info-emphasis small">مفلتر</span>
+                    {% endif %}
+                </form>
+                {% endif %}
 
                 {% block content %}{% endblock %}
             </main>

@@ -137,6 +137,22 @@ def create():
             created_by=current_user.id
         )
         db.session.add(complaint)
+        db.session.flush()
+
+        # GYM-21: optional attachments (images + PDFs)
+        from app.utils.helpers import save_uploaded_file
+        from app.models.complaint import ComplaintAttachment
+        allowed = {'png', 'jpg', 'jpeg', 'gif', 'pdf'}
+        for f in request.files.getlist('attachments'):
+            if not f or not f.filename:
+                continue
+            saved = save_uploaded_file(f, folder='complaints', allowed=allowed)
+            if saved:
+                db.session.add(ComplaintAttachment(
+                    complaint_id=complaint.id,
+                    filename=saved,
+                    original_name=f.filename[:240],
+                ))
         db.session.commit()
 
         flash('تم تسجيل الشكوى بنجاح', 'success')

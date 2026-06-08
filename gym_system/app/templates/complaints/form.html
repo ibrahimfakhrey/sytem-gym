@@ -14,7 +14,7 @@
     <div class="col-lg-8">
         <div class="card">
             <div class="card-body">
-                <form method="POST">
+                <form method="POST" enctype="multipart/form-data">
                     {{ form.hidden_tag() }}
 
                     {% if brand %}
@@ -66,6 +66,17 @@
                     <div class="mb-3">
                         <label class="form-label">التفاصيل *</label>
                         {{ form.description(class="form-control", rows="5", placeholder="اشرح الشكوى بالتفصيل...") }}
+                    </div>
+
+                    {# GYM-21 — optional attachments. PNG/JPG/PDF, multiple. #}
+                    <div class="mb-3">
+                        <label for="complaint-attachments" class="form-label">
+                            <i class="bi bi-paperclip"></i>
+                            مرفقات (اختياري)
+                        </label>
+                        <input type="file" id="complaint-attachments" name="attachments"
+                               class="form-control" multiple accept="image/*,application/pdf">
+                        <small class="text-muted">يمكن إضافة أكثر من ملف. الأنواع المسموحة: PNG / JPG / PDF.</small>
                     </div>
 
                     <hr class="my-4">

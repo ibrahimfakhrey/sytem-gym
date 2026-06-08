@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}تقرير الإقفال اليومي{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-clipboard-data"></i> تقرير الإقفال اليومي</h1>
+    <a href="{{ url_for('daily_closing.index') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-right"></i> رجوع
+    </a>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label for="rep-start" class="form-label">من</label>
+                <input type="date" id="rep-start" name="start_date" class="form-control" value="{{ start_date.isoformat() }}">
+            </div>
+            <div class="col-md-3">
+                <label for="rep-end" class="form-label">إلى</label>
+                <input type="date" id="rep-end" name="end_date" class="form-control" value="{{ end_date.isoformat() }}">
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary w-100"><i class="bi bi-funnel"></i> عرض</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="row g-3 mb-3">
+    {% for label, value, cls in [
+        ('عدد الإقفالات', totals.count, 'primary'),
+        ('إجمالي المبيعات', '{:,.0f} ر.س'.format(totals.sales), 'success'),
+        ('إجمالي المصروفات', '{:,.0f} ر.س'.format(totals.expenses), 'danger'),
+        ('فروقات النقد', '{:,.0f} ر.س'.format(totals.variance), 'warning' if totals.variance != 0 else 'secondary')] %}
+    <div class="col-md-3">
+        <div class="card border-{{ cls }}">
+            <div class="card-body">
+                <div class="small text-muted">{{ label }}</div>
+                <div class="fw-bold fs-5">{{ value }}</div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="card mb-3">
+    <div class="card-header"><i class="bi bi-buildings"></i> حسب الفرع</div>
+    <div class="card-body p-0">
+        {% if per_branch %}
+        <table class="table mb-0">
+            <thead>
+                <tr>
+                    <th>الفرع</th>
+                    <th class="text-center">عدد الإقفالات</th>
+                    <th class="text-end">المبيعات</th>
+                    <th class="text-end">فروقات النقد</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in per_branch %}
+                <tr>
+                    <td>{{ row.branch.name if row.branch else 'بدون فرع' }}</td>
+                    <td class="text-center">{{ row.count }}</td>
+                    <td class="text-end">{{ "{:,.0f}".format(row.sales) }} ر.س</td>
+                    <td class="text-end {% if row.variance > 0 %}text-success{% elif row.variance < 0 %}text-danger{% endif %}">
+                        {{ "{:,.0f}".format(row.variance) }} ر.س
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-center text-muted py-4 mb-0">لا توجد إقفالات في هذه الفترة</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><i class="bi bi-calendar-week"></i> التفاصيل اليومية</div>
+    <div class="card-body p-0">
+        {% if closings %}
+        <div class="table-responsive">
+            <table class="table mb-0">
+                <thead>
+                    <tr>
+                        <th>التاريخ</th>
+                        <th>الفرع</th>
+                        <th class="text-end">المبيعات</th>
+                        <th class="text-end">نقدي</th>
+                        <th class="text-end">شبكة</th>
+                        <th class="text-end">حوالة</th>
+                        <th class="text-end">المصروفات</th>
+                        <th class="text-end">الفرق</th>
+                        <th>الحالة</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in closings %}
+                    <tr>
+                        <td>{{ c.closing_date.strftime('%Y-%m-%d') }}</td>
+                        <td>{{ c.branch.name if c.branch else 'بدون فرع' }}</td>
+                        <td class="text-end">{{ "{:,.0f}".format(c.total_sales or 0) }}</td>
+                        <td class="text-end">{{ "{:,.0f}".format(c.cash_amount or 0) }}</td>
+                        <td class="text-end">{{ "{:,.0f}".format(c.card_amount or 0) }}</td>
+                        <td class="text-end">{{ "{:,.0f}".format(c.transfer_amount or 0) }}</td>
+                        <td class="text-end">{{ "{:,.0f}".format(c.total_expenses or 0) }}</td>
+                        <td class="text-end {% if (c.cash_difference or 0) > 0 %}text-success{% elif (c.cash_difference or 0) < 0 %}text-danger{% endif %}">
+                            {{ "{:,.0f}".format(c.cash_difference or 0) }}
+                        </td>
+                        <td><span class="badge bg-{{ c.status_class }}">{{ c.status_arabic }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-center text-muted py-4 mb-0">لا توجد إقفالات في هذه الفترة</p>
+        {% endif %}
+    </div>
+</div>
+
+{% endblock %}

@@ -19,7 +19,16 @@
                         <td>{{ "{:,.0f}".format(gc.remaining_amount) }} ر.س</td>
                         <td>{% if gc.expires_at %}{{ gc.expires_at.strftime('%Y-%m-%d') }}{% else %}بدون انتهاء{% endif %}</td>
                         <td><span class="badge bg-{{ 'success' if gc.status == 'active' else 'secondary' }}">{{ gc.status }}</span></td>
-                        <td><a href="{{ url_for('gift_cards.view', gift_card_id=gc.id) }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></a></td>
+                        <td>
+                            <div class="d-flex flex-wrap gap-1">
+                                <a href="{{ url_for('gift_cards.view', gift_card_id=gc.id) }}" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-eye"></i> عرض
+                                </a>
+                                <a href="{{ url_for('gift_cards.print_card', gift_card_id=gc.id) }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">
+                                    <i class="bi bi-printer"></i> طباعة
+                                </a>
+                            </div>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>

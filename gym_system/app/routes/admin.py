@@ -186,7 +186,7 @@ def branches_list(brand_id):
 
 @admin_bp.route('/brands/<int:brand_id>/branches/create', methods=['GET', 'POST'])
 @login_required
-@owner_required
+@brand_manager_required
 def branches_create(brand_id):
     """Create new branch"""
     brand = Brand.query.get_or_404(brand_id)
@@ -198,6 +198,9 @@ def branches_create(brand_id):
     form = BranchForm()
 
     if form.validate_on_submit():
+        # GYM-19: only admins can write fingerprint hardware fields.
+        # Brand owners' POSTs for these fields are ignored.
+        admin_writes_fp = current_user.is_owner
         branch = Branch(
             brand_id=brand_id,
             name=form.name.data,
@@ -205,9 +208,9 @@ def branches_create(brand_id):
             phone=form.phone.data,
             gym_capacity=form.gym_capacity.data,
             pool_capacity=form.pool_capacity.data,
-            uses_fingerprint=form.uses_fingerprint.data,
-            fingerprint_ip=form.fingerprint_ip.data if form.uses_fingerprint.data else None,
-            fingerprint_port=form.fingerprint_port.data if form.uses_fingerprint.data else 5005,
+            uses_fingerprint=form.uses_fingerprint.data if admin_writes_fp else False,
+            fingerprint_ip=(form.fingerprint_ip.data if (admin_writes_fp and form.uses_fingerprint.data) else None),
+            fingerprint_port=(form.fingerprint_port.data if (admin_writes_fp and form.uses_fingerprint.data) else 5005),
             lease_expiry_date=form.lease_expiry_date.data,
             commercial_registration_expiry=form.commercial_registration_expiry.data,
             is_active=form.is_active.data
@@ -227,7 +230,7 @@ def branches_create(brand_id):
 
 @admin_bp.route('/branches/<int:branch_id>/edit', methods=['GET', 'POST'])
 @login_required
-@owner_required
+@brand_manager_required
 def branches_edit(branch_id):
     """Edit branch"""
     branch = Branch.query.get_or_404(branch_id)
@@ -240,14 +243,17 @@ def branches_edit(branch_id):
     form = BranchForm(obj=branch)
 
     if form.validate_on_submit():
+        # GYM-19: only admins may overwrite fingerprint hardware fields.
+        admin_writes_fp = current_user.is_owner
         branch.name = form.name.data
         branch.address = form.address.data
         branch.phone = form.phone.data
         branch.gym_capacity = form.gym_capacity.data
         branch.pool_capacity = form.pool_capacity.data
-        branch.uses_fingerprint = form.uses_fingerprint.data
-        branch.fingerprint_ip = form.fingerprint_ip.data if form.uses_fingerprint.data else None
-        branch.fingerprint_port = form.fingerprint_port.data if form.uses_fingerprint.data else 5005
+        if admin_writes_fp:
+            branch.uses_fingerprint = form.uses_fingerprint.data
+            branch.fingerprint_ip = form.fingerprint_ip.data if form.uses_fingerprint.data else None
+            branch.fingerprint_port = form.fingerprint_port.data if form.uses_fingerprint.data else 5005
         branch.lease_expiry_date = form.lease_expiry_date.data
         branch.commercial_registration_expiry = form.commercial_registration_expiry.data
         branch.is_active = form.is_active.data
@@ -676,6 +682,34 @@ def plans_edit(plan_id):
         form.service_type_id.data = plan.service_type_id
 
     return render_template('admin/plans/form.html', form=form, plan=plan, brand=plan.brand)
+
+
+@admin_bp.route('/plans/<int:plan_id>/delete', methods=['POST'])
+@login_required
+@brand_manager_required
+def plans_delete(plan_id):
+    """GYM-14: delete a plan. Hard-delete if no subscription ever referenced
+    it; soft-delete (is_active=False) otherwise so historical subscriptions
+    keep their plan_id intact (the column is NOT NULL).
+    """
+    plan = Plan.query.get_or_404(plan_id)
+    if not current_user.is_owner and current_user.brand_id != plan.brand_id:
+        flash('ليس لديك صلاحية لحذف هذه الباقة', 'danger')
+        return redirect(url_for('admin.plans_list'))
+
+    used_count = plan.subscriptions.count()
+    if used_count == 0:
+        db.session.delete(plan)
+        db.session.commit()
+        flash(f'تم حذف الباقة "{plan.name}" نهائياً', 'success')
+    else:
+        if not plan.is_active:
+            flash('الباقة معطلة بالفعل', 'info')
+        else:
+            plan.is_active = False
+            db.session.commit()
+            flash(f'تم تعطيل الباقة "{plan.name}" (تستخدم في {used_count} اشتراك ولا يمكن حذفها نهائياً)', 'warning')
+    return redirect(url_for('admin.plans_list'))
 
 
 # ============== Service Types ==============

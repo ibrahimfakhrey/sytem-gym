@@ -191,24 +191,24 @@
                             {% endif %}
                         </td>
                         <td>
-                            <div class="btn-group">
+                            <div class="d-flex flex-wrap gap-1">
                                 <a href="{{ url_for('members.view', member_id=member.id) }}"
-                                   class="btn btn-sm btn-outline-primary" title="عرض">
-                                    <i class="bi bi-eye"></i>
+                                   class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-eye"></i> عرض
                                 </a>
                                 <a href="{{ url_for('members.edit', member_id=member.id) }}"
-                                   class="btn btn-sm btn-outline-secondary" title="تعديل">
-                                    <i class="bi bi-pencil"></i>
+                                   class="btn btn-sm btn-outline-secondary">
+                                    <i class="bi bi-pencil"></i> تعديل
                                 </a>
                                 {% if member.active_subscription %}
                                 <a href="{{ url_for('subscriptions.renew', subscription_id=member.active_subscription.id) }}"
-                                   class="btn btn-sm btn-outline-success" title="تجديد">
-                                    <i class="bi bi-arrow-repeat"></i>
+                                   class="btn btn-sm btn-outline-success">
+                                    <i class="bi bi-arrow-repeat"></i> تجديد
                                 </a>
                                 {% else %}
                                 <a href="{{ url_for('subscriptions.create', member_id=member.id) }}"
-                                   class="btn btn-sm btn-success" title="اشتراك جديد">
-                                    <i class="bi bi-plus"></i>
+                                   class="btn btn-sm btn-success">
+                                    <i class="bi bi-plus"></i> اشتراك جديد
                                 </a>
                                 {% endif %}
                             </div>

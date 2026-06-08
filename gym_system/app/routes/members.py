@@ -61,8 +61,11 @@ def index():
     search = request.args.get('search', '')
     status = request.args.get('status', '')
 
-    # Base query with brand/branch filtering
-    query = apply_branch_filter(Member.query, Member)
+    # Base query with brand/branch filtering — GYM-12 owner picker is plumbed
+    # through `branch_filter_id` so a brand owner can scope to one branch.
+    from app.utils.helpers import resolve_owner_branch_filter
+    query = apply_branch_filter(Member.query, Member,
+                                branch_filter_id=resolve_owner_branch_filter())
 
     # Optional brand filter for admins (is_owner) browsing a specific brand
     brand_filter_id = request.args.get('brand_id', type=int)

@@ -5,12 +5,26 @@
 {% block content %}
 <div class="page-header">
     <h1><i class="bi bi-wallet2"></i> الرواتب</h1>
-    {% if current_user.is_owner %}
-    <a href="{{ url_for('employees.report') }}" class="btn btn-outline-primary">
-        <i class="bi bi-people"></i>
-        تقرير الموظفين
-    </a>
-    {% endif %}
+    <div class="d-flex gap-2 flex-wrap">
+        {# Generate Salary rows for any active employee with a base salary
+           who doesn't have a row for this month yet. #}
+        <form method="POST" action="{{ url_for('finance.salaries_generate') }}"
+              onsubmit="return confirm('سيتم إنشاء سجل راتب جديد لكل موظف نشط بدون سجل لهذا الشهر/السنة. هل تريد المتابعة؟');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="month" value="{{ month }}">
+            <input type="hidden" name="year" value="{{ year }}">
+            <button type="submit" class="btn btn-success">
+                <i class="bi bi-plus-circle"></i>
+                إنشاء رواتب الشهر
+            </button>
+        </form>
+        {% if current_user.is_owner %}
+        <a href="{{ url_for('employees.report') }}" class="btn btn-outline-primary">
+            <i class="bi bi-people"></i>
+            تقرير الموظفين
+        </a>
+        {% endif %}
+    </div>
 </div>
 
 <!-- Filter -->
@@ -107,10 +121,11 @@
                         <th class="text-center">المكافآت</th>
                         <th class="text-center">الخصومات</th>
                         <th class="text-center">الصافي</th>
+                        <th class="text-center">الحالة</th>
                         {% if current_user.is_owner %}
                         <th>البراند</th>
-                        <th>الإجراءات</th>
                         {% endif %}
+                        <th>إجراءات</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -148,27 +163,46 @@
                                 {{ "{:,.0f}".format(item.net_salary) }} ر.س
                             </strong>
                         </td>
+                        <td class="text-center">
+                            <span class="badge bg-{{ item.salary.status_class }}">{{ item.salary.status_text }}</span>
+                            {% if item.salary.paid_date %}
+                            <div class="small text-muted mt-1">{{ item.salary.paid_date.strftime('%Y-%m-%d') }}</div>
+                            {% endif %}
+                        </td>
                         {% if current_user.is_owner %}
                         <td>
                             <span class="badge bg-secondary">{{ item.salary.brand.name if item.salary.brand else '-' }}</span>
                         </td>
+                        {% endif %}
                         <td>
-                            <div class="btn-group btn-group-sm">
+                            <div class="d-flex gap-1 flex-wrap">
+                                {% if item.salary.status != 'paid' %}
+                                <button type="button"
+                                        class="btn btn-sm btn-success"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#paySalaryModal"
+                                        data-salary-id="{{ item.salary.id }}"
+                                        data-employee-name="{{ item.salary.user.name if item.salary.user else '-' }}"
+                                        data-net-salary="{{ '{:,.0f}'.format(item.net_salary) }}">
+                                    <i class="bi bi-check2-circle"></i> تأكيد الدفع
+                                </button>
+                                {% endif %}
+                                {% if current_user.is_owner %}
                                 <a href="{{ url_for('employees.details', user_id=item.salary.user_id) }}"
-                                   class="btn btn-outline-primary" title="تفاصيل">
-                                    <i class="bi bi-eye"></i>
+                                   class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-eye"></i> تفاصيل
                                 </a>
                                 <a href="{{ url_for('employees.give_reward', user_id=item.salary.user_id) }}"
-                                   class="btn btn-outline-success" title="مكافأة">
-                                    <i class="bi bi-gift"></i>
+                                   class="btn btn-sm btn-outline-success">
+                                    <i class="bi bi-gift"></i> مكافأة
                                 </a>
                                 <a href="{{ url_for('employees.give_deduction', user_id=item.salary.user_id) }}"
-                                   class="btn btn-outline-danger" title="خصم">
-                                    <i class="bi bi-dash-circle"></i>
+                                   class="btn btn-sm btn-outline-danger">
+                                    <i class="bi bi-dash-circle"></i> خصم
                                 </a>
+                                {% endif %}
                             </div>
                         </td>
-                        {% endif %}
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -204,6 +238,48 @@ document.addEventListener('DOMContentLoaded', function() {
     tooltipTriggerList.map(function (tooltipTriggerEl) {
         return new bootstrap.Tooltip(tooltipTriggerEl, {html: true});
     });
+
+    var paySalaryModal = document.getElementById('paySalaryModal');
+    if (paySalaryModal) {
+        paySalaryModal.addEventListener('show.bs.modal', function (event) {
+            var trigger = event.relatedTarget;
+            if (!trigger) return;
+            document.getElementById('paySalaryEmployee').textContent = trigger.getAttribute('data-employee-name') || '';
+            document.getElementById('paySalaryNet').textContent = trigger.getAttribute('data-net-salary') || '0';
+            document.getElementById('paySalaryForm').action = '/finance/salaries/' + trigger.getAttribute('data-salary-id') + '/pay';
+        });
+    }
 });
 </script>
+
+<!-- GYM-18: confirm-pay modal — shared across all rows. -->
+<div class="modal fade" id="paySalaryModal" tabindex="-1" aria-labelledby="paySalaryModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="paySalaryModalLabel">
+                    <i class="bi bi-cash-coin text-success" aria-hidden="true"></i>
+                    تأكيد دفع الراتب
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-2">سيتم تسجيل دفع راتب <strong id="paySalaryEmployee"></strong> بمبلغ
+                    <strong id="paySalaryNet"></strong> ر.س.</p>
+                <p class="text-muted small mb-0">
+                    سينعكس ذلك في سجل المصروفات تحت بند "رواتب" ويظهر الراتب في صفحة الموظف كمدفوع.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                <form id="paySalaryForm" method="POST" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-check2-circle"></i> تأكيد الدفع
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
