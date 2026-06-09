@@ -626,69 +626,93 @@ def reject_expense(expense_id):
 @login_required
 @finance_required
 def salaries_list():
-    """List salaries with rewards and deductions"""
+    """List salaries for the period.
+
+    Every active employee with a base salary_amount > 0 in scope appears,
+    whether or not a Salary row exists for the month yet. Rows without a
+    Salary record are flagged 'غير منشأ' — the owner just clicks
+    "إنشاء رواتب الشهر" once and they all materialize as pending Salary rows.
+    """
     from app.models.employee import EmployeeReward, EmployeeDeduction
 
     month = request.args.get('month', date.today().month, type=int)
     year = request.args.get('year', date.today().year, type=int)
 
-    # Calculate period dates
     from calendar import monthrange
     period_start = date(year, month, 1)
     period_end = date(year, month, monthrange(year, month)[1])
 
-    # Base query
-    query = apply_branch_filter(Salary.query, Salary)
-
-    query = query.filter_by(month=month, year=year)
-    salaries = query.all()
-
-    # Build salary data with rewards/deductions
-    salary_data = []
-    for salary in salaries:
-        # Get rewards for this employee in this period
-        rewards = EmployeeReward.query.filter(
-            EmployeeReward.user_id == salary.user_id,
-            EmployeeReward.is_active == True,
-            db.or_(
-                # One-time rewards in period
-                db.and_(
-                    EmployeeReward.is_recurring == False,
-                    EmployeeReward.effective_date >= period_start,
-                    EmployeeReward.effective_date <= period_end
-                ),
-                # Recurring rewards
-                EmployeeReward.is_recurring == True
+    # 1) All active employees in scope with a base salary configured.
+    users_q = User.query.filter(
+        User.is_active == True,
+        User.salary_amount != None,
+        User.salary_amount > 0,
+    )
+    if not current_user.can_view_all_brands:
+        if current_user.brand_id:
+            users_q = users_q.filter(User.brand_id == current_user.brand_id)
+        if current_user.branch_id:
+            users_q = users_q.filter(
+                db.or_(User.branch_id == current_user.branch_id,
+                       User.branch_id.is_(None))
             )
-        ).all()
+    candidates = users_q.order_by(User.name).all()
+
+    # 2) Salary rows for the period, keyed by user_id.
+    salary_q = apply_branch_filter(Salary.query, Salary).filter_by(month=month, year=year)
+    salary_by_user = {s.user_id: s for s in salary_q.all()}
+
+    # 3) Single batched read for the period's rewards / deductions.
+    visible_ids = [u.id for u in candidates] or [-1]
+    rewards_q = EmployeeReward.query.filter(
+        EmployeeReward.user_id.in_(visible_ids),
+        EmployeeReward.is_active == True,
+        db.or_(
+            db.and_(EmployeeReward.is_recurring == False,
+                    EmployeeReward.effective_date >= period_start,
+                    EmployeeReward.effective_date <= period_end),
+            EmployeeReward.is_recurring == True,
+        ),
+    ).all()
+    deductions_q = EmployeeDeduction.query.filter(
+        EmployeeDeduction.user_id.in_(visible_ids),
+        EmployeeDeduction.deduction_date >= period_start,
+        EmployeeDeduction.deduction_date <= period_end,
+    ).all()
+    rewards_by_user = {}
+    deductions_by_user = {}
+    for r in rewards_q:
+        rewards_by_user.setdefault(r.user_id, []).append(r)
+    for d in deductions_q:
+        deductions_by_user.setdefault(d.user_id, []).append(d)
+
+    salary_data = []
+    for user in candidates:
+        salary = salary_by_user.get(user.id)
+        rewards = rewards_by_user.get(user.id, [])
+        deductions = deductions_by_user.get(user.id, [])
         total_rewards = sum(float(r.amount) for r in rewards)
-
-        # Get deductions for this employee in this period
-        deductions = EmployeeDeduction.query.filter(
-            EmployeeDeduction.user_id == salary.user_id,
-            EmployeeDeduction.deduction_date >= period_start,
-            EmployeeDeduction.deduction_date <= period_end
-        ).all()
         total_deductions = sum(float(d.amount) for d in deductions)
-
-        net_salary = float(salary.base_salary) + total_rewards - total_deductions
+        base = float((salary.base_salary if salary else None) or user.salary_amount or 0)
+        net_salary = base + total_rewards - total_deductions
 
         salary_data.append({
+            'user': user,
             'salary': salary,
+            'has_record': salary is not None,
+            'base_salary': base,
             'rewards': rewards,
             'deductions': deductions,
             'total_rewards': total_rewards,
             'total_deductions': total_deductions,
-            'net_salary': net_salary
+            'net_salary': net_salary,
         })
 
-    # Calculate totals
-    total_base = sum(float(s['salary'].base_salary) for s in salary_data)
+    total_base = sum(s['base_salary'] for s in salary_data)
     total_rewards = sum(s['total_rewards'] for s in salary_data)
     total_deductions = sum(s['total_deductions'] for s in salary_data)
     total_net = total_base + total_rewards - total_deductions
 
-    # Brands for filter
     brands = None
     if current_user.can_view_all_brands:
         brands = Brand.query.filter_by(is_active=True).all()

@@ -133,14 +133,30 @@
                 </thead>
                 <tbody>
                     {% for item in salary_data %}
-                    <tr>
+                    <tr {% if not item.has_record %}class="table-warning"{% endif %}>
                         <td>
-                            <strong>{{ item.salary.user.name if item.salary.user else '-' }}</strong>
+                            {% if item.user %}
+                            <a href="{{ url_for('employees.details', user_id=item.user.id) }}"
+                               class="text-decoration-none">
+                                <strong>{{ item.user.name }}</strong>
+                            </a>
+                            <div class="small text-muted">
+                                <i class="bi bi-clock-history"></i> اضغط للاطلاع على سجل الرواتب السابقة
+                            </div>
+                            {% else %}
+                            <strong>-</strong>
+                            {% endif %}
+                            {% if not item.has_record %}
+                            <div class="small text-warning-emphasis">
+                                <i class="bi bi-exclamation-circle"></i>
+                                سيُنشأ سجل عند الضغط على "إنشاء رواتب الشهر"
+                            </div>
+                            {% endif %}
                         </td>
                         <td>
-                            <span class="badge bg-secondary">{{ item.salary.user.role.name if item.salary.user and item.salary.user.role else '-' }}</span>
+                            <span class="badge bg-secondary">{{ item.user.role.name if item.user and item.user.role else '-' }}</span>
                         </td>
-                        <td class="text-center">{{ "{:,.0f}".format(item.salary.base_salary) }} ر.س</td>
+                        <td class="text-center">{{ "{:,.0f}".format(item.base_salary) }} ر.س</td>
                         <td class="text-center">
                             {% if item.total_rewards > 0 %}
                             <span class="text-success" data-bs-toggle="tooltip" title="{% for r in item.rewards %}{{ r.title }}: {{ r.amount|int }} ر.س&#10;{% endfor %}">
@@ -162,44 +178,48 @@
                             {% endif %}
                         </td>
                         <td class="text-center">
-                            <strong class="{% if item.net_salary > item.salary.base_salary|float %}text-success{% elif item.net_salary < item.salary.base_salary|float %}text-danger{% endif %}">
+                            <strong class="{% if item.net_salary > item.base_salary %}text-success{% elif item.net_salary < item.base_salary %}text-danger{% endif %}">
                                 {{ "{:,.0f}".format(item.net_salary) }} ر.س
                             </strong>
                         </td>
                         <td class="text-center">
+                            {% if item.has_record %}
                             <span class="badge bg-{{ item.salary.status_class }}">{{ item.salary.status_text }}</span>
                             {% if item.salary.paid_date %}
                             <div class="small text-muted mt-1">{{ item.salary.paid_date.strftime('%Y-%m-%d') }}</div>
                             {% endif %}
+                            {% else %}
+                            <span class="badge bg-warning text-dark">غير منشأ</span>
+                            {% endif %}
                         </td>
                         {% if current_user.is_owner %}
                         <td>
-                            <span class="badge bg-secondary">{{ item.salary.brand.name if item.salary.brand else '-' }}</span>
+                            <span class="badge bg-secondary">{{ item.user.brand.name if item.user and item.user.brand else '-' }}</span>
                         </td>
                         {% endif %}
                         <td>
                             <div class="d-flex gap-1 flex-wrap">
-                                {% if item.salary.status != 'paid' %}
+                                {% if item.has_record and item.salary.status != 'paid' %}
                                 <button type="button"
                                         class="btn btn-sm btn-success"
                                         data-bs-toggle="modal"
                                         data-bs-target="#paySalaryModal"
                                         data-salary-id="{{ item.salary.id }}"
-                                        data-employee-name="{{ item.salary.user.name if item.salary.user else '-' }}"
+                                        data-employee-name="{{ item.user.name if item.user else '-' }}"
                                         data-net-salary="{{ '{:,.0f}'.format(item.net_salary) }}">
                                     <i class="bi bi-check2-circle"></i> تأكيد الدفع
                                 </button>
                                 {% endif %}
-                                {% if current_user.is_owner %}
-                                <a href="{{ url_for('employees.details', user_id=item.salary.user_id) }}"
+                                {% if current_user.is_owner or current_user.is_brand_manager %}
+                                <a href="{{ url_for('employees.details', user_id=item.user.id) }}"
                                    class="btn btn-sm btn-outline-primary">
                                     <i class="bi bi-eye"></i> تفاصيل
                                 </a>
-                                <a href="{{ url_for('employees.give_reward', user_id=item.salary.user_id) }}"
+                                <a href="{{ url_for('employees.give_reward', user_id=item.user.id) }}"
                                    class="btn btn-sm btn-outline-success">
                                     <i class="bi bi-gift"></i> مكافأة
                                 </a>
-                                <a href="{{ url_for('employees.give_deduction', user_id=item.salary.user_id) }}"
+                                <a href="{{ url_for('employees.give_deduction', user_id=item.user.id) }}"
                                    class="btn btn-sm btn-outline-danger">
                                     <i class="bi bi-dash-circle"></i> خصم
                                 </a>
