@@ -50,6 +50,24 @@
             <div class="card mb-3">
                 <div class="card-header"><i class="bi bi-stopwatch"></i> النشاط والوقت</div>
                 <div class="card-body">
+                    {# Branch selector. If the current user already has a
+                       branch, send it as a hidden value (one less click for
+                       the receptionist). Otherwise show a required picker. #}
+                    {% if current_user.branch_id %}
+                    <input type="hidden" name="branch_id" value="{{ current_user.branch_id }}">
+                    {% else %}
+                    <div class="mb-3">
+                        <label for="branch_id" class="form-label">الفرع *</label>
+                        <select id="branch_id" name="branch_id" class="form-select" required>
+                            <option value="">— اختر الفرع —</option>
+                            {% for b in branches %}
+                            <option value="{{ b.id }}">{{ b.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">يُسجَّل الفرع على التذكرة لكي يظهر في فلتر الفروع لاحقاً.</small>
+                    </div>
+                    {% endif %}
+
                     <div class="mb-3">
                         <label for="service_type_id" class="form-label">النشاط *</label>
                         <select id="service_type_id" name="service_type_id" class="form-select" required>

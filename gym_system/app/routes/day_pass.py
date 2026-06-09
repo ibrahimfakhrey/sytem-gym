@@ -151,6 +151,7 @@ def create():
     """Any authenticated user can issue a ticket. The ticket records
     `created_by`, which the owner sees on the list page in the المُصدر column.
     """
+    from app.models.company import Branch
     brand_id = current_user.brand_id
     if current_user.can_view_all_brands:
         brand_id = request.values.get('brand_id', type=int) or brand_id
@@ -175,6 +176,11 @@ def create():
         'price': float(p.price),
     } for p, st in priced]
 
+    # Branch selector. The creator's own branch is pre-selected if they have
+    # one (and the dropdown is hidden), so receptionists keep the one-click
+    # flow. Brand-level users (owner/admin) pick a branch explicitly.
+    branches = Branch.query.filter_by(brand_id=brand_id, is_active=True).order_by(Branch.name).all()
+
     if request.method == 'POST':
         try:
             service_type_id = int(request.form.get('service_type_id') or 0)
@@ -191,14 +197,34 @@ def create():
         payment_method = request.form.get('payment_method') or 'cash'
         notes = (request.form.get('notes') or '').strip() or None
 
-        if not service_type_id or not name:
-            flash('الاسم ونوع النشاط مطلوبان', 'danger')
-            return render_template('day_pass/create.html', activities=activities, brand_id=brand_id)
+        # Branch is now required so the owner's branch picker can find these
+        # tickets. Brand-level users pick from the form; branch users are
+        # auto-pinned to their own branch.
+        try:
+            branch_id = int(request.form.get('branch_id') or 0)
+        except ValueError:
+            branch_id = 0
+        if not branch_id and current_user.branch_id:
+            branch_id = current_user.branch_id
+        # Validate the branch belongs to this brand.
+        if branch_id:
+            branch = Branch.query.filter_by(id=branch_id, brand_id=brand_id).first()
+            if not branch:
+                branch_id = 0
+
+        if not service_type_id or not name or not branch_id:
+            if not branch_id:
+                flash('اختر الفرع الذي يُصدر التذكرة منه', 'danger')
+            else:
+                flash('الاسم ونوع النشاط مطلوبان', 'danger')
+            return render_template('day_pass/create.html', activities=activities,
+                                   branches=branches, brand_id=brand_id)
 
         price_row = DayPassPrice.query.filter_by(brand_id=brand_id, service_type_id=service_type_id).first()
         if not price_row or not price_row.is_active or float(price_row.price) <= 0:
             flash('لا يوجد سعر نشط لهذا النشاط — اطلب من المالك ضبط السعر أولاً', 'warning')
-            return render_template('day_pass/create.html', activities=activities, brand_id=brand_id)
+            return render_template('day_pass/create.html', activities=activities,
+                                   branches=branches, brand_id=brand_id)
 
         def _parse_time(s):
             try:
@@ -211,7 +237,7 @@ def create():
 
         dp = DayPass(
             brand_id=brand_id,
-            branch_id=current_user.branch_id,
+            branch_id=branch_id,
             service_type_id=service_type_id,
             customer_name=name[:120],
             customer_phone=phone,
@@ -229,7 +255,7 @@ def create():
 
         db.session.add(Income(
             brand_id=brand_id,
-            branch_id=current_user.branch_id,
+            branch_id=branch_id,
             service_type_id=service_type_id,
             amount=price_row.price,
             type='day_pass',
@@ -242,4 +268,5 @@ def create():
         flash(f'تم إصدار تذكرة #{dp.id} بقيمة {float(price_row.price):,.0f} ر.س', 'success')
         return redirect(url_for('day_pass.index'))
 
-    return render_template('day_pass/create.html', activities=activities, brand_id=brand_id)
+    return render_template('day_pass/create.html', activities=activities,
+                           branches=branches, brand_id=brand_id)

@@ -47,9 +47,15 @@
 {# Prefer the snapshot on the Invoice row when one exists; else fall back
    to the subscription's live branch/brand. #}
 {% set invoice = invoice if invoice is defined else (subscription.invoices[0] if subscription.invoices else None) %}
-{% set branch_name = (invoice.branch_name if invoice and invoice.branch_name) or (subscription.branch.name if subscription.branch else subscription.brand.name) %}
-{% set branch_phone = (invoice.branch_phone if invoice and invoice.branch_phone) or (subscription.branch.phone if subscription.branch else '') %}
-{% set branch_address = (invoice.branch_address if invoice and invoice.branch_address) or (subscription.branch.address if subscription.branch else '') %}
+{# Branch resolution chain: (1) snapshot on the invoice row, (2) the
+   subscription's branch, (3) the member's home branch, and only as a last
+   resort (4) the brand name. This makes the header show the right branch
+   even for invoices issued before GYM-15 went live. #}
+{% set _sub_branch = subscription.branch %}
+{% set _mem_branch = subscription.member.branch if subscription.member and subscription.member.branch_id else None %}
+{% set branch_name    = (invoice.branch_name    if invoice and invoice.branch_name)    or (_sub_branch.name    if _sub_branch else (_mem_branch.name    if _mem_branch else subscription.brand.name)) %}
+{% set branch_phone   = (invoice.branch_phone   if invoice and invoice.branch_phone)   or (_sub_branch.phone   if _sub_branch else (_mem_branch.phone   if _mem_branch else '')) %}
+{% set branch_address = (invoice.branch_address if invoice and invoice.branch_address) or (_sub_branch.address if _sub_branch else (_mem_branch.address if _mem_branch else '')) %}
 {% set invoice_no = (invoice.invoice_number if invoice else ('INV-' ~ subscription.id)) %}
 
 <div class="invoice-wrap">

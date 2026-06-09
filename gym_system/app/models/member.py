@@ -54,6 +54,8 @@ class Member(db.Model):
                                    order_by='desc(Subscription.created_at)')
     attendance = db.relationship('MemberAttendance', backref='member', lazy='dynamic',
                                 order_by='desc(MemberAttendance.check_in)')
+    # `branch` is provided as a backref from Branch.members (see
+    # app/models/company.py:89) — don't redefine it here.
 
     def __repr__(self):
         return f'<Member {self.name}>'

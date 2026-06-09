@@ -1,5 +1,6 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask import Blueprint, render_template, redirect, url_for, flash, request, send_file
 from flask_login import login_required, current_user
+import io
 from flask_wtf import FlaskForm
 from wtforms import StringField, DecimalField, TextAreaField, DateField, SelectField
 from wtforms.validators import DataRequired, Optional
@@ -916,3 +917,154 @@ def expense_reject(expense_id):
         return redirect(url_for('finance.expenses', status='pending'))
 
     return render_template('finance/expense_reject.html', expense=expense)
+
+
+# ============== xlsx exports — GYM-16 rework ==============
+
+def _xlsx_response(filename, headers, rows):
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, PatternFill
+    wb = Workbook(); ws = wb.active; ws.title = filename[:30]
+    ws.append(headers)
+    header_font = Font(bold=True, color='FFFFFF')
+    header_fill = PatternFill('solid', fgColor='0F3460')
+    for c in ws[1]:
+        c.font = header_font; c.fill = header_fill
+        c.alignment = Alignment(horizontal='center')
+    for row in rows:
+        ws.append(row)
+    for col in ws.columns:
+        ws.column_dimensions[col[0].column_letter].width = min(
+            max((len(str(c.value or '')) for c in col), default=10) + 2, 40)
+    buf = io.BytesIO(); wb.save(buf); buf.seek(0)
+    return send_file(buf, as_attachment=True, download_name=f'{filename}.xlsx',
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
+def _date_range_args():
+    df = request.args.get('date_from', date.today().replace(day=1).isoformat())
+    dt = request.args.get('date_to', date.today().isoformat())
+    try:
+        return date.fromisoformat(df), date.fromisoformat(dt)
+    except ValueError:
+        return date.today().replace(day=1), date.today()
+
+
+def _scoped_brand_id():
+    """Same scoping the finance pages use — admin picks, everyone else pinned."""
+    if current_user.can_view_all_brands:
+        return request.args.get('brand_id', type=int)
+    return current_user.brand_id
+
+
+@finance_bp.route('/income/export.xlsx')
+@login_required
+@finance_required
+def income_export():
+    fd, td = _date_range_args()
+    q = Income.query.filter(Income.date >= fd, Income.date <= td)
+    bid = _scoped_brand_id()
+    if bid:
+        q = q.filter(Income.brand_id == bid)
+    if current_user.branch_id and not current_user.can_view_all_brands:
+        q = q.filter(Income.branch_id == current_user.branch_id)
+    pm = request.args.get('payment_method', '')
+    if pm:
+        q = q.filter(Income.payment_method == pm)
+    rows = [[i.date.isoformat(), float(i.amount or 0),
+             i.type or '', i.payment_method or '', i.description or '',
+             i.branch.name if i.branch else '-']
+            for i in q.order_by(Income.date.desc()).all()]
+    return _xlsx_response(
+        f'income-{fd.isoformat()}-to-{td.isoformat()}',
+        ['التاريخ', 'المبلغ', 'النوع', 'طريقة الدفع', 'الوصف', 'الفرع'],
+        rows,
+    )
+
+
+@finance_bp.route('/expenses/export.xlsx')
+@login_required
+@finance_required
+def expenses_export():
+    fd, td = _date_range_args()
+    q = Expense.query.filter(Expense.date >= fd, Expense.date <= td)
+    bid = _scoped_brand_id()
+    if bid:
+        q = q.filter(Expense.brand_id == bid)
+    if current_user.branch_id and not current_user.can_view_all_brands:
+        q = q.filter(Expense.branch_id == current_user.branch_id)
+    st = request.args.get('status', '')
+    if st:
+        q = q.filter(Expense.status == st)
+    cat = request.args.get('category', '')
+    if cat:
+        q = q.filter(Expense.category_name == cat)
+    rows = [[e.date.isoformat(), float(e.amount or 0),
+             e.category_name or '', e.status or '', e.description or '',
+             e.creator.name if e.creator else '-']
+            for e in q.order_by(Expense.date.desc()).all()]
+    return _xlsx_response(
+        f'expenses-{fd.isoformat()}-to-{td.isoformat()}',
+        ['التاريخ', 'المبلغ', 'الفئة', 'الحالة', 'الوصف', 'بواسطة'],
+        rows,
+    )
+
+
+@finance_bp.route('/sales-transactions/export.xlsx')
+@login_required
+@finance_required
+def sales_transactions_export():
+    fd, td = _date_range_args()
+    q = db.session.query(SubscriptionPayment).join(Subscription).join(Subscription.member)
+    bid = _scoped_brand_id()
+    if bid:
+        q = q.filter(Subscription.brand_id == bid)
+    else:
+        q = q.filter(Subscription.brand_id == current_user.brand_id)
+    q = q.filter(db.func.date(SubscriptionPayment.payment_date) >= fd,
+                 db.func.date(SubscriptionPayment.payment_date) <= td)
+    pm = request.args.get('payment_method', '')
+    if pm:
+        q = q.filter(SubscriptionPayment.payment_method == pm)
+    rows = []
+    for p in q.order_by(SubscriptionPayment.payment_date.desc()).all():
+        sub = p.subscription
+        m = sub.member if sub else None
+        rows.append([
+            p.payment_date.strftime('%Y-%m-%d %H:%M') if p.payment_date else '',
+            m.name if m else '-',
+            sub.plan.name if sub and sub.plan else '-',
+            float(p.amount or 0),
+            p.payment_method or '',
+            sub.branch.name if sub and sub.branch else '-',
+        ])
+    return _xlsx_response(
+        f'sales-transactions-{fd.isoformat()}-to-{td.isoformat()}',
+        ['التاريخ', 'العضو', 'الباقة', 'المبلغ', 'طريقة الدفع', 'الفرع'],
+        rows,
+    )
+
+
+@finance_bp.route('/salaries/export.xlsx')
+@login_required
+@finance_required
+def salaries_export():
+    month = request.args.get('month', date.today().month, type=int)
+    year = request.args.get('year', date.today().year, type=int)
+    q = apply_branch_filter(Salary.query, Salary).filter_by(month=month, year=year)
+    brand_name_by_id = {b.id: b.name for b in Brand.query.all()}
+    rows = []
+    for s in q.all():
+        rows.append([
+            s.user.name if s.user else '-',
+            brand_name_by_id.get(s.brand_id, '-'),
+            float(s.base_salary or 0),
+            float(s.net_salary or 0),
+            s.status_text,
+            s.paid_date.isoformat() if s.paid_date else '',
+        ])
+    return _xlsx_response(
+        f'salaries-{year}-{month:02d}',
+        ['الموظف', 'البراند', 'الراتب الأساسي', 'الصافي', 'الحالة', 'تاريخ الدفع'],
+        rows,
+    )

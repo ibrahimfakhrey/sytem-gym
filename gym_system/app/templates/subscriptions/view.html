@@ -84,14 +84,12 @@
                             </td>
                             <td>{{ payment.notes or '-' }}</td>
                             <td>
-                                {% if payment.invoice and payment.invoice|length > 0 %}
-                                <a href="{{ url_for('invoices.view', invoice_id=payment.invoice[0].id) }}" class="btn btn-sm btn-outline-primary">
+                                <a href="{{ url_for('subscriptions.invoice', subscription_id=subscription.id) }}"
+                                   target="_blank" rel="noopener"
+                                   class="btn btn-sm btn-outline-primary">
                                     <i class="bi bi-receipt"></i>
                                     عرض الفاتورة
                                 </a>
-                                {% else %}
-                                <span class="text-muted">-</span>
-                                {% endif %}
                             </td>
                         </tr>
                         {% endfor %}

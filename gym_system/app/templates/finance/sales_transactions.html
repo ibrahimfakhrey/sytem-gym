@@ -5,6 +5,9 @@
 {% block content %}
 <div class="page-header">
     <h1><i class="bi bi-receipt-cutoff"></i> تفاصيل معاملات المبيعات</h1>
+    <a href="{{ url_for('finance.sales_transactions_export', **request.args) }}" class="btn btn-outline-success">
+        <i class="bi bi-file-earmark-excel"></i> تصدير اكسيل
+    </a>
 </div>
 
 <!-- Filters -->
@@ -191,7 +194,7 @@
                                 عرض الاشتراك
                             </a>
                             {% if transaction.invoice %}
-                            <a href="{{ url_for('invoices.view', invoice_id=transaction.invoice.id) }}"
+                            <a href="{{ url_for('invoices.view', invoice_id=transaction.invoice[0].id) }}"
                                class="btn btn-sm btn-outline-secondary">
                                 <i class="bi bi-receipt"></i>
                                 الفاتورة
