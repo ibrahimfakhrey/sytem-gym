@@ -62,8 +62,8 @@
             </div>
         </div>
 
-        <div class="card {% if closing.has_discrepancy %}border-{{ closing.discrepancy_class }}{% endif %}">
-            <div class="card-header {% if closing.has_discrepancy %}bg-{{ closing.discrepancy_class }} text-white{% endif %}">
+        <div class="card {% if closing.has_cash_difference %}border-{{ closing.cash_difference_class }}{% endif %}">
+            <div class="card-header {% if closing.has_cash_difference %}bg-{{ closing.cash_difference_class }} text-white{% endif %}">
                 <i class="bi bi-cash-stack"></i>
                 مطابقة النقدية
             </div>
@@ -80,8 +80,8 @@
                     <tr class="border-top">
                         <td><strong>الفرق:</strong></td>
                         <td class="text-end">
-                            {% if closing.has_discrepancy %}
-                            <h4 class="mb-0 text-{{ closing.discrepancy_class }}">
+                            {% if closing.has_cash_difference %}
+                            <h4 class="mb-0 text-{{ closing.cash_difference_class }}">
                                 {{ "{:+,.2f}".format(closing.cash_difference) }} ر.س
                             </h4>
                             {% else %}
@@ -93,8 +93,8 @@
                     </tr>
                 </table>
 
-                {% if closing.has_discrepancy %}
-                <div class="alert alert-{{ closing.discrepancy_class }} mb-0">
+                {% if closing.has_cash_difference %}
+                <div class="alert alert-{{ closing.cash_difference_class }} mb-0">
                     <i class="bi bi-exclamation-triangle"></i>
                     {% if closing.cash_difference > 0 %}
                     <strong>فائض:</strong> هناك زيادة في النقدية بمبلغ {{ "{:,.2f}".format(closing.cash_difference) }} ر.س
@@ -139,7 +139,7 @@
                 {% endif %}
                 <p class="mb-2">
                     <strong>أقفل بواسطة:</strong><br>
-                    {{ closing.closed_by_user.name }}
+                    {{ closing.submitter.name if closing.submitter else "—" }}
                 </p>
                 <p class="mb-2">
                     <strong>وقت الإقفال:</strong><br>

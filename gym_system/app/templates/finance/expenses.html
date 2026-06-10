@@ -93,6 +93,7 @@
                         <th>البراند</th>
                         {% endif %}
                         <th>المبلغ</th>
+                        <th class="text-center">الإيصال</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -109,6 +110,24 @@
                         </td>
                         {% endif %}
                         <td class="text-danger fw-bold">-{{ "{:,.0f}".format(expense.amount) }} ر.س</td>
+                        <td class="text-center">
+                            {% if expense.receipt_image %}
+                            {% set is_pdf = expense.receipt_image.lower().endswith('.pdf') %}
+                            <a href="{{ url_for('static', filename=expense.receipt_image) }}"
+                               target="_blank" rel="noopener"
+                               title="فتح الإيصال">
+                                {% if is_pdf %}
+                                <i class="bi bi-file-pdf text-danger fs-4"></i>
+                                {% else %}
+                                <img src="{{ url_for('static', filename=expense.receipt_image) }}"
+                                     alt="إيصال" loading="lazy"
+                                     style="width:42px; height:42px; object-fit:cover; border-radius:6px; border:1px solid var(--border-color);">
+                                {% endif %}
+                            </a>
+                            {% else %}
+                            <span class="text-muted small">—</span>
+                            {% endif %}
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>

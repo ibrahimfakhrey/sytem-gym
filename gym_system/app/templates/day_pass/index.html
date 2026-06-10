@@ -63,7 +63,11 @@
                     <tr>
                         <td>{{ p.id }}</td>
                         <td>
-                            <strong>{{ p.customer_name }}</strong>
+                            <a href="{{ url_for('day_pass.print_pass', pass_id=p.id) }}"
+                               target="_blank" rel="noopener"
+                               class="text-decoration-none">
+                                <strong>{{ p.customer_name }}</strong>
+                            </a>
                             {% if p.customer_phone %}
                             <div class="small text-muted">{{ p.customer_phone }}</div>
                             {% endif %}

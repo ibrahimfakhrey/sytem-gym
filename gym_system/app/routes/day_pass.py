@@ -270,3 +270,17 @@ def create():
 
     return render_template('day_pass/create.html', activities=activities,
                            branches=branches, brand_id=brand_id)
+
+
+@day_pass_bp.route('/<int:pass_id>/print')
+@login_required
+def print_pass(pass_id):
+    """Printable ticket card (like the gift card) — visible to anyone
+    authenticated who can access the brand/branch. WhatsApp share button
+    appears if the customer phone is on file.
+    """
+    dp = DayPass.query.get_or_404(pass_id)
+    if not check_entity_access(dp):
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('day_pass.index'))
+    return render_template('day_pass/print.html', dp=dp)

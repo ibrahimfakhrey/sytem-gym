@@ -68,12 +68,12 @@
                         {% if current_user.can_view_all_brands %}
                         <td>{{ closing.brand.name }}</td>
                         {% endif %}
-                        <td class="text-success"><strong>{{ "{:,.2f}".format(closing.total_sales) }} ر.س</strong></td>
-                        <td>{{ "{:,.2f}".format(closing.expected_cash) }} ر.س</td>
-                        <td>{{ "{:,.2f}".format(closing.actual_cash_submitted) }} ر.س</td>
+                        <td class="text-success"><strong>{{ "{:,.2f}".format(closing.total_sales or 0) }} ر.س</strong></td>
+                        <td>{{ "{:,.2f}".format(closing.expected_cash or 0) }} ر.س</td>
+                        <td>{{ "{:,.2f}".format(closing.actual_cash_submitted or 0) }} ر.س</td>
                         <td>
-                            {% if closing.has_discrepancy %}
-                            <span class="badge bg-{{ closing.discrepancy_class }}">
+                            {% if closing.has_cash_difference %}
+                            <span class="badge bg-{{ closing.cash_difference_class }}">
                                 {{ "{:,.2f}".format(closing.cash_difference) }} ر.س
                             </span>
                             {% else %}
@@ -82,7 +82,7 @@
                             </span>
                             {% endif %}
                         </td>
-                        <td><small>{{ closing.closed_by_user.name }}</small></td>
+                        <td><small>{{ closing.submitter.name if closing.submitter else '—' }}</small></td>
                         <td>
                             <a href="{{ url_for('closing.view_closing', closing_id=closing.id) }}" class="btn btn-sm btn-info">
                                 <i class="bi bi-eye"></i>
