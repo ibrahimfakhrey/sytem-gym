@@ -79,7 +79,22 @@
                 {% if expense.receipt_image %}
                 <hr>
                 <h6>صورة الإيصال:</h6>
-                <img src="{{ url_for('static', filename='uploads/' + expense.receipt_image) }}" class="img-fluid rounded" style="max-width: 400px;">
+                {# expense.receipt_image already carries the "uploads/<folder>/<file>"
+                   prefix from save_uploaded_file(), so don't add it again. Tolerate
+                   legacy rows that stored just "<file>" by checking the prefix. #}
+                {% set img_path = expense.receipt_image if expense.receipt_image.startswith('uploads/') else 'uploads/receipts/' ~ expense.receipt_image %}
+                {% set is_pdf = img_path.lower().endswith('.pdf') %}
+                {% if is_pdf %}
+                <a href="{{ url_for('static', filename=img_path) }}" target="_blank" rel="noopener" class="btn btn-outline-danger">
+                    <i class="bi bi-file-pdf"></i> فتح ملف PDF
+                </a>
+                {% else %}
+                <a href="{{ url_for('static', filename=img_path) }}" target="_blank" rel="noopener">
+                    <img src="{{ url_for('static', filename=img_path) }}"
+                         class="img-fluid rounded" style="max-width: 400px; cursor: zoom-in;"
+                         alt="إيصال" loading="lazy">
+                </a>
+                {% endif %}
                 {% endif %}
             </div>
         </div>

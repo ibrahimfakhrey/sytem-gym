@@ -118,14 +118,15 @@
                         <td class="text-danger fw-bold">-{{ "{:,.0f}".format(expense.amount) }} ر.س</td>
                         <td class="text-center" data-noclick="1">
                             {% if expense.receipt_image %}
-                            {% set is_pdf = expense.receipt_image.lower().endswith('.pdf') %}
-                            <a href="{{ url_for('static', filename=expense.receipt_image) }}"
+                            {% set img_path = expense.receipt_image if expense.receipt_image.startswith('uploads/') else 'uploads/receipts/' ~ expense.receipt_image %}
+                            {% set is_pdf = img_path.lower().endswith('.pdf') %}
+                            <a href="{{ url_for('static', filename=img_path) }}"
                                target="_blank" rel="noopener"
                                title="فتح الإيصال">
                                 {% if is_pdf %}
                                 <i class="bi bi-file-pdf text-danger fs-4"></i>
                                 {% else %}
-                                <img src="{{ url_for('static', filename=expense.receipt_image) }}"
+                                <img src="{{ url_for('static', filename=img_path) }}"
                                      alt="إيصال" loading="lazy"
                                      style="width:42px; height:42px; object-fit:cover; border-radius:6px; border:1px solid var(--border-color);">
                                 {% endif %}
