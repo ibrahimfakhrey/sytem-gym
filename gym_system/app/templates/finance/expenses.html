@@ -98,8 +98,14 @@
                 </thead>
                 <tbody>
                     {% for expense in expenses.items %}
-                    <tr>
-                        <td>{{ expense.date.strftime('%Y-%m-%d') }}</td>
+                    <tr class="expense-row" style="cursor:pointer;"
+                        data-href="{{ url_for('finance.expense_view', expense_id=expense.id) }}">
+                        <td>
+                            <a href="{{ url_for('finance.expense_view', expense_id=expense.id) }}"
+                               class="text-decoration-none">
+                                {{ expense.date.strftime('%Y-%m-%d') }}
+                            </a>
+                        </td>
                         <td>
                             <span class="badge bg-secondary">{{ expense.category_name or '-' }}</span>
                         </td>
@@ -110,7 +116,7 @@
                         </td>
                         {% endif %}
                         <td class="text-danger fw-bold">-{{ "{:,.0f}".format(expense.amount) }} ر.س</td>
-                        <td class="text-center">
+                        <td class="text-center" data-noclick="1">
                             {% if expense.receipt_image %}
                             {% set is_pdf = expense.receipt_image.lower().endswith('.pdf') %}
                             <a href="{{ url_for('static', filename=expense.receipt_image) }}"
@@ -202,4 +208,17 @@
         {% endif %}
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Whole row → expense detail view. Skip when the click landed inside the
+// receipt cell (data-noclick) so opening the file in a new tab keeps working.
+document.querySelectorAll('.expense-row[data-href]').forEach(function (row) {
+    row.addEventListener('click', function (e) {
+        if (e.target.closest('a, button, [data-noclick]')) return;
+        window.location = row.dataset.href;
+    });
+});
+</script>
 {% endblock %}
