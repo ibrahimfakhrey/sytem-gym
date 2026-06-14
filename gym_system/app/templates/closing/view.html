@@ -59,6 +59,31 @@
                         </table>
                     </div>
                 </div>
+
+                {# GYM-29 breakdown — what makes up the day's expected cash. #}
+                {% if income_by_type %}
+                {% set type_labels = {'subscription': 'اشتراكات', 'day_pass': 'تذاكر يومية', 'other': 'إيرادات أخرى'} %}
+                <hr>
+                <h6 class="text-muted small mb-3">
+                    <i class="bi bi-list-ul"></i> الإيرادات حسب النوع
+                </h6>
+                <div class="row g-2">
+                    {% for t, amount in income_by_type.items() %}
+                    <div class="col-md-4">
+                        <div class="border rounded p-2">
+                            <div class="small text-muted">{{ type_labels.get(t, t) }}</div>
+                            <div class="fw-bold">{{ "{:,.2f}".format(amount) }} ر.س</div>
+                            {% if income_cash_by_type.get(t, 0) > 0 %}
+                            <div class="small text-success">
+                                <i class="bi bi-cash"></i>
+                                نقدي: {{ "{:,.2f}".format(income_cash_by_type[t]) }} ر.س
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
             </div>
         </div>
 

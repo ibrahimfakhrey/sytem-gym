@@ -126,15 +126,23 @@ class DailyClosing(db.Model):
         # This is simplified - you might want a more accurate calculation
         self.renewals_count = 0  # TODO: Implement renewal detection
 
-        # Get payments by method
-        payments = SubscriptionPayment.query.filter(
-            SubscriptionPayment.brand_id == self.brand_id,
-            db.func.date(SubscriptionPayment.payment_date) == self.closing_date
+        # GYM-29: revenue is sourced from the Income ledger (the canonical
+        # cross-product table for every revenue event), not just
+        # SubscriptionPayment — that way day-pass tickets and any future
+        # Income-only revenue path is reflected in expected_cash and the
+        # cash drawer reconciles cleanly. Branch-scoped if this closing is
+        # branch-specific.
+        incomes_q = Income.query.filter(
+            Income.brand_id == self.brand_id,
+            Income.date == self.closing_date,
         )
+        if self.branch_id:
+            incomes_q = incomes_q.filter(Income.branch_id == self.branch_id)
+        incomes = incomes_q.all()
 
-        self.cash_amount = sum(float(p.amount) for p in payments if p.payment_method == 'cash') or 0
-        self.card_amount = sum(float(p.amount) for p in payments if p.payment_method == 'card') or 0
-        self.transfer_amount = sum(float(p.amount) for p in payments if p.payment_method == 'transfer') or 0
+        self.cash_amount     = sum(float(i.amount) for i in incomes if i.payment_method == 'cash') or 0
+        self.card_amount     = sum(float(i.amount) for i in incomes if i.payment_method == 'card') or 0
+        self.transfer_amount = sum(float(i.amount) for i in incomes if i.payment_method == 'transfer') or 0
 
         self.total_sales = self.cash_amount + self.card_amount + self.transfer_amount
         self.expected_cash = self.cash_amount

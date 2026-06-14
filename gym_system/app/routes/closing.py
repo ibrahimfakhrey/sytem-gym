@@ -237,34 +237,70 @@ def view_closing(closing_id):
         flash('ليس لديك صلاحية', 'danger')
         return redirect(url_for('closing.index'))
 
-    return render_template('closing/view.html', closing=closing)
+    # GYM-29 — recompute the per-type breakdown from Income for the receipt
+    # explanation: "اشتراكات X · تذاكر يومية Y · إيرادات أخرى Z = expected_cash"
+    incomes_q = Income.query.filter(
+        Income.brand_id == closing.brand_id,
+        Income.date == closing.closing_date,
+    )
+    if closing.branch_id:
+        incomes_q = incomes_q.filter(Income.branch_id == closing.branch_id)
+
+    income_by_type: dict[str, float] = {}
+    income_cash_by_type: dict[str, float] = {}
+    for i in incomes_q.all():
+        t = i.type or 'other'
+        amount = float(i.amount or 0)
+        income_by_type[t] = income_by_type.get(t, 0) + amount
+        if i.payment_method == 'cash':
+            income_cash_by_type[t] = income_cash_by_type.get(t, 0) + amount
+
+    return render_template('closing/view.html',
+                           closing=closing,
+                           income_by_type=income_by_type,
+                           income_cash_by_type=income_cash_by_type)
 
 
 def calculate_daily_stats(brand_id, target_date):
-    """Calculate daily statistics for closing"""
-    # New subscriptions (created today)
+    """Calculate daily statistics for closing.
+
+    GYM-29: revenue is sourced from Income (the canonical revenue ledger)
+    rather than SubscriptionPayment alone — that way day-pass tickets and
+    any future Income-only revenue path is reflected in `expected_cash`,
+    and the receptionist's drawer reconciles cleanly. Old subscription
+    payments unchanged: every one also produced an Income row, so the
+    sums match.
+    """
+    # New subscriptions (created today) — kept for headcount/stats
     new_subs = Subscription.query.filter(
         Subscription.brand_id == brand_id,
         db.func.date(Subscription.created_at) == target_date
     ).all()
-
     new_subscriptions_count = len([s for s in new_subs if not hasattr(s, 'is_renewal')])
+    renewals_count = 0  # TODO: real renewal detection
 
-    # Renewals (assuming we check if subscription was extended)
-    # This is simplified - you may need to add is_renewal flag to Subscription
-    renewals_count = 0  # Placeholder - implement based on your logic
+    incomes = Income.query.filter(
+        Income.brand_id == brand_id,
+        Income.date == target_date,
+    ).all()
 
-    # Payments made today
+    cash_sales     = sum(float(i.amount) for i in incomes if i.payment_method == 'cash')
+    card_sales     = sum(float(i.amount) for i in incomes if i.payment_method == 'card')
+    transfer_sales = sum(float(i.amount) for i in incomes if i.payment_method == 'transfer')
+    total_sales = cash_sales + card_sales + transfer_sales
+
+    # Per-type breakdown so the closing view can show what makes up the day:
+    # e.g. {'subscription': 1200, 'day_pass': 150, 'other': 0}.
+    by_type: dict[str, float] = {}
+    for i in incomes:
+        by_type[i.type or 'other'] = by_type.get(i.type or 'other', 0) + float(i.amount or 0)
+
+    # Surface the payments list too — keep the historical key name so the
+    # template doesn't break.
     payments = SubscriptionPayment.query.filter(
         SubscriptionPayment.brand_id == brand_id,
         db.func.date(SubscriptionPayment.payment_date) == target_date
     ).all()
-
-    # Calculate totals by payment method
-    cash_sales = sum([float(p.amount) for p in payments if p.payment_method == 'cash'])
-    card_sales = sum([float(p.amount) for p in payments if p.payment_method == 'card'])
-    transfer_sales = sum([float(p.amount) for p in payments if p.payment_method == 'transfer'])
-    total_sales = cash_sales + card_sales + transfer_sales
 
     return {
         'new_subscriptions_count': new_subscriptions_count,
@@ -274,5 +310,7 @@ def calculate_daily_stats(brand_id, target_date):
         'card_sales': card_sales,
         'transfer_sales': transfer_sales,
         'payments': payments,
-        'new_subscriptions': new_subs
+        'incomes': incomes,
+        'income_by_type': by_type,
+        'new_subscriptions': new_subs,
     }
