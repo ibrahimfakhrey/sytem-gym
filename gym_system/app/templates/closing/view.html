@@ -38,7 +38,7 @@
                             </tr>
                             <tr class="border-top">
                                 <td><strong>إجمالي المبيعات:</strong></td>
-                                <td class="text-end"><strong class="text-success">{{ "{:,.2f}".format(closing.total_sales) }} ر.س</strong></td>
+                                <td class="text-end"><strong class="text-success">{{ "{:,.2f}".format(closing.total_sales or 0) }} ر.س</strong></td>
                             </tr>
                         </table>
                     </div>
@@ -71,11 +71,11 @@
                 <table class="table table-borderless table-lg">
                     <tr>
                         <td><strong>النقدي المتوقع (من النظام):</strong></td>
-                        <td class="text-end"><h5 class="mb-0">{{ "{:,.2f}".format(closing.expected_cash) }} ر.س</h5></td>
+                        <td class="text-end"><h5 class="mb-0">{{ "{:,.2f}".format(closing.expected_cash or 0) }} ر.س</h5></td>
                     </tr>
                     <tr>
                         <td><strong>النقدي الفعلي (المعدود):</strong></td>
-                        <td class="text-end"><h5 class="mb-0">{{ "{:,.2f}".format(closing.actual_cash_submitted) }} ر.س</h5></td>
+                        <td class="text-end"><h5 class="mb-0">{{ "{:,.2f}".format(closing.actual_cash_submitted or 0) }} ر.س</h5></td>
                     </tr>
                     <tr class="border-top">
                         <td><strong>الفرق:</strong></td>
@@ -97,7 +97,7 @@
                 <div class="alert alert-{{ closing.cash_difference_class }} mb-0">
                     <i class="bi bi-exclamation-triangle"></i>
                     {% if closing.cash_difference > 0 %}
-                    <strong>فائض:</strong> هناك زيادة في النقدية بمبلغ {{ "{:,.2f}".format(closing.cash_difference) }} ر.س
+                    <strong>فائض:</strong> هناك زيادة في النقدية بمبلغ {{ "{:,.2f}".format(closing.cash_difference or 0) }} ر.س
                     {% else %}
                     <strong>عجز:</strong> هناك نقص في النقدية بمبلغ {{ "{:,.2f}".format(abs(closing.cash_difference)) }} ر.س
                     {% endif %}

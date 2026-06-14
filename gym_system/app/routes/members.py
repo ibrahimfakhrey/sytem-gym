@@ -830,3 +830,143 @@ def unblock(blocked_id):
     
     flash(f'✅ تم إلغاء حظر {blocked.name}', 'success')
     return redirect(url_for('members.blocked_list'))
+
+
+# ============== GYM-28: duplicate finder + bulk merge ==============
+
+def _owner_or_admin():
+    return current_user.is_owner or current_user.is_brand_manager
+
+
+@members_bp.route('/duplicates')
+@login_required
+@members_required
+def duplicates():
+    """List clusters of duplicate members for the current brand.
+
+    Brand scope: admin picks via ?brand_id=, brand-level users are pinned
+    to their own brand. Branch picker filters which branch the cluster
+    members must belong to (NULL → all branches in this brand).
+    """
+    if not _owner_or_admin():
+        flash('هذه الصفحة للمالك فقط', 'danger')
+        return redirect(url_for('members.index'))
+
+    from app.services.dedupe import find_duplicate_clusters, STRICTNESS_LEVELS
+    from app.models.merge_log import MemberMergeLog
+
+    if current_user.can_view_all_brands:
+        brand_id = request.args.get('brand_id', type=int)
+        if not brand_id:
+            first = Brand.query.filter_by(is_active=True).first()
+            brand_id = first.id if first else None
+    else:
+        brand_id = current_user.brand_id
+
+    if not brand_id:
+        flash('يرجى اختيار البراند', 'warning')
+        return redirect(url_for('dashboard.index'))
+
+    branch_id = request.args.get('branch_id', type=int) or None
+    strictness = request.args.get('strictness', 'medium')
+    if strictness not in STRICTNESS_LEVELS:
+        strictness = 'medium'
+
+    clusters = find_duplicate_clusters(brand_id, branch_id=branch_id,
+                                       strictness=strictness)
+
+    from app.models.company import Branch
+    branches = Branch.query.filter_by(brand_id=brand_id, is_active=True).all()
+    recent_merges = (MemberMergeLog.query
+                     .filter_by(brand_id=brand_id)
+                     .order_by(MemberMergeLog.id.desc()).limit(5).all())
+
+    return render_template('members/duplicates.html',
+                           clusters=clusters,
+                           brand_id=brand_id,
+                           branch_id=branch_id,
+                           branches=branches,
+                           strictness=strictness,
+                           recent_merges=recent_merges)
+
+
+@members_bp.route('/duplicates/merge', methods=['POST'])
+@login_required
+@members_required
+def duplicates_merge():
+    """Apply the auto-pick rule to one or more clusters. The form sends
+    `cluster_ids[]` — each value is a comma-separated list of member ids
+    forming one cluster. Wrapping every cluster in the same db.session
+    means if anything fails the whole batch rolls back."""
+    if not _owner_or_admin():
+        flash('هذه الصفحة للمالك فقط', 'danger')
+        return redirect(url_for('members.index'))
+
+    from app.services.dedupe import merge_cluster
+    cluster_groups = request.form.getlist('cluster_ids[]') or request.form.getlist('cluster_ids')
+    if not cluster_groups:
+        flash('لم يتم اختيار أي مجموعة للدمج', 'warning')
+        return redirect(url_for('members.duplicates', **request.args.to_dict()))
+
+    merged = 0
+    losers = 0
+    failures = []
+    try:
+        for grp in cluster_groups:
+            try:
+                ids = [int(x) for x in grp.split(',') if x.strip()]
+            except ValueError:
+                continue
+            if len(ids) < 2:
+                continue
+            summary = merge_cluster(ids, performed_by=current_user.id)
+            merged += 1
+            losers += len(summary['losers'])
+        db.session.commit()
+        flash(f'تم دمج {merged} مجموعة وتعطيل {losers} عضو مكرر — يمكن التراجع من سجل الدمج',
+              'success')
+    except Exception as exc:
+        db.session.rollback()
+        failures.append(str(exc))
+        flash(f'فشلت عملية الدمج وتم التراجع عن كل التغييرات: {exc}', 'danger')
+
+    qs = {k: v for k, v in request.args.items() if k != 'cluster_ids'}
+    return redirect(url_for('members.duplicates', **qs))
+
+
+@members_bp.route('/duplicates/log')
+@login_required
+@members_required
+def duplicates_log():
+    if not _owner_or_admin():
+        flash('هذه الصفحة للمالك فقط', 'danger')
+        return redirect(url_for('members.index'))
+    from app.models.merge_log import MemberMergeLog
+    if current_user.can_view_all_brands:
+        brand_id = request.args.get('brand_id', type=int)
+        q = MemberMergeLog.query
+        if brand_id:
+            q = q.filter_by(brand_id=brand_id)
+    else:
+        brand_id = current_user.brand_id
+        q = MemberMergeLog.query.filter_by(brand_id=brand_id)
+    logs = q.order_by(MemberMergeLog.id.desc()).limit(200).all()
+    return render_template('members/duplicates_log.html', logs=logs, brand_id=brand_id)
+
+
+@members_bp.route('/duplicates/log/<int:log_id>/undo', methods=['POST'])
+@login_required
+@members_required
+def duplicates_undo(log_id):
+    if not _owner_or_admin():
+        flash('هذه الصفحة للمالك فقط', 'danger')
+        return redirect(url_for('members.index'))
+    from app.services.dedupe import undo_merge
+    try:
+        undo_merge(log_id, undone_by=current_user.id)
+        db.session.commit()
+        flash('تم التراجع عن الدمج بنجاح', 'success')
+    except Exception as exc:
+        db.session.rollback()
+        flash(f'تعذّر التراجع: {exc}', 'danger')
+    return redirect(url_for('members.duplicates_log'))

@@ -21,3 +21,4 @@ from .offer import PromotionalOffer
 from .employee import EmployeeSettings, EmployeeShift, EmployeeReward, EmployeeDeduction, EmployeeLateRule
 from .blocked_member import BlockedMember
 from .day_pass import DayPass, DayPassPrice  # GYM-23
+from .merge_log import MemberMergeLog  # GYM-28

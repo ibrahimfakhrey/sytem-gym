@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+{% block title %}الأعضاء المكررون{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-people-fill text-warning"></i> الأعضاء المكررون</h1>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('members.duplicates_log') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-clock-history"></i> سجل الدمج
+        </a>
+        <a href="{{ url_for('members.index') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-right"></i> رجوع
+        </a>
+    </div>
+</div>
+
+<div class="alert alert-info d-flex align-items-center gap-2">
+    <i class="bi bi-info-circle"></i>
+    <div>
+        <strong>قاعدة الاختيار التلقائي</strong>:
+        يُحتفظ بالعضو الذي لديه أكثر اشتراكات، ثم أكثر فواتير، ثم أكثر حضور، ثم الأقدم.
+        المعلومات الناقصة في السجل المُحتفظ به تنتقل إليه تلقائياً من السجلات المكررة.
+        لا يتم حذف أحد — السجلات المكررة تُعطَّل فقط ويمكن استرجاعها من
+        <a href="{{ url_for('members.duplicates_log') }}">سجل الدمج</a>.
+    </div>
+</div>
+
+<form method="get" class="card mb-3">
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label for="filter-branch" class="form-label">الفرع</label>
+                <select id="filter-branch" name="branch_id" class="form-select">
+                    <option value="">جميع الفروع</option>
+                    {% for b in branches %}
+                    <option value="{{ b.id }}" {% if branch_id == b.id %}selected{% endif %}>{{ b.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label for="filter-strictness" class="form-label">دقة الفحص</label>
+                <select id="filter-strictness" name="strictness" class="form-select">
+                    <option value="strict"  {% if strictness == 'strict'  %}selected{% endif %}>دقيقة — اسم + هاتف مطابقان</option>
+                    <option value="medium"  {% if strictness == 'medium'  %}selected{% endif %}>متوسطة — اسم + (هاتف أو رقم البصمة)</option>
+                    <option value="loose"   {% if strictness == 'loose'   %}selected{% endif %}>فضفاضة — اسم مطابق فقط</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="bi bi-funnel"></i> تطبيق
+                </button>
+            </div>
+        </div>
+    </div>
+</form>
+
+{% if not clusters %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-check-circle display-1 text-success"></i>
+        <h4 class="mt-3">لا توجد تكرارات</h4>
+        <p class="text-muted">لا يوجد أعضاء يتطابقون بالاسم والهاتف ضمن هذا النطاق.</p>
+    </div>
+</div>
+{% else %}
+
+<form method="post" action="{{ url_for('members.duplicates_merge', brand_id=brand_id, branch_id=branch_id, strictness=strictness) }}"
+      onsubmit="return confirm('سيتم دمج كل المجموعات المختارة. متابعة؟');">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="card mb-3">
+        <div class="card-body d-flex justify-content-between align-items-center">
+            <div>
+                <strong>{{ clusters|length }}</strong> مجموعة مكررة في هذا النطاق
+            </div>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-outline-primary" onclick="document.querySelectorAll('.cluster-check').forEach(c=>c.checked=true)">
+                    اختر الكل
+                </button>
+                <button type="submit" class="btn btn-success">
+                    <i class="bi bi-magic"></i> دمج ذكي للمجموعات المختارة
+                </button>
+            </div>
+        </div>
+    </div>
+
+    {% for c in clusters %}
+    {% set keeper_id = c.members|sort(attribute='subs', reverse=true)|first %}
+    <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center bg-warning-subtle">
+            <div class="d-flex align-items-center gap-3">
+                <input class="form-check-input cluster-check" type="checkbox"
+                       name="cluster_ids[]" value="{{ c.ids|join(',') }}" id="cluster-{{ loop.index0 }}">
+                <label for="cluster-{{ loop.index0 }}" class="mb-0">
+                    <strong>{{ c.name }}</strong>
+                    <span class="badge bg-warning text-dark ms-2">{{ c.members|length }} نسخة</span>
+                </label>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>#</th>
+                            <th>الاسم</th>
+                            <th>الهاتف</th>
+                            <th>رقم البصمة</th>
+                            <th>الفرع</th>
+                            <th class="text-center">اشتراكات</th>
+                            <th class="text-center">فواتير</th>
+                            <th class="text-center">حضور</th>
+                            <th class="text-end">الإيرادات</th>
+                            <th>آخر زيارة</th>
+                            <th>تم الإنشاء</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for e in c.members|sort(attribute='subs', reverse=true) %}
+                        <tr {% if loop.first %}class="table-success"{% endif %}>
+                            <td>
+                                <a href="{{ url_for('members.view', member_id=e.m.id) }}" target="_blank" rel="noopener">
+                                    #{{ e.m.id }}
+                                </a>
+                                {% if loop.first %}
+                                <span class="badge bg-success">سيُحتفظ به</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ e.m.name }}</td>
+                            <td>{{ e.m.phone or '—' }}</td>
+                            <td>{{ e.m.fingerprint_id or '—' }}</td>
+                            <td>{{ e.m.branch.name if e.m.branch else '—' }}</td>
+                            <td class="text-center">{{ e.subs }}</td>
+                            <td class="text-center">{{ e.invoices }}</td>
+                            <td class="text-center">{{ e.attendance }}</td>
+                            <td class="text-end">{{ "{:,.0f}".format(e.revenue) }} ر.س</td>
+                            <td class="small text-muted">{{ e.last_attendance.strftime('%Y-%m-%d') if e.last_attendance else '—' }}</td>
+                            <td class="small text-muted">{{ e.m.created_at.strftime('%Y-%m-%d') if e.m.created_at else '—' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</form>
+
+{% endif %}
+
+{% if recent_merges %}
+<div class="card mt-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-clock-history"></i> آخر عمليات الدمج</span>
+        <a href="{{ url_for('members.duplicates_log') }}" class="small">عرض الكل</a>
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+            <thead>
+                <tr>
+                    <th>التاريخ</th>
+                    <th>المُحتفظ به</th>
+                    <th>المُدمج</th>
+                    <th>بواسطة</th>
+                    <th>الحالة</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in recent_merges %}
+                <tr>
+                    <td>{{ log.performed_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td>#{{ log.keeper_id }} — {{ log.keeper.name if log.keeper else '—' }}</td>
+                    <td>#{{ log.loser_id }} — {{ log.loser.name if log.loser else '—' }}</td>
+                    <td>{{ log.performer.name if log.performer else '—' }}</td>
+                    <td>
+                        {% if log.is_active %}
+                        <span class="badge bg-success">مُطبَّق</span>
+                        {% else %}
+                        <span class="badge bg-secondary">تم التراجع</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

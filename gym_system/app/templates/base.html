@@ -125,12 +125,21 @@
 
                         {% if current_user.can_manage_members or current_user.can_manage_attendance %}
                         <li class="nav-item">
-                            <a class="nav-link {% if request.endpoint and 'members' in request.endpoint %}active{% endif %}"
+                            <a class="nav-link {% if request.endpoint and 'members' in request.endpoint and 'duplicates' not in request.endpoint %}active{% endif %}"
                                href="{{ url_for('members.index') }}">
                                 <i class="bi bi-people"></i>
                                 الأعضاء
                             </a>
                         </li>
+                        {% if current_user.is_owner or current_user.is_brand_manager %}
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint and 'duplicates' in request.endpoint %}active{% endif %}"
+                               href="{{ url_for('members.duplicates') }}">
+                                <i class="bi bi-people-fill text-warning"></i>
+                                المكررون
+                            </a>
+                        </li>
+                        {% endif %}
                         {% endif %}
 
                         {% if current_user.can_manage_subscriptions %}
