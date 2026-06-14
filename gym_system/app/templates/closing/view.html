@@ -46,15 +46,15 @@
                         <table class="table table-borderless">
                             <tr>
                                 <td><i class="bi bi-cash text-success"></i> <strong>نقدي:</strong></td>
-                                <td class="text-end"><strong>{{ "{:,.2f}".format(closing.cash_amount) }} ر.س</strong></td>
+                                <td class="text-end"><strong>{{ "{:,.2f}".format(closing.cash_amount or 0) }} ر.س</strong></td>
                             </tr>
                             <tr>
                                 <td><i class="bi bi-credit-card-2-front text-primary"></i> <strong>شبكة:</strong></td>
-                                <td class="text-end"><strong>{{ "{:,.2f}".format(closing.card_amount) }} ر.س</strong></td>
+                                <td class="text-end"><strong>{{ "{:,.2f}".format(closing.card_amount or 0) }} ر.س</strong></td>
                             </tr>
                             <tr>
                                 <td><i class="bi bi-bank text-info"></i> <strong>حوالة:</strong></td>
-                                <td class="text-end"><strong>{{ "{:,.2f}".format(closing.transfer_amount) }} ر.س</strong></td>
+                                <td class="text-end"><strong>{{ "{:,.2f}".format(closing.transfer_amount or 0) }} ر.س</strong></td>
                             </tr>
                         </table>
                     </div>
@@ -107,7 +107,7 @@
                         <td class="text-end">
                             {% if closing.has_cash_difference %}
                             <h4 class="mb-0 text-{{ closing.cash_difference_class }}">
-                                {{ "{:+,.2f}".format(closing.cash_difference) }} ر.س
+                                {{ "{:+,.2f}".format(closing.cash_difference or 0) }} ر.س
                             </h4>
                             {% else %}
                             <h4 class="mb-0 text-success">

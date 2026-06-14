@@ -74,7 +74,7 @@
                         <td>
                             {% if closing.has_cash_difference %}
                             <span class="badge bg-{{ closing.cash_difference_class }}">
-                                {{ "{:,.2f}".format(closing.cash_difference) }} ر.س
+                                {{ "{:,.2f}".format(closing.cash_difference or 0) }} ر.س
                             </span>
                             {% else %}
                             <span class="badge bg-success">

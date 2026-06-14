@@ -15,7 +15,7 @@ from sqlalchemy import func
 from app import db
 from app.models.member import Member
 from app.models.subscription import Subscription, RenewalRejection
-from app.models.finance import Invoice
+from app.models.finance import Invoice, Refund
 from app.models.attendance import MemberAttendance
 from app.models.classes import ClassBooking
 from app.models.complaint import Complaint
@@ -214,6 +214,7 @@ _FK_COLUMNS = [
     (DeviceCommand, 'member_id', 'device_commands'),
     (FingerprintAccessLog, 'member_id', 'fp_access_logs'),
     (RenewalRejection, 'member_id', 'renewal_rejections'),
+    (Refund, 'member_id', 'refunds'),
 ]
 
 
