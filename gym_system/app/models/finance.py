@@ -53,6 +53,8 @@ class Income(db.Model):
 
     description = db.Column(db.Text)
     date = db.Column(db.Date, nullable=False, default=date.today)
+    # GYM-32 — soft-delete; cascades from Subscription/Expense delete.
+    is_deleted = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
 
@@ -103,7 +105,7 @@ class Income(db.Model):
 
     @classmethod
     def get_by_payment_method(cls, brand_id, start_date, end_date):
-        """Get income grouped by payment method"""
+        """Get income grouped by payment method (GYM-32: skip soft-deleted)"""
         from sqlalchemy import func
         return db.session.query(
             cls.payment_method,
@@ -111,16 +113,18 @@ class Income(db.Model):
         ).filter(
             cls.brand_id == brand_id,
             cls.date >= start_date,
-            cls.date <= end_date
+            cls.date <= end_date,
+            cls.is_deleted == False,
         ).group_by(cls.payment_method).all()
 
     @classmethod
     def get_total_for_period(cls, brand_id, start_date, end_date):
-        """Get total income for period"""
+        """Get total income for period (GYM-32: skip soft-deleted)"""
         result = db.session.query(db.func.sum(cls.amount)).filter(
             cls.brand_id == brand_id,
             cls.date >= start_date,
-            cls.date <= end_date
+            cls.date <= end_date,
+            cls.is_deleted == False,
         ).scalar()
         return float(result) if result else 0.0
 
@@ -147,6 +151,8 @@ class Expense(db.Model):
     approved_at = db.Column(db.DateTime)
     rejection_reason = db.Column(db.Text)
 
+    # GYM-32 — soft-delete; hides from /finance/expenses + totals.
+    is_deleted = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
 
@@ -195,32 +201,34 @@ class Expense(db.Model):
 
     @classmethod
     def get_pending_approvals(cls, brand_id=None):
-        """Get all expenses pending approval"""
-        query = cls.query.filter_by(status='pending')
+        """Get all expenses pending approval (GYM-32: skip soft-deleted)"""
+        query = cls.query.filter_by(status='pending').filter(cls.is_deleted == False)
         if brand_id:
             query = query.filter_by(brand_id=brand_id)
         return query.order_by(cls.date.desc()).all()
 
     @classmethod
     def get_total_for_period(cls, brand_id, start_date, end_date):
-        """Get total expenses for period"""
+        """Get total expenses for period (GYM-32: skip soft-deleted)"""
         result = db.session.query(db.func.sum(cls.amount)).filter(
             cls.brand_id == brand_id,
             cls.date >= start_date,
-            cls.date <= end_date
+            cls.date <= end_date,
+            cls.is_deleted == False,
         ).scalar()
         return float(result) if result else 0.0
 
     @classmethod
     def get_by_category(cls, brand_id, start_date, end_date):
-        """Get expenses grouped by category"""
+        """Get expenses grouped by category (GYM-32: skip soft-deleted)"""
         return db.session.query(
             cls.category_name,
             db.func.sum(cls.amount).label('total')
         ).filter(
             cls.brand_id == brand_id,
             cls.date >= start_date,
-            cls.date <= end_date
+            cls.date <= end_date,
+            cls.is_deleted == False,
         ).group_by(cls.category_name).all()
 
 

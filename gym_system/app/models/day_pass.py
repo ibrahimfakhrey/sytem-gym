@@ -54,6 +54,9 @@ class DayPass(db.Model):
 
     # Money
     price = db.Column(db.Numeric(10, 2), nullable=False)  # snapshot at issue time
+    # GYM-33 — receptionist-applied discount in ر.س. Stored separately so we
+    # can show both "السعر الأصلي" and "بعد الخصم" on the printable ticket.
+    discount = db.Column(db.Numeric(10, 2), default=0, nullable=False)
     payment_method = db.Column(db.String(20), default='cash')
 
     notes = db.Column(db.Text)

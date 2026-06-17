@@ -196,6 +196,14 @@ def create():
         valid_until_str = request.form.get('valid_until') or ''
         payment_method = request.form.get('payment_method') or 'cash'
         notes = (request.form.get('notes') or '').strip() or None
+        # GYM-33 — optional receptionist discount in ر.س. Clamp to [0, price]
+        # below so a typo can't produce a negative-amount Income row.
+        try:
+            discount = float(request.form.get('discount') or 0)
+        except ValueError:
+            discount = 0.0
+        if discount < 0:
+            discount = 0.0
 
         # Branch is now required so the owner's branch picker can find these
         # tickets. Brand-level users pick from the form; branch users are
@@ -226,6 +234,26 @@ def create():
             return render_template('day_pass/create.html', activities=activities,
                                    branches=branches, brand_id=brand_id)
 
+        # Clamp discount so it never exceeds the catalogue price.
+        if discount > float(price_row.price):
+            discount = float(price_row.price)
+        final_amount = max(0.0, float(price_row.price) - discount)
+
+        # GYM-31 — double-submit dedupe. Key by (brand, branch, customer name,
+        # price, 30-second window): a receptionist double-clicking "save"
+        # within that window gets the existing ticket, not a duplicate.
+        from datetime import datetime as _dt, timedelta as _td
+        _dup = DayPass.query.filter(
+            DayPass.brand_id == brand_id,
+            DayPass.branch_id == branch_id,
+            DayPass.customer_name == name[:120],
+            DayPass.price == price_row.price,
+            DayPass.created_at >= _dt.utcnow() - _td(seconds=30),
+        ).order_by(DayPass.created_at.desc()).first()
+        if _dup:
+            flash(f'تم إصدار التذكرة للتو (#{_dup.id}) — لم نقم بإنشاء تكرار.', 'info')
+            return redirect(url_for('day_pass.index'))
+
         def _parse_time(s):
             try:
                 return datetime.strptime(s, '%H:%M').time() if s else None
@@ -246,6 +274,7 @@ def create():
             valid_from=valid_from,
             valid_until=valid_until,
             price=price_row.price,
+            discount=discount,
             payment_method=payment_method,
             notes=notes,
             created_by=current_user.id,
@@ -257,7 +286,7 @@ def create():
             brand_id=brand_id,
             branch_id=branch_id,
             service_type_id=service_type_id,
-            amount=price_row.price,
+            amount=final_amount,
             type='day_pass',
             payment_method=payment_method,
             description=f'تذكرة يومية — {name}',
@@ -265,7 +294,10 @@ def create():
             created_by=current_user.id,
         ))
         db.session.commit()
-        flash(f'تم إصدار تذكرة #{dp.id} بقيمة {float(price_row.price):,.0f} ر.س', 'success')
+        if discount > 0:
+            flash(f'تم إصدار تذكرة #{dp.id} بقيمة {final_amount:,.0f} ر.س (بعد خصم {discount:,.0f} ر.س)', 'success')
+        else:
+            flash(f'تم إصدار تذكرة #{dp.id} بقيمة {final_amount:,.0f} ر.س', 'success')
         return redirect(url_for('day_pass.index'))
 
     return render_template('day_pass/create.html', activities=activities,

@@ -120,10 +120,31 @@ def index():
     status = request.args.get('status', '')
     expiring = request.args.get('expiring', type=int)
     service_type_id = request.args.get('service_type_id', type=int)
+    # GYM-34 — drill-down filters from /reports/staff-performance.
+    created_by = request.args.get('created_by', type=int)
+    date_from = request.args.get('date_from', '')
+    date_to = request.args.get('date_to', '')
 
     # Base query — honor GYM-12 owner branch picker
     query = apply_branch_filter(Subscription.query, Subscription,
                                 branch_filter_id=resolve_owner_branch_filter())
+    # GYM-32 — hide soft-deleted rows from the list (still in DB for audit)
+    query = query.filter(Subscription.is_deleted == False)
+
+    # GYM-34 — created_by + date range filters
+    if created_by:
+        query = query.filter(Subscription.created_by == created_by)
+    if date_from:
+        try:
+            query = query.filter(Subscription.created_at >= date.fromisoformat(date_from))
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            from datetime import timedelta
+            query = query.filter(Subscription.created_at < date.fromisoformat(date_to) + timedelta(days=1))
+        except ValueError:
+            pass
 
     # Status filter
     if status:
@@ -250,6 +271,7 @@ def new_select_member():
             Subscription.member_id.in_(visible_ids),
             Subscription.status == 'active',
             Subscription.end_date >= today,
+            Subscription.is_deleted == False,  # GYM-32
         ).all():
             active_subs[sub.member_id] = sub
 
@@ -358,6 +380,19 @@ def create():
     form.offer_id.choices = [(0, '-- بدون عرض --')] + [(o.id, f'{o.name} ({o.discount_display})') for o in offers]
 
     if form.validate_on_submit():
+        # GYM-31 — double-submit dedupe. If a Subscription for this member
+        # was created in the last 30 seconds (refresh, double-click, browser
+        # back-and-resubmit, network retry), redirect to the existing one
+        # instead of creating a twin row.
+        from datetime import datetime as _dt, timedelta as _td
+        _dup = Subscription.query.filter(
+            Subscription.member_id == member.id,
+            Subscription.created_at >= _dt.utcnow() - _td(seconds=30),
+        ).order_by(Subscription.created_at.desc()).first()
+        if _dup:
+            flash('تم إنشاء هذا الاشتراك للتو — لم نقم بإنشاء تكرار.', 'info')
+            return redirect(url_for('subscriptions.view', subscription_id=_dup.id))
+
         plan = Plan.query.get(form.plan_id.data)
 
         # Calculate amounts
@@ -590,6 +625,18 @@ def renew(subscription_id):
         form.amount_paid.data = subscription.plan.price
 
     if form.validate_on_submit():
+        # GYM-31 — double-submit dedupe for renewals. If a payment was
+        # written against this same subscription in the last 30 seconds, we
+        # treat the second POST as a duplicate.
+        from datetime import datetime as _dt, timedelta as _td
+        _dup = SubscriptionPayment.query.filter(
+            SubscriptionPayment.subscription_id == subscription.id,
+            SubscriptionPayment.payment_date >= _dt.utcnow() - _td(seconds=30),
+        ).order_by(SubscriptionPayment.payment_date.desc()).first()
+        if _dup:
+            flash('تم تجديد الاشتراك للتو — لم نقم بإنشاء تكرار.', 'info')
+            return redirect(url_for('subscriptions.view', subscription_id=subscription.id))
+
         plan = Plan.query.get(form.plan_id.data)
         if not plan:
             flash('الباقة غير موجودة', 'danger')
@@ -823,8 +870,18 @@ def add_payment(subscription_id):
     form = PaymentForm()
 
     if form.validate_on_submit():
+        # GYM-31 — double-submit dedupe for partial payments.
+        from datetime import datetime as _dt, timedelta as _td
+        _dup = SubscriptionPayment.query.filter(
+            SubscriptionPayment.subscription_id == subscription.id,
+            SubscriptionPayment.payment_date >= _dt.utcnow() - _td(seconds=30),
+        ).order_by(SubscriptionPayment.payment_date.desc()).first()
+        if _dup:
+            flash('تم تسجيل الدفعة للتو — لم نقم بإنشاء تكرار.', 'info')
+            return redirect(url_for('subscriptions.view', subscription_id=subscription.id))
+
         amount = float(form.amount.data)
-        
+
         # Validate payment doesn't exceed remaining amount
         remaining = float(subscription.remaining_amount or 0)
         if remaining <= 0:
@@ -917,11 +974,12 @@ def expiring():
     # Base query
     query = apply_branch_filter(Subscription.query, Subscription)
 
-    # Filter expiring subscriptions
+    # Filter expiring subscriptions (GYM-32: skip soft-deleted)
     query = query.filter(
         Subscription.status == 'active',
         Subscription.end_date >= today,
-        Subscription.end_date <= end_date
+        Subscription.end_date <= end_date,
+        Subscription.is_deleted == False,
     ).order_by(Subscription.end_date)
 
     subscriptions = query.paginate(page=page, per_page=per_page, error_out=False)
@@ -1069,3 +1127,65 @@ def invoice(subscription_id):
                           subscription=subscription,
                           payments=payments,
                           income_records=income_records)
+
+
+# ─── GYM-32 — safe edit + soft-delete ─────────────────────────────────────
+
+@subscriptions_bp.route('/<int:subscription_id>/edit', methods=['GET', 'POST'])
+@login_required
+@members_required
+def edit(subscription_id):
+    """Safe-field edit: notes + end_date only. Money-touching fields are
+    intentionally NOT exposed here so the books stay clean. Anything else
+    needs a refund + new subscription instead."""
+    subscription = Subscription.query.get_or_404(subscription_id)
+    if not check_entity_access(subscription):
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('subscriptions.index'))
+    if subscription.is_deleted:
+        flash('الاشتراك محذوف.', 'warning')
+        return redirect(url_for('subscriptions.index'))
+
+    if request.method == 'POST':
+        # end_date — allow extending or shortening; reject obviously bad values.
+        new_end_str = (request.form.get('end_date') or '').strip()
+        new_notes = (request.form.get('notes') or '').strip() or None
+        if new_end_str:
+            try:
+                new_end = date.fromisoformat(new_end_str)
+            except ValueError:
+                flash('تاريخ النهاية غير صالح', 'danger')
+                return redirect(url_for('subscriptions.edit', subscription_id=subscription.id))
+            if subscription.start_date and new_end < subscription.start_date:
+                flash('تاريخ النهاية أقدم من تاريخ البداية', 'danger')
+                return redirect(url_for('subscriptions.edit', subscription_id=subscription.id))
+            subscription.end_date = new_end
+        subscription.notes = new_notes
+        db.session.commit()
+        flash('تم تحديث الاشتراك', 'success')
+        return redirect(url_for('subscriptions.view', subscription_id=subscription.id))
+
+    return render_template('subscriptions/edit.html', subscription=subscription)
+
+
+@subscriptions_bp.route('/<int:subscription_id>/delete', methods=['POST'])
+@login_required
+@members_required
+def delete(subscription_id):
+    """Soft-delete: flips is_deleted on the subscription AND its linked
+    Income rows so the day's revenue total stays correct. Reversible by
+    flipping the flags back via a manual DB query."""
+    subscription = Subscription.query.get_or_404(subscription_id)
+    if not check_entity_access(subscription):
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('subscriptions.index'))
+    if subscription.is_deleted:
+        flash('الاشتراك محذوف مسبقاً.', 'warning')
+        return redirect(url_for('subscriptions.index'))
+
+    subscription.is_deleted = True
+    Income.query.filter_by(subscription_id=subscription.id).update(
+        {'is_deleted': True}, synchronize_session=False)
+    db.session.commit()
+    flash(f'تم حذف الاشتراك #{subscription.id} وعكس إيراداته.', 'success')
+    return redirect(url_for('members.view', member_id=subscription.member_id))

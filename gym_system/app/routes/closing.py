@@ -242,6 +242,7 @@ def view_closing(closing_id):
     incomes_q = Income.query.filter(
         Income.brand_id == closing.brand_id,
         Income.date == closing.closing_date,
+        Income.is_deleted == False,  # GYM-32 — skip soft-deleted
     )
     if closing.branch_id:
         incomes_q = incomes_q.filter(Income.branch_id == closing.branch_id)
@@ -271,10 +272,11 @@ def calculate_daily_stats(brand_id, target_date):
     payments unchanged: every one also produced an Income row, so the
     sums match.
     """
-    # New subscriptions (created today) — kept for headcount/stats
+    # New subscriptions (created today) — kept for headcount/stats (GYM-32)
     new_subs = Subscription.query.filter(
         Subscription.brand_id == brand_id,
-        db.func.date(Subscription.created_at) == target_date
+        db.func.date(Subscription.created_at) == target_date,
+        Subscription.is_deleted == False,
     ).all()
     new_subscriptions_count = len([s for s in new_subs if not hasattr(s, 'is_renewal')])
     renewals_count = 0  # TODO: real renewal detection
@@ -282,6 +284,7 @@ def calculate_daily_stats(brand_id, target_date):
     incomes = Income.query.filter(
         Income.brand_id == brand_id,
         Income.date == target_date,
+        Income.is_deleted == False,  # GYM-32 — skip soft-deleted
     ).all()
 
     cash_sales     = sum(float(i.amount) for i in incomes if i.payment_method == 'cash')

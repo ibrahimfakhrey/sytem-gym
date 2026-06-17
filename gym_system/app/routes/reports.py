@@ -99,22 +99,23 @@ def staff_performance():
     # Get performance data for each employee
     staff_data = []
     for emp in employees:
-        # Subscriptions created by this employee
+        # GYM-32 — exclude soft-deleted subscriptions from this employee's stats.
         subs_created = Subscription.query.filter(
             Subscription.created_by == emp.id,
-            Subscription.created_at >= start_date
+            Subscription.created_at >= start_date,
+            Subscription.is_deleted == False,
         ).count()
-        
-        # Revenue from subscriptions created by this employee
+
         revenue = db.session.query(func.sum(Subscription.total_amount)).filter(
             Subscription.created_by == emp.id,
-            Subscription.created_at >= start_date
+            Subscription.created_at >= start_date,
+            Subscription.is_deleted == False,
         ).scalar() or 0
-        
-        # Renewals (subscriptions where member already had a previous subscription)
+
         renewals = db.session.query(Subscription).filter(
             Subscription.created_by == emp.id,
             Subscription.created_at >= start_date,
+            Subscription.is_deleted == False,
             Subscription.member_id.in_(
                 db.session.query(Subscription.member_id).group_by(
                     Subscription.member_id
@@ -220,9 +221,12 @@ def financial():
     else:
         start_date = today.replace(day=1)
     
-    # Build base filter
-    income_filter = [Income.date >= start_date, Income.date <= today]
-    sub_filter = [Subscription.created_at >= start_date]
+    # Build base filter. GYM-32 — soft-deleted income + subscriptions stay
+    # out of the financial report.
+    income_filter = [Income.date >= start_date, Income.date <= today,
+                     Income.is_deleted == False]
+    sub_filter = [Subscription.created_at >= start_date,
+                  Subscription.is_deleted == False]
     gc_filter = [func.date(GiftCard.created_at) >= start_date]
     
     if brand_id:
@@ -556,7 +560,8 @@ def financial_export():
     else:
         start_date = today.replace(day=1)
 
-    flt = [Income.date >= start_date, Income.date <= today]
+    flt = [Income.date >= start_date, Income.date <= today,
+           Income.is_deleted == False]  # GYM-32
     if brand_id:
         flt.append(Income.brand_id == brand_id)
     payment_breakdown = db.session.query(

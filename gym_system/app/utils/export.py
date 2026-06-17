@@ -211,13 +211,16 @@ def export_financial_report(brand_id, start_date, end_date):
         income = Income.get_total_for_period(brand_id, start_date, end_date)
         expenses = Expense.get_total_for_period(brand_id, start_date, end_date)
     else:
+        # GYM-32 — skip soft-deleted
         income = db.session.query(db.func.sum(Income.amount)).filter(
             Income.date >= start_date,
-            Income.date <= end_date
+            Income.date <= end_date,
+            Income.is_deleted == False,
         ).scalar() or 0
         expenses = db.session.query(db.func.sum(Expense.amount)).filter(
             Expense.date >= start_date,
-            Expense.date <= end_date
+            Expense.date <= end_date,
+            Expense.is_deleted == False,
         ).scalar() or 0
 
     report_data = {

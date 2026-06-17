@@ -31,17 +31,19 @@ def dashboard():
     else:
         brand_id = current_user.brand_id
 
-    # Calculate today's total sales
+    # Calculate today's total sales (GYM-32: skip soft-deleted)
     sales_query = db.session.query(db.func.sum(Income.amount)).filter(
-        Income.date == today
+        Income.date == today,
+        Income.is_deleted == False,
     )
     if brand_id:
         sales_query = sales_query.filter(Income.brand_id == brand_id)
     total_sales = sales_query.scalar() or 0
 
-    # Calculate today's total expenses
+    # Calculate today's total expenses (GYM-32: skip soft-deleted)
     expenses_query = db.session.query(db.func.sum(Expense.amount)).filter(
-        Expense.date == today
+        Expense.date == today,
+        Expense.is_deleted == False,
     )
     if brand_id:
         expenses_query = expenses_query.filter(Expense.brand_id == brand_id)
@@ -86,20 +88,24 @@ def dashboard():
             'message': 'لا توجد مبيعات اليوم حتى الآن'
         })
 
-    # Get recent payments (last 10 today)
-    payments_query = SubscriptionPayment.query.filter(
-        db.func.date(SubscriptionPayment.payment_date) == today
+    # Get recent payments (last 10 today). GYM-32 — drop payments tied to
+    # soft-deleted subscriptions; otherwise refunds/cancellations would
+    # ghost-appear in "آخر المبيعات اليوم".
+    payments_query = SubscriptionPayment.query.join(Subscription).filter(
+        db.func.date(SubscriptionPayment.payment_date) == today,
+        Subscription.is_deleted == False,
     )
     if brand_id:
-        payments_query = payments_query.join(Subscription).filter(
-            Subscription.brand_id == brand_id
-        )
+        payments_query = payments_query.filter(Subscription.brand_id == brand_id)
     recent_payments = payments_query.order_by(
         SubscriptionPayment.payment_date.desc()
     ).limit(10).all()
 
-    # Get recent expenses (last 5 today)
-    expenses_list_query = Expense.query.filter(Expense.date == today)
+    # Get recent expenses (last 5 today; GYM-32 — skip soft-deleted)
+    expenses_list_query = Expense.query.filter(
+        Expense.date == today,
+        Expense.is_deleted == False,
+    )
     if brand_id:
         expenses_list_query = expenses_list_query.filter(Expense.brand_id == brand_id)
     recent_expenses = expenses_list_query.order_by(
@@ -107,7 +113,9 @@ def dashboard():
     ).limit(5).all()
 
     # Get pending expenses count
-    pending_expenses_query = Expense.query.filter_by(status='pending')
+    pending_expenses_query = Expense.query.filter_by(status='pending').filter(
+        Expense.is_deleted == False  # GYM-32
+    )
     if brand_id:
         pending_expenses_query = pending_expenses_query.filter(Expense.brand_id == brand_id)
     pending_expenses_count = pending_expenses_query.count()
@@ -176,10 +184,11 @@ def sales_transactions():
     else:
         query = query.filter(Subscription.brand_id == current_user.brand_id)
 
-    # Date filter
+    # Date filter (GYM-32 — skip soft-deleted subscriptions)
     query = query.filter(
         db.func.date(SubscriptionPayment.payment_date) >= from_date,
-        db.func.date(SubscriptionPayment.payment_date) <= to_date
+        db.func.date(SubscriptionPayment.payment_date) <= to_date,
+        Subscription.is_deleted == False,
     )
 
     # Payment method filter
@@ -305,15 +314,17 @@ def income_list():
         # Central accountant - see all branches in brand
         query = Income.query.filter_by(brand_id=current_user.brand_id)
 
-    # Date filter
-    query = query.filter(Income.date >= from_date, Income.date <= to_date)
+    # Date filter (GYM-32 — skip soft-deleted)
+    query = query.filter(Income.date >= from_date, Income.date <= to_date,
+                         Income.is_deleted == False)
 
     # Payment method filter
     if payment_method:
         query = query.filter(Income.payment_method == payment_method)
 
     # Calculate totals by payment method
-    base_filter = [Income.date >= from_date, Income.date <= to_date]
+    base_filter = [Income.date >= from_date, Income.date <= to_date,
+                   Income.is_deleted == False]
     if current_user.brand_id:
         base_filter.append(Income.brand_id == current_user.brand_id)
         # Branch accountant filter
@@ -388,6 +399,8 @@ def expenses():
         query = Expense.query.filter_by(brand_id=current_user.brand_id)
 
     query = query.filter(Expense.date >= from_date, Expense.date <= to_date)
+    # GYM-32 — hide soft-deleted expenses
+    query = query.filter(Expense.is_deleted == False)
 
     # Additional filters
     if status:
@@ -404,7 +417,10 @@ def expenses():
         query = query.filter(Expense.branch_id == branch_id_filter)
 
     # Calculate totals
-    base_filter = [Expense.date >= from_date, Expense.date <= to_date]
+    base_filter = [
+        Expense.date >= from_date, Expense.date <= to_date,
+        Expense.is_deleted == False,
+    ]
     if current_user.brand_id:
         base_filter.append(Expense.brand_id == current_user.brand_id)
         # Branch accountant filter
@@ -490,6 +506,22 @@ def expenses_create():
         brand_id = brand.id
 
     if form.validate_on_submit():
+        # GYM-31 — double-submit dedupe. Key by (brand, branch, category,
+        # amount, 30-second window) — receptionist double-clicking save
+        # gets a redirect instead of two identical expense rows.
+        from datetime import datetime as _dt, timedelta as _td
+        _dup = Expense.query.filter(
+            Expense.brand_id == brand_id,
+            Expense.branch_id == current_user.branch_id,
+            Expense.category_name == form.category_name.data,
+            Expense.amount == form.amount.data,
+            Expense.created_at >= _dt.utcnow() - _td(seconds=30),
+            Expense.is_deleted == False,
+        ).order_by(Expense.created_at.desc()).first()
+        if _dup:
+            flash(f'تم تسجيل المصروف للتو (#{_dup.id}) — لم نقم بإنشاء تكرار.', 'info')
+            return redirect(url_for('finance.expenses'))
+
         expense = Expense(
             brand_id=brand_id,
             branch_id=current_user.branch_id,
@@ -537,7 +569,7 @@ def pending_expenses():
     """View pending expenses for approval"""
     page, per_page = pagination_args(request)
 
-    # Base query for pending expenses
+    # Base query for pending expenses (GYM-32: skip soft-deleted)
     if current_user.can_view_all_brands:
         brand_id = request.args.get('brand_id', type=int)
         if brand_id:
@@ -546,6 +578,7 @@ def pending_expenses():
             query = Expense.query.filter_by(status='pending')
     else:
         query = Expense.query.filter_by(brand_id=current_user.brand_id, status='pending')
+    query = query.filter(Expense.is_deleted == False)
 
     # Pagination
     expenses = query.order_by(Expense.created_at.desc()).paginate(
@@ -557,9 +590,10 @@ def pending_expenses():
     if current_user.can_view_all_brands:
         brands = Brand.query.filter_by(is_active=True).all()
 
-    # Calculate total pending amount
+    # Calculate total pending amount (GYM-32: skip soft-deleted)
     total_pending = db.session.query(db.func.sum(Expense.amount)).filter(
-        Expense.status == 'pending'
+        Expense.status == 'pending',
+        Expense.is_deleted == False,
     )
     if not current_user.can_view_all_brands:
         total_pending = total_pending.filter(Expense.brand_id == current_user.brand_id)
@@ -888,6 +922,79 @@ def expense_view(expense_id):
     return render_template('finance/expense_view.html', expense=expense)
 
 
+# ─── GYM-32 — expense edit + soft-delete ──────────────────────────────────
+
+@finance_bp.route('/expenses/<int:expense_id>/edit', methods=['GET', 'POST'])
+@login_required
+@finance_required
+def expense_edit(expense_id):
+    """Safe-field edit: amount, category, description, receipt. Status +
+    branch + brand are intentionally fixed."""
+    expense = Expense.query.get_or_404(expense_id)
+    if not current_user.can_access_brand(expense.brand_id):
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('finance.expenses'))
+    if expense.is_deleted:
+        flash('المصروف محذوف.', 'warning')
+        return redirect(url_for('finance.expenses'))
+
+    categories = ExpenseCategory.query.filter_by(brand_id=expense.brand_id).all()
+
+    if request.method == 'POST':
+        try:
+            new_amount = float(request.form.get('amount') or expense.amount)
+        except ValueError:
+            flash('قيمة المبلغ غير صالحة', 'danger')
+            return redirect(url_for('finance.expense_edit', expense_id=expense.id))
+        if new_amount <= 0:
+            flash('المبلغ يجب أن يكون أكبر من صفر', 'danger')
+            return redirect(url_for('finance.expense_edit', expense_id=expense.id))
+
+        cat_name = (request.form.get('category_name') or expense.category_name).strip()
+        cat_row = ExpenseCategory.query.filter_by(
+            brand_id=expense.brand_id, name=cat_name
+        ).first()
+
+        expense.amount = new_amount
+        expense.category_name = cat_name
+        if cat_row:
+            expense.category_id = cat_row.id
+        expense.description = (request.form.get('description') or '').strip() or None
+
+        # Optional new receipt
+        receipt = request.files.get('receipt_image')
+        if receipt and getattr(receipt, 'filename', ''):
+            saved = save_uploaded_file(receipt, folder='receipts')
+            if saved:
+                expense.receipt_image = saved
+
+        db.session.commit()
+        flash('تم تحديث المصروف', 'success')
+        return redirect(url_for('finance.expense_view', expense_id=expense.id))
+
+    return render_template('finance/expense_edit.html',
+                           expense=expense, categories=categories)
+
+
+@finance_bp.route('/expenses/<int:expense_id>/delete', methods=['POST'])
+@login_required
+@finance_required
+def expense_delete(expense_id):
+    """Soft-delete an expense (status check + brand check)."""
+    expense = Expense.query.get_or_404(expense_id)
+    if not current_user.can_access_brand(expense.brand_id):
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('finance.expenses'))
+    if expense.is_deleted:
+        flash('المصروف محذوف مسبقاً.', 'warning')
+        return redirect(url_for('finance.expenses'))
+
+    expense.is_deleted = True
+    db.session.commit()
+    flash(f'تم حذف المصروف #{expense.id}.', 'success')
+    return redirect(url_for('finance.expenses'))
+
+
 @finance_bp.route('/expenses/<int:expense_id>/approve', methods=['POST'])
 @login_required
 @brand_manager_required
@@ -986,7 +1093,8 @@ def _scoped_brand_id():
 @finance_required
 def income_export():
     fd, td = _date_range_args()
-    q = Income.query.filter(Income.date >= fd, Income.date <= td)
+    q = Income.query.filter(Income.date >= fd, Income.date <= td,
+                            Income.is_deleted == False)  # GYM-32
     bid = _scoped_brand_id()
     if bid:
         q = q.filter(Income.brand_id == bid)

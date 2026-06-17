@@ -108,6 +108,9 @@ class Subscription(db.Model):
 
     notes = db.Column(db.Text)
     proof_image = db.Column(db.String(255))
+    # GYM-32 — soft-delete. Reports + lists filter is_deleted=False so the
+    # row vanishes from the UI but stays in the DB for audit + undo.
+    is_deleted = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
 

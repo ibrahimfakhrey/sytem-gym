@@ -265,6 +265,7 @@ def search_members_api():
             has_active = Subscription.query.filter(
                 Subscription.member_id == m.id,
                 Subscription.status == 'active',
+                Subscription.is_deleted == False,  # GYM-32
             ).first() is not None
             results.append({
                 'id': m.id,

@@ -120,6 +120,41 @@ def create_app(config_name=None):
                 ):
                     if col not in inv_cols:
                         conn.exec_driver_sql(f"ALTER TABLE invoices ADD COLUMN {col} {ddl}")
+                # day_passes.discount (GYM-33) + subscriptions/expenses.is_deleted (GYM-32)
+                try:
+                    dp_cols = [r[1] for r in conn.exec_driver_sql(
+                        "PRAGMA table_info(day_passes)"
+                    ).fetchall()]
+                    if dp_cols and 'discount' not in dp_cols:
+                        conn.exec_driver_sql(
+                            "ALTER TABLE day_passes ADD COLUMN discount NUMERIC(10,2) DEFAULT 0 NOT NULL"
+                        )
+                except Exception:
+                    pass
+                try:
+                    sub_cols = [r[1] for r in conn.exec_driver_sql(
+                        "PRAGMA table_info(subscriptions)"
+                    ).fetchall()]
+                    if sub_cols and 'is_deleted' not in sub_cols:
+                        conn.exec_driver_sql(
+                            "ALTER TABLE subscriptions ADD COLUMN is_deleted BOOLEAN DEFAULT 0 NOT NULL"
+                        )
+                    exp_cols = [r[1] for r in conn.exec_driver_sql(
+                        "PRAGMA table_info(expenses)"
+                    ).fetchall()]
+                    if exp_cols and 'is_deleted' not in exp_cols:
+                        conn.exec_driver_sql(
+                            "ALTER TABLE expenses ADD COLUMN is_deleted BOOLEAN DEFAULT 0 NOT NULL"
+                        )
+                    inc_cols = [r[1] for r in conn.exec_driver_sql(
+                        "PRAGMA table_info(income)"
+                    ).fetchall()]
+                    if inc_cols and 'is_deleted' not in inc_cols:
+                        conn.exec_driver_sql(
+                            "ALTER TABLE income ADD COLUMN is_deleted BOOLEAN DEFAULT 0 NOT NULL"
+                        )
+                except Exception:
+                    pass
                 # complaint_attachments (GYM-21)
                 try:
                     conn.exec_driver_sql(

@@ -207,10 +207,12 @@ def owner():
 
     for brand in brands:
         # Current week revenue (last 7 days)
+        # GYM-32 — skip soft-deleted income from baseline + week math.
         current_week_revenue = db.session.query(db.func.sum(Income.amount)).filter(
             Income.brand_id == brand.id,
             Income.date >= week_ago,
-            Income.date <= today
+            Income.date <= today,
+            Income.is_deleted == False,
         ).scalar() or 0
 
         # Previous 4 weeks average (days 8-35)
@@ -219,7 +221,8 @@ def owner():
         baseline_revenue = db.session.query(db.func.sum(Income.amount)).filter(
             Income.brand_id == brand.id,
             Income.date >= baseline_start,
-            Income.date <= baseline_end
+            Income.date <= baseline_end,
+            Income.is_deleted == False,
         ).scalar() or 0
 
         # Calculate weekly baseline average
@@ -300,9 +303,10 @@ def owner():
         func.count(Income.id).label('transactions')
     ).filter(
         Income.date >= month_start,
-        Income.date <= today
+        Income.date <= today,
+        Income.is_deleted == False,  # GYM-32
     ).group_by(Income.payment_method).all()
-    
+
     payment_stats = {
         'cash': {'amount': 0, 'transactions': 0, 'percentage': 0},
         'card': {'amount': 0, 'transactions': 0, 'percentage': 0},
@@ -405,12 +409,14 @@ def branch_detail(branch_id):
         'income': db.session.query(func.sum(Income.amount)).filter(
             Income.branch_id == branch_id,
             Income.date >= month_start,
-            Income.date <= today
+            Income.date <= today,
+            Income.is_deleted == False,  # GYM-32
         ).scalar() or 0,
         'expenses': db.session.query(func.sum(Expense.amount)).filter(
             Expense.branch_id == branch_id,
             Expense.date >= month_start,
-            Expense.date <= today
+            Expense.date <= today,
+            Expense.is_deleted == False,  # GYM-32
         ).scalar() or 0
     }
     stats['profit'] = stats['income'] - stats['expenses']
@@ -457,7 +463,8 @@ def branch_detail(branch_id):
     ).filter(
         Income.branch_id == branch_id,
         Income.date >= month_start,
-        Income.date <= today
+        Income.date <= today,
+        Income.is_deleted == False,  # GYM-32
     ).group_by(
         ServiceType.id, ServiceType.name, ServiceType.category
     ).order_by(func.sum(Income.amount).desc()).all()
@@ -919,13 +926,14 @@ def finance_admin():
         total_income += income
         total_expenses += expenses
 
-    # Payment method breakdown for the month
+    # Payment method breakdown for the month (GYM-32: skip soft-deleted)
     payment_breakdown = db.session.query(
         Income.payment_method,
         func.sum(Income.amount)
     ).filter(
         Income.date >= month_start,
-        Income.date <= today
+        Income.date <= today,
+        Income.is_deleted == False,
     ).group_by(Income.payment_method).all()
 
     payment_stats = {
@@ -1085,7 +1093,9 @@ def get_brand_stats(brand_id, start_date, end_date):
     ).filter(
         Income.brand_id == brand_id,
         Income.date >= start_date,
-        Income.date <= end_date
+        Income.date <= end_date,
+        Income.is_deleted == False,  # GYM-32
+        Subscription.is_deleted == False,
     ).group_by(ServiceType.id, ServiceType.name
     ).order_by(func.sum(Income.amount).desc()).all()
 
@@ -1096,7 +1106,8 @@ def get_brand_stats(brand_id, start_date, end_date):
     ).filter(
         Income.brand_id == brand_id,
         Income.date >= start_date,
-        Income.date <= end_date
+        Income.date <= end_date,
+        Income.is_deleted == False,  # GYM-32
     ).group_by(Income.payment_method).all()
 
     # Gift card analytics

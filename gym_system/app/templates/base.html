@@ -557,5 +557,28 @@
     {% endif %}
 
     {% block extra_js %}{% endblock %}
+
+    {# GYM-31 — disable submit buttons tagged data-dedupe-submit on click so
+       a double-click can't fire two POSTs. Server-side dedupe window is the
+       real defense; this is a UX backstop. We re-enable after 8s in case the
+       browser keeps the page alive (rare slow connections). #}
+    <script>
+    document.addEventListener('submit', function (e) {
+        var form = e.target;
+        if (!form || form.tagName !== 'FORM') return;
+        var btn = form.querySelector('button[type=submit][data-dedupe-submit]');
+        if (!btn || btn.disabled) return;
+        btn.disabled = true;
+        var original = btn.innerHTML;
+        btn.dataset.originalLabel = original;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> جاري الحفظ...';
+        setTimeout(function () {
+            if (btn.disabled && btn.dataset.originalLabel) {
+                btn.disabled = false;
+                btn.innerHTML = btn.dataset.originalLabel;
+            }
+        }, 8000);
+    });
+    </script>
 </body>
 </html>

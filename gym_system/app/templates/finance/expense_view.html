@@ -3,9 +3,22 @@
 {% block content %}
 <div class="page-header">
     <h1><i class="bi bi-receipt"></i> تفاصيل المصروف</h1>
-    <a href="{{ url_for('finance.expenses') }}" class="btn btn-secondary">
-        <i class="bi bi-arrow-right"></i> رجوع
-    </a>
+    <div class="d-flex gap-2 flex-wrap">
+        {# GYM-32 — safe edit + soft-delete #}
+        <a href="{{ url_for('finance.expense_edit', expense_id=expense.id) }}" class="btn btn-outline-primary">
+            <i class="bi bi-pencil-square"></i> تعديل
+        </a>
+        <form method="post" action="{{ url_for('finance.expense_delete', expense_id=expense.id) }}" class="d-inline"
+              onsubmit="return confirm('تأكيد حذف هذا المصروف؟');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token else '' }}">
+            <button type="submit" class="btn btn-outline-danger">
+                <i class="bi bi-trash"></i> حذف
+            </button>
+        </form>
+        <a href="{{ url_for('finance.expenses') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-right"></i> رجوع
+        </a>
+    </div>
 </div>
 
 <div class="row">

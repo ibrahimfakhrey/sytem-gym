@@ -75,7 +75,17 @@
                         <td>{{ p.service_type.name if p.service_type else '—' }}</td>
                         <td class="text-center">{{ p.customer_age or '—' }}</td>
                         <td class="text-center small">{{ p.time_range_text }}</td>
-                        <td class="text-center fw-bold">{{ "{:,.0f}".format(p.price) }} ر.س</td>
+                        <td class="text-center fw-bold">
+                            {# GYM-33 — show "بعد الخصم" + original strikethrough when applicable #}
+                            {% set _net = (p.price|float) - (p.discount or 0|float) %}
+                            {% if (p.discount or 0)|float > 0 %}
+                                {{ "{:,.0f}".format(_net) }} ر.س
+                                <br><small class="text-muted text-decoration-line-through">{{ "{:,.0f}".format(p.price) }}</small>
+                                <small class="badge bg-info text-dark">خصم {{ "{:,.0f}".format(p.discount) }}</small>
+                            {% else %}
+                                {{ "{:,.0f}".format(p.price) }} ر.س
+                            {% endif %}
+                        </td>
                         <td class="text-center"><span class="badge bg-secondary">{{ p.payment_method }}</span></td>
                         <td class="text-center small text-muted">
                             {{ p.creator.name if p.creator else '—' }}

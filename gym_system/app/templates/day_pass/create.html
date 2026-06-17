@@ -109,6 +109,17 @@
                             <input id="price-display" type="text" class="form-control bg-light text-center fw-bold" readonly value="—">
                         </div>
                     </div>
+                    {# GYM-33 — optional discount in ر.س #}
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="discount" class="form-label">خصم (ر.س)</label>
+                            <input id="discount" name="discount" type="number" min="0" step="0.01" value="0" class="form-control">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="final-display" class="form-label">الصافي بعد الخصم</label>
+                            <input id="final-display" type="text" class="form-control bg-light text-center fw-bold text-success" readonly value="—">
+                        </div>
+                    </div>
                     <div class="mb-1">
                         <label for="notes" class="form-label">ملاحظات</label>
                         <textarea id="notes" name="notes" class="form-control" rows="2"></textarea>
@@ -124,7 +135,7 @@
                     <p class="mb-1 small text-muted">السعر المختار</p>
                     <h3 id="summary-price" class="text-success">— ر.س</h3>
                     <hr>
-                    <button type="submit" class="btn btn-primary w-100">
+                    <button type="submit" class="btn btn-primary w-100" data-dedupe-submit>
                         <i class="bi bi-check2-circle"></i> إصدار التذكرة
                     </button>
                 </div>
@@ -138,14 +149,24 @@
     var sel = document.getElementById('service_type_id');
     var disp = document.getElementById('price-display');
     var summary = document.getElementById('summary-price');
+    var discountInput = document.getElementById('discount');
+    var finalDisp = document.getElementById('final-display');
     if (!sel) return;
-    sel.addEventListener('change', function () {
+
+    function recompute() {
         var opt = sel.options[sel.selectedIndex];
         var price = parseFloat(opt && opt.dataset && opt.dataset.price) || 0;
-        var formatted = price > 0 ? new Intl.NumberFormat('ar-SA').format(price) + ' ر.س' : '—';
-        disp.value = formatted;
-        summary.textContent = formatted;
-    });
+        var discount = parseFloat(discountInput && discountInput.value) || 0;
+        if (discount < 0) discount = 0;
+        if (discount > price) discount = price;
+        var final_ = Math.max(0, price - discount);
+        var fmt = function (v) { return new Intl.NumberFormat('ar-SA').format(v) + ' ر.س'; };
+        disp.value = price > 0 ? fmt(price) : '—';
+        finalDisp.value = price > 0 ? fmt(final_) : '—';
+        summary.textContent = price > 0 ? fmt(final_) : '—';
+    }
+    sel.addEventListener('change', recompute);
+    if (discountInput) discountInput.addEventListener('input', recompute);
 })();
 </script>
 

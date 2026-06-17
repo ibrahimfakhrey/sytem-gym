@@ -82,12 +82,13 @@ class Member(db.Model):
 
     @property
     def active_subscription(self):
-        """Get current active subscription"""
+        """Get current active subscription (GYM-32: skip soft-deleted)"""
         from .subscription import Subscription
         return Subscription.query.filter(
             Subscription.member_id == self.id,
             Subscription.status == 'active',
-            Subscription.end_date >= date.today()
+            Subscription.end_date >= date.today(),
+            Subscription.is_deleted == False,
         ).first()
 
     @property

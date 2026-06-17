@@ -310,7 +310,8 @@ def _record_member_scan_row(member, branch, timestamp, device_log_id, allowed, w
     sub = Subscription.query.filter(
         Subscription.member_id == member.id,
         Subscription.status == 'active',
-        Subscription.end_date >= date.today()
+        Subscription.end_date >= date.today(),
+        Subscription.is_deleted == False,  # GYM-32
     ).first()
     att = MemberAttendance(
         member_id=member.id,
@@ -700,6 +701,7 @@ def _compute_access(member, now, today, window_minutes):
     sub = Subscription.query.filter(
         Subscription.member_id == member.id,
         Subscription.status == 'active',
+        Subscription.is_deleted == False,  # GYM-32 — soft-deleted subs must NOT unlock the door
     ).order_by(Subscription.end_date.desc()).first()
 
     if not sub:

@@ -58,32 +58,38 @@
             <div class="stat-label">عدد الموظفين</div>
         </div>
     </div>
+    {# GYM-34 — make the summary cards drill into their underlying lists #}
+    {% set _df = start_date.isoformat() %}
+    {% set _dt = today.isoformat() %}
     <div class="col-md-3">
-        <div class="card stat-card">
+        <a href="{{ url_for('subscriptions.index', date_from=_df, date_to=_dt) }}"
+           class="card stat-card text-decoration-none text-reset">
             <div class="stat-icon text-success">
                 <i class="bi bi-card-checklist"></i>
             </div>
             <div class="stat-value">{{ totals.subscriptions }}</div>
             <div class="stat-label">إجمالي الاشتراكات</div>
-        </div>
+        </a>
     </div>
     <div class="col-md-3">
-        <div class="card stat-card">
+        <a href="{{ url_for('subscriptions.index', date_from=_df, date_to=_dt) }}"
+           class="card stat-card text-decoration-none text-reset">
             <div class="stat-icon text-info">
                 <i class="bi bi-arrow-repeat"></i>
             </div>
             <div class="stat-value">{{ totals.renewals }}</div>
             <div class="stat-label">التجديدات</div>
-        </div>
+        </a>
     </div>
     <div class="col-md-3">
-        <div class="card stat-card">
+        <a href="{{ url_for('finance.sales_transactions', date_from=_df, date_to=_dt) }}"
+           class="card stat-card text-decoration-none text-reset">
             <div class="stat-icon text-warning">
                 <i class="bi bi-cash"></i>
             </div>
             <div class="stat-value">{{ "{:,.0f}".format(totals.revenue) }}</div>
             <div class="stat-label">إجمالي الإيرادات</div>
-        </div>
+        </a>
     </div>
 </div>
 
@@ -98,19 +104,24 @@
                 {% if top_performers %}
                 <ul class="list-group list-group-flush">
                     {% for emp in top_performers %}
+                    {# GYM-34 — clicking name/revenue/subs jumps to that employee's filtered list #}
+                    {% set _subs = url_for('subscriptions.index', created_by=emp.id, date_from=start_date.isoformat(), date_to=today.isoformat()) %}
+                    {% set _sales = url_for('finance.sales_transactions', receptionist_id=emp.id, date_from=start_date.isoformat(), date_to=today.isoformat()) %}
                     <li class="list-group-item d-flex justify-content-between align-items-center">
                         <div>
                             <span class="me-2">
                                 {% if loop.index == 1 %}🥇{% elif loop.index == 2 %}🥈{% elif loop.index == 3 %}🥉{% else %}{{ loop.index }}{% endif %}
                             </span>
-                            <strong>{{ emp.name }}</strong>
+                            <a href="{{ _subs }}" class="fw-bold text-decoration-none">{{ emp.name }}</a>
                             <br>
                             <small class="text-muted">{{ emp.role }} - {{ emp.branch }}</small>
                         </div>
                         <div class="text-end">
-                            <span class="badge bg-success">{{ "{:,.0f}".format(emp.revenue) }} ر.س</span>
+                            <a href="{{ _sales }}" class="text-decoration-none">
+                                <span class="badge bg-success">{{ "{:,.0f}".format(emp.revenue) }} ر.س</span>
+                            </a>
                             <br>
-                            <small>{{ emp.subscriptions }} اشتراك</small>
+                            <a href="{{ _subs }}" class="text-decoration-none text-muted"><small>{{ emp.subscriptions }} اشتراك</small></a>
                         </div>
                     </li>
                     {% endfor %}
@@ -130,16 +141,20 @@
                 {% if bottom_performers %}
                 <ul class="list-group list-group-flush">
                     {% for emp in bottom_performers %}
+                    {% set _subs = url_for('subscriptions.index', created_by=emp.id, date_from=start_date.isoformat(), date_to=today.isoformat()) %}
+                    {% set _sales = url_for('finance.sales_transactions', receptionist_id=emp.id, date_from=start_date.isoformat(), date_to=today.isoformat()) %}
                     <li class="list-group-item d-flex justify-content-between align-items-center">
                         <div>
-                            <strong>{{ emp.name }}</strong>
+                            <a href="{{ _subs }}" class="fw-bold text-decoration-none">{{ emp.name }}</a>
                             <br>
                             <small class="text-muted">{{ emp.role }} - {{ emp.branch }}</small>
                         </div>
                         <div class="text-end">
-                            <span class="badge bg-warning text-dark">{{ "{:,.0f}".format(emp.revenue) }} ر.س</span>
+                            <a href="{{ _sales }}" class="text-decoration-none">
+                                <span class="badge bg-warning text-dark">{{ "{:,.0f}".format(emp.revenue) }} ر.س</span>
+                            </a>
                             <br>
-                            <small>{{ emp.subscriptions }} اشتراك</small>
+                            <a href="{{ _subs }}" class="text-decoration-none text-muted"><small>{{ emp.subscriptions }} اشتراك</small></a>
                         </div>
                     </li>
                     {% endfor %}
@@ -177,23 +192,28 @@
                     </tr>
                 </thead>
                 <tbody>
+                    {# GYM-34 — each number drills into a filtered list scoped to this employee #}
                     {% for emp in staff_data %}
+                    {% set _subs = url_for('subscriptions.index', created_by=emp.id, date_from=start_date.isoformat(), date_to=today.isoformat()) %}
+                    {% set _sales = url_for('finance.sales_transactions', receptionist_id=emp.id, date_from=start_date.isoformat(), date_to=today.isoformat()) %}
                     <tr class="{% if emp.rank <= 3 %}table-success{% elif emp.rank >= staff_data|length - 2 and staff_data|length > 5 %}table-warning{% endif %}">
                         <td>
                             {% if emp.rank == 1 %}🥇{% elif emp.rank == 2 %}🥈{% elif emp.rank == 3 %}🥉{% else %}{{ emp.rank }}{% endif %}
                         </td>
-                        <td><strong>{{ emp.name }}</strong></td>
+                        <td><a href="{{ _subs }}" class="fw-bold text-decoration-none">{{ emp.name }}</a></td>
                         <td>{{ emp.role }}</td>
                         <td>{{ emp.branch }}</td>
-                        <td>{{ emp.subscriptions }}</td>
-                        <td>{{ emp.new_members }}</td>
-                        <td>{{ emp.renewals }}</td>
+                        <td><a href="{{ _subs }}" class="text-decoration-none">{{ emp.subscriptions }}</a></td>
+                        <td><a href="{{ _subs }}" class="text-decoration-none">{{ emp.new_members }}</a></td>
+                        <td><a href="{{ _subs }}" class="text-decoration-none">{{ emp.renewals }}</a></td>
                         <td>
                             <span class="badge {% if emp.renewal_rate >= 50 %}bg-success{% elif emp.renewal_rate >= 25 %}bg-warning{% else %}bg-danger{% endif %}">
                                 {{ emp.renewal_rate }}%
                             </span>
                         </td>
-                        <td class="text-success fw-bold">{{ "{:,.0f}".format(emp.revenue) }}</td>
+                        <td class="text-success fw-bold">
+                            <a href="{{ _sales }}" class="text-success text-decoration-none">{{ "{:,.0f}".format(emp.revenue) }}</a>
+                        </td>
                         <td>{{ "{:,.0f}".format(emp.avg_value) }}</td>
                     </tr>
                     {% endfor %}

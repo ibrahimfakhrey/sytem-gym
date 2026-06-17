@@ -35,46 +35,46 @@
 </div>
 {% endif %}
 
-<!-- Stats Cards -->
+<!-- Stats Cards — GYM-34 — every card drills into its underlying list -->
 <div class="row g-4 mb-4">
     <div class="col-md-6 col-lg-3">
-        <div class="card stat-card">
+        <a href="{{ url_for('members.index') }}" class="card stat-card text-decoration-none text-reset">
             <div class="stat-icon text-primary">
                 <i class="bi bi-people"></i>
             </div>
             <div class="stat-value">{{ stats.total_members }}</div>
             <div class="stat-label">إجمالي الأعضاء</div>
-        </div>
+        </a>
     </div>
 
     <div class="col-md-6 col-lg-3">
-        <div class="card stat-card">
+        <a href="{{ url_for('subscriptions.index', status='active') }}" class="card stat-card text-decoration-none text-reset">
             <div class="stat-icon text-success">
                 <i class="bi bi-card-checklist"></i>
             </div>
             <div class="stat-value">{{ stats.active_subscriptions }}</div>
             <div class="stat-label">الاشتراكات النشطة</div>
-        </div>
+        </a>
     </div>
 
     <div class="col-md-6 col-lg-3">
-        <div class="card stat-card">
+        <a href="{{ url_for('finance.income') }}" class="card stat-card text-decoration-none text-reset">
             <div class="stat-icon text-info">
                 <i class="bi bi-cash"></i>
             </div>
             <div class="stat-value">{{ "{:,.0f}".format(stats.total_income) }}</div>
             <div class="stat-label">الدخل (هذا الشهر)</div>
-        </div>
+        </a>
     </div>
 
     <div class="col-md-6 col-lg-3">
-        <div class="card stat-card">
+        <a href="{{ url_for('reports.financial') }}" class="card stat-card text-decoration-none text-reset">
             <div class="stat-icon text-warning">
                 <i class="bi bi-graph-up"></i>
             </div>
             <div class="stat-value">{{ "{:,.0f}".format(stats.net_profit) }}</div>
             <div class="stat-label">صافي الربح</div>
-        </div>
+        </a>
     </div>
 </div>
 

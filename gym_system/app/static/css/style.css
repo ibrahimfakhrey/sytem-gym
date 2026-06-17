@@ -367,6 +367,14 @@ main {
     position: relative;
     overflow: hidden;
     border-radius: var(--radius-xl);
+    display: block;
+}
+
+/* GYM-34 — clickable card affordance */
+a.stat-card { transition: transform .15s ease, box-shadow .15s ease; }
+a.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(0,0,0,.10);
 }
 
 .stat-card::before {

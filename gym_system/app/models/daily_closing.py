@@ -112,10 +112,11 @@ class DailyClosing(db.Model):
         from .finance import Income
         from .subscription import Subscription, SubscriptionPayment
 
-        # Get subscriptions created on this date
+        # Get subscriptions created on this date (GYM-32: skip soft-deleted)
         new_subs = Subscription.query.filter(
             Subscription.brand_id == self.brand_id,
-            db.func.date(Subscription.created_at) == self.closing_date
+            db.func.date(Subscription.created_at) == self.closing_date,
+            Subscription.is_deleted == False,
         )
         if self.branch_id:
             new_subs = new_subs.filter_by(branch_id=self.branch_id)
@@ -135,6 +136,7 @@ class DailyClosing(db.Model):
         incomes_q = Income.query.filter(
             Income.brand_id == self.brand_id,
             Income.date == self.closing_date,
+            Income.is_deleted == False,  # GYM-32
         )
         if self.branch_id:
             incomes_q = incomes_q.filter(Income.branch_id == self.branch_id)
