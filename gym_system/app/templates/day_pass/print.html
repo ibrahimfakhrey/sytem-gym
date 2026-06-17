@@ -68,7 +68,7 @@
         <div>
             <div class="pass-label">القيمة</div>
             {# GYM-33 — show the net charge prominently; show the original price + discount underneath. #}
-            {% set _net = (dp.price|float) - (dp.discount or 0|float) %}
+            {% set _net = (dp.price|float) - ((dp.discount or 0)|float) %}
             <div class="pass-amount">{{ "{:,.0f}".format(_net) }}<small>ر.س</small></div>
             {% if (dp.discount or 0)|float > 0 %}
             <div class="pass-label mt-1">
@@ -134,7 +134,7 @@
     {% set wa_phone = dp.customer_phone|replace('+','')|replace(' ','')|replace('-','') %}
     {% if wa_phone.startswith('0') and not wa_phone.startswith('00') %}{% set wa_phone = '966' + wa_phone.lstrip('0') %}{% endif %}
     <a class="btn btn-success" target="_blank" rel="noopener"
-       href="https://wa.me/{{ wa_phone }}?text={{ ('تذكرة دخول يومي رقم #' + ('%04d'|format(dp.id)) + ' باسم ' + dp.customer_name + ' بقيمة ' + '{:,.0f}'.format((dp.price|float) - (dp.discount or 0|float)) + ' ر.س — ' + (dp.service_type.name if dp.service_type else ''))|urlencode }}">
+       href="https://wa.me/{{ wa_phone }}?text={{ ('تذكرة دخول يومي رقم #' + ('%04d'|format(dp.id)) + ' باسم ' + dp.customer_name + ' بقيمة ' + '{:,.0f}'.format((dp.price|float) - ((dp.discount or 0)|float)) + ' ر.س — ' + (dp.service_type.name if dp.service_type else ''))|urlencode }}">
         <i class="bi bi-whatsapp"></i> إرسال عبر واتساب
     </a>
     {% endif %}
