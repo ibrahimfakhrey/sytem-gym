@@ -124,6 +124,13 @@
         <div>طريقة الدفع: {{ dp.payment_method }}</div>
         <div>المُصدر: {{ dp.creator.name if dp.creator else '-' }}</div>
     </div>
+    {# Creation timestamp — auditable proof of when the ticket was issued. #}
+    {% if dp.created_at %}
+    <div class="pass-meta mt-1 text-center" style="opacity:.7;">
+        <i class="bi bi-clock"></i>
+        أُصدرت في {{ dp.created_at.strftime('%Y-%m-%d') }} الساعة {{ dp.created_at.strftime('%H:%M') }}
+    </div>
+    {% endif %}
 </div>
 
 <div class="actions no-print">
