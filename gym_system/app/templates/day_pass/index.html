@@ -55,6 +55,8 @@
                         <th class="text-center">الوقت</th>
                         <th class="text-center">السعر</th>
                         <th class="text-center">الدفع</th>
+                        {# GYM-39 — surface created_at + creator automatically. #}
+                        <th class="text-center">وقت الإصدار</th>
                         <th class="text-center">المُصدر</th>
                     </tr>
                 </thead>
@@ -87,6 +89,13 @@
                             {% endif %}
                         </td>
                         <td class="text-center"><span class="badge bg-secondary">{{ p.payment_method }}</span></td>
+                        {# GYM-39 — automatic created_at + creator (no manual entry) #}
+                        <td class="text-center small text-muted" dir="ltr">
+                            {% if p.created_at %}
+                                <div>{{ p.created_at.strftime('%Y-%m-%d') }}</div>
+                                <div class="fw-bold">{{ p.created_at.strftime('%H:%M') }}</div>
+                            {% else %}—{% endif %}
+                        </td>
                         <td class="text-center small text-muted">
                             {{ p.creator.name if p.creator else '—' }}
                         </td>

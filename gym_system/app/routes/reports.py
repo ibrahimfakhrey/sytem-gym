@@ -514,13 +514,16 @@ def staff_performance_export():
 
     rows = []
     for emp in emp_query.all():
+        # GYM-40 — exclude soft-deleted subscriptions from per-staff totals.
         subs = Subscription.query.filter(
             Subscription.created_by == emp.id,
-            Subscription.created_at >= start_date
+            Subscription.created_at >= start_date,
+            Subscription.is_deleted == False,
         ).count()
         revenue = db.session.query(func.coalesce(func.sum(Subscription.total_amount), 0)).filter(
             Subscription.created_by == emp.id,
-            Subscription.created_at >= start_date
+            Subscription.created_at >= start_date,
+            Subscription.is_deleted == False,
         ).scalar() or 0
         rows.append([
             emp.name, emp.role.name if emp.role else '-',

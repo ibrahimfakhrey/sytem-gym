@@ -32,10 +32,12 @@ sys.path.insert(0, os.path.dirname(HERE))
 
 # (table, column, "ALTER TABLE ... ADD COLUMN ..." DDL)
 _ADDITIONS = [
-    ('day_passes',    'discount',   'ALTER TABLE day_passes ADD COLUMN discount NUMERIC(10,2) NOT NULL DEFAULT 0'),
-    ('subscriptions', 'is_deleted', 'ALTER TABLE subscriptions ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT 0'),
-    ('expenses',      'is_deleted', 'ALTER TABLE expenses ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT 0'),
-    ('income',        'is_deleted', 'ALTER TABLE income ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT 0'),
+    ('day_passes',            'discount',   'ALTER TABLE day_passes ADD COLUMN discount NUMERIC(10,2) NOT NULL DEFAULT 0'),
+    ('subscriptions',         'is_deleted', 'ALTER TABLE subscriptions ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT 0'),
+    ('expenses',              'is_deleted', 'ALTER TABLE expenses ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT 0'),
+    ('income',                'is_deleted', 'ALTER TABLE income ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT 0'),
+    # GYM-38 — soft-delete per individual subscription_payment row.
+    ('subscription_payments', 'is_deleted', 'ALTER TABLE subscription_payments ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT 0'),
 ]
 
 

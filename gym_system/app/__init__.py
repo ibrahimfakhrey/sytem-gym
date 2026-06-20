@@ -153,6 +153,14 @@ def create_app(config_name=None):
                         conn.exec_driver_sql(
                             "ALTER TABLE income ADD COLUMN is_deleted BOOLEAN DEFAULT 0 NOT NULL"
                         )
+                    # GYM-38 — subscription_payments.is_deleted
+                    sp_cols = [r[1] for r in conn.exec_driver_sql(
+                        "PRAGMA table_info(subscription_payments)"
+                    ).fetchall()]
+                    if sp_cols and 'is_deleted' not in sp_cols:
+                        conn.exec_driver_sql(
+                            "ALTER TABLE subscription_payments ADD COLUMN is_deleted BOOLEAN DEFAULT 0 NOT NULL"
+                        )
                 except Exception:
                     pass
                 # complaint_attachments (GYM-21)

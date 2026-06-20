@@ -89,11 +89,11 @@ def dashboard():
         })
 
     # Get recent payments (last 10 today). GYM-32 — drop payments tied to
-    # soft-deleted subscriptions; otherwise refunds/cancellations would
-    # ghost-appear in "آخر المبيعات اليوم".
+    # soft-deleted subscriptions; GYM-38 — also drop soft-deleted payments.
     payments_query = SubscriptionPayment.query.join(Subscription).filter(
         db.func.date(SubscriptionPayment.payment_date) == today,
         Subscription.is_deleted == False,
+        SubscriptionPayment.is_deleted == False,
     )
     if brand_id:
         payments_query = payments_query.filter(Subscription.brand_id == brand_id)
@@ -197,6 +197,7 @@ def sales_transactions():
         db.func.date(SubscriptionPayment.payment_date) >= from_date,
         db.func.date(SubscriptionPayment.payment_date) <= to_date,
         Subscription.is_deleted == False,  # GYM-32
+        SubscriptionPayment.is_deleted == False,  # GYM-38
     )
     if payment_method:
         sub_q = sub_q.filter(SubscriptionPayment.payment_method == payment_method)
@@ -1206,7 +1207,10 @@ def income_export():
 @finance_required
 def expenses_export():
     fd, td = _date_range_args()
-    q = Expense.query.filter(Expense.date >= fd, Expense.date <= td)
+    # GYM-40 — skip soft-deleted, otherwise the xlsx total inflates above
+    # what the on-screen list shows.
+    q = Expense.query.filter(Expense.date >= fd, Expense.date <= td,
+                             Expense.is_deleted == False)
     bid = _scoped_brand_id()
     if bid:
         q = q.filter(Expense.brand_id == bid)
@@ -1233,33 +1237,81 @@ def expenses_export():
 @login_required
 @finance_required
 def sales_transactions_export():
+    """GYM-40 — skip soft-deleted; GYM-36 — include day-pass tickets too,
+    so the xlsx matches the on-screen list."""
+    from app.models.day_pass import DayPass
     fd, td = _date_range_args()
+
+    # Subscription payments
     q = db.session.query(SubscriptionPayment).join(Subscription).join(Subscription.member)
     bid = _scoped_brand_id()
     if bid:
         q = q.filter(Subscription.brand_id == bid)
     else:
         q = q.filter(Subscription.brand_id == current_user.brand_id)
-    q = q.filter(db.func.date(SubscriptionPayment.payment_date) >= fd,
-                 db.func.date(SubscriptionPayment.payment_date) <= td)
+    q = q.filter(
+        db.func.date(SubscriptionPayment.payment_date) >= fd,
+        db.func.date(SubscriptionPayment.payment_date) <= td,
+        Subscription.is_deleted == False,
+        SubscriptionPayment.is_deleted == False,  # GYM-38
+    )
     pm = request.args.get('payment_method', '')
     if pm:
         q = q.filter(SubscriptionPayment.payment_method == pm)
+
     rows = []
-    for p in q.order_by(SubscriptionPayment.payment_date.desc()).all():
+    for p in q.all():
         sub = p.subscription
         m = sub.member if sub else None
-        rows.append([
-            p.payment_date.strftime('%Y-%m-%d %H:%M') if p.payment_date else '',
-            m.name if m else '-',
-            sub.plan.name if sub and sub.plan else '-',
-            float(p.amount or 0),
-            p.payment_method or '',
-            sub.branch.name if sub and sub.branch else '-',
-        ])
+        rows.append((
+            p.payment_date or None,
+            ['اشتراك',
+             p.payment_date.strftime('%Y-%m-%d %H:%M') if p.payment_date else '',
+             m.name if m else '-',
+             sub.plan.name if sub and sub.plan else '-',
+             float(p.amount or 0),
+             p.payment_method or '',
+             sub.branch.name if sub and sub.branch else '-']
+        ))
+
+    # Day-pass tickets in the same range
+    dpq = DayPass.query.filter(DayPass.pass_date >= fd, DayPass.pass_date <= td)
+    if bid:
+        dpq = dpq.filter(DayPass.brand_id == bid)
+    elif not current_user.can_view_all_brands:
+        dpq = dpq.filter(DayPass.brand_id == current_user.brand_id)
+    if pm:
+        dpq = dpq.filter(DayPass.payment_method == pm)
+
+    # batch branch names for day-passes (no relationship on the model)
+    dp_list = dpq.all()
+    branch_ids = {dp.branch_id for dp in dp_list if dp.branch_id}
+    branch_name_map = {}
+    if branch_ids:
+        from app.models.company import Branch
+        branch_name_map = {b.id: b.name for b in Branch.query.filter(Branch.id.in_(branch_ids)).all()}
+
+    for dp in dp_list:
+        when = dp.created_at or datetime.combine(dp.pass_date, datetime.min.time())
+        net = float(dp.price or 0) - float(dp.discount or 0)
+        rows.append((
+            when,
+            ['تذكرة يومية',
+             when.strftime('%Y-%m-%d %H:%M'),
+             dp.customer_name or '-',
+             dp.service_type.name if dp.service_type else '-',
+             net,
+             dp.payment_method or '',
+             branch_name_map.get(dp.branch_id, '-')]
+        ))
+
+    # Sort by datetime desc, then drop the sort key
+    rows.sort(key=lambda r: r[0] or datetime.min, reverse=True)
+    rows = [r[1] for r in rows]
+
     return _xlsx_response(
         f'sales-transactions-{fd.isoformat()}-to-{td.isoformat()}',
-        ['التاريخ', 'العضو', 'الباقة', 'المبلغ', 'طريقة الدفع', 'الفرع'],
+        ['النوع', 'التاريخ', 'العميل', 'الخدمة', 'المبلغ', 'طريقة الدفع', 'الفرع'],
         rows,
     )
 

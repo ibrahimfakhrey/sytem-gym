@@ -632,6 +632,7 @@ def renew(subscription_id):
         _dup = SubscriptionPayment.query.filter(
             SubscriptionPayment.subscription_id == subscription.id,
             SubscriptionPayment.payment_date >= _dt.utcnow() - _td(seconds=30),
+            SubscriptionPayment.is_deleted == False,  # GYM-38
         ).order_by(SubscriptionPayment.payment_date.desc()).first()
         if _dup:
             flash('تم تجديد الاشتراك للتو — لم نقم بإنشاء تكرار.', 'info')
@@ -875,6 +876,7 @@ def add_payment(subscription_id):
         _dup = SubscriptionPayment.query.filter(
             SubscriptionPayment.subscription_id == subscription.id,
             SubscriptionPayment.payment_date >= _dt.utcnow() - _td(seconds=30),
+            SubscriptionPayment.is_deleted == False,  # GYM-38
         ).order_by(SubscriptionPayment.payment_date.desc()).first()
         if _dup:
             flash('تم تسجيل الدفعة للتو — لم نقم بإنشاء تكرار.', 'info')
@@ -1189,3 +1191,99 @@ def delete(subscription_id):
     db.session.commit()
     flash(f'تم حذف الاشتراك #{subscription.id} وعكس إيراداته.', 'success')
     return redirect(url_for('members.view', member_id=subscription.member_id))
+
+
+# ─── GYM-38 — edit/delete individual SubscriptionPayment rows ────────────
+# Each edit / delete cascades to the matching Income row so the daily
+# closing math + reports stay consistent (same principle as GYM-32 on the
+# subscription as a whole, but at the payment-row granularity).
+
+@subscriptions_bp.route('/payment/<int:payment_id>/edit', methods=['GET', 'POST'])
+@login_required
+@members_required
+def payment_edit(payment_id):
+    payment = SubscriptionPayment.query.get_or_404(payment_id)
+    subscription = payment.subscription
+    if not subscription or not check_entity_access(subscription):
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('subscriptions.index'))
+
+    if request.method == 'POST':
+        try:
+            new_amount = float(request.form.get('amount') or payment.amount)
+        except ValueError:
+            flash('قيمة غير صالحة', 'danger')
+            return redirect(url_for('subscriptions.payment_edit', payment_id=payment_id))
+        if new_amount <= 0:
+            flash('المبلغ يجب أن يكون أكبر من صفر', 'danger')
+            return redirect(url_for('subscriptions.payment_edit', payment_id=payment_id))
+
+        new_method = (request.form.get('payment_method') or payment.payment_method or 'cash').strip()
+        new_notes = (request.form.get('notes') or '').strip() or None
+
+        delta = float(new_amount) - float(payment.amount or 0)
+
+        payment.amount = new_amount
+        payment.payment_method = new_method
+        payment.notes = new_notes
+
+        # Cascade to the linked Income row(s). Income created in the same
+        # request as the payment carries the same subscription_id; usually
+        # one Income per payment. We match by payment_id when set, else fall
+        # back to the most recent non-deleted Income on the subscription.
+        income = Income.query.filter_by(payment_id=payment.id, is_deleted=False).first()
+        if not income:
+            income = (Income.query.filter_by(subscription_id=subscription.id, is_deleted=False)
+                                  .order_by(Income.id.desc()).first())
+        if income:
+            income.amount = new_amount
+            income.payment_method = new_method
+
+        # Re-derive subscription.paid_amount + remaining_amount from the
+        # surviving payments (single source of truth).
+        live_paid = sum(float(p.amount or 0)
+                        for p in subscription.payments
+                        if not getattr(p, 'is_deleted', False))
+        subscription.paid_amount = live_paid
+        subscription.remaining_amount = max(0, float(subscription.total_amount or 0) - live_paid)
+
+        db.session.commit()
+        flash('تم تحديث الدفعة وعُكست في الإيراد.', 'success')
+        return redirect(url_for('subscriptions.view', subscription_id=subscription.id))
+
+    return render_template('subscriptions/payment_edit.html',
+                           payment=payment, subscription=subscription)
+
+
+@subscriptions_bp.route('/payment/<int:payment_id>/delete', methods=['POST'])
+@login_required
+@members_required
+def payment_delete(payment_id):
+    payment = SubscriptionPayment.query.get_or_404(payment_id)
+    subscription = payment.subscription
+    if not subscription or not check_entity_access(subscription):
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('subscriptions.index'))
+
+    # Soft-delete so the linked Invoice FK (invoices.payment_id NOT NULL)
+    # doesn't break, and so the row stays around for audit / un-delete.
+    # Cascade to the linked Income row(s) by the same flag.
+    inc = Income.query.filter_by(payment_id=payment.id).all()
+    if not inc:
+        inc = (Income.query.filter_by(subscription_id=subscription.id, is_deleted=False)
+                           .order_by(Income.id.desc()).limit(1).all())
+    for i in inc:
+        i.is_deleted = True
+
+    payment.is_deleted = True
+    sub_id = subscription.id
+
+    live_paid = sum(float(p.amount or 0)
+                    for p in subscription.payments
+                    if p.id != payment.id and not getattr(p, 'is_deleted', False))
+    subscription.paid_amount = live_paid
+    subscription.remaining_amount = max(0, float(subscription.total_amount or 0) - live_paid)
+    db.session.commit()
+
+    flash('تم حذف الدفعة وعكس إيرادها.', 'success')
+    return redirect(url_for('subscriptions.view', subscription_id=sub_id))

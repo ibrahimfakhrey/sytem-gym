@@ -352,6 +352,10 @@ class SubscriptionPayment(db.Model):
 
     notes = db.Column(db.Text)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
+    # GYM-38 — soft-delete; mirrors Subscription/Expense/Income. Aggregations
+    # filter is_deleted=False; the row stays in the DB so the linked invoice
+    # FK constraint doesn't break.
+    is_deleted = db.Column(db.Boolean, default=False, nullable=False)
 
     def __repr__(self):
         return f'<Payment {self.amount}>'

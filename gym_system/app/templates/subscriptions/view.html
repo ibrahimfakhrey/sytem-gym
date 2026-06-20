@@ -67,7 +67,9 @@
             </div>
         </div>
 
-        {% if subscription.payments %}
+        {# GYM-38 — only show non-deleted payments in the log #}
+        {% set live_payments = subscription.payments | selectattr('is_deleted', 'sameas', False) | list %}
+        {% if live_payments %}
         <div class="card mb-4">
             <div class="card-header">
                 <i class="bi bi-cash"></i>
@@ -82,10 +84,11 @@
                             <th>طريقة الدفع</th>
                             <th>ملاحظات</th>
                             <th>الفاتورة</th>
+                            <th>إجراءات</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for payment in subscription.payments %}
+                        {% for payment in live_payments %}
                         <tr>
                             <td>{{ payment.payment_date.strftime('%Y-%m-%d') }}</td>
                             <td>{{ payment.amount }} ر.س</td>
@@ -102,6 +105,21 @@
                                     <i class="bi bi-receipt"></i>
                                     عرض الفاتورة
                                 </a>
+                            </td>
+                            <td>
+                                {# GYM-38 — edit + delete this payment row; cascades to Income #}
+                                <a href="{{ url_for('subscriptions.payment_edit', payment_id=payment.id) }}"
+                                   class="btn btn-sm btn-outline-secondary">
+                                    <i class="bi bi-pencil-square"></i>
+                                </a>
+                                <form method="post" action="{{ url_for('subscriptions.payment_delete', payment_id=payment.id) }}"
+                                      class="d-inline"
+                                      onsubmit="return confirm('تأكيد حذف هذه الدفعة؟ سيُعكس مبلغها من الإيراد ومتبقي الاشتراك.');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token else '' }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
                             </td>
                         </tr>
                         {% endfor %}
