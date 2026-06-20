@@ -1188,6 +1188,11 @@ def delete(subscription_id):
     subscription.is_deleted = True
     Income.query.filter_by(subscription_id=subscription.id).update(
         {'is_deleted': True}, synchronize_session=False)
+    # GYM-38 cascade — also flag the subscription's payment rows so
+    # aggregations that look at SubscriptionPayment directly (without joining
+    # Subscription) don't keep counting them.
+    SubscriptionPayment.query.filter_by(subscription_id=subscription.id).update(
+        {'is_deleted': True}, synchronize_session=False)
     db.session.commit()
     flash(f'تم حذف الاشتراك #{subscription.id} وعكس إيراداته.', 'success')
     return redirect(url_for('members.view', member_id=subscription.member_id))

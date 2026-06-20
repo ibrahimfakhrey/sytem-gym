@@ -305,10 +305,11 @@ def calculate_daily_stats(brand_id, target_date):
         by_type[i.type or 'other'] = by_type.get(i.type or 'other', 0) + float(i.amount or 0)
 
     # Surface the payments list too — keep the historical key name so the
-    # template doesn't break.
+    # template doesn't break. GYM-38 — skip soft-deleted payments.
     payments = SubscriptionPayment.query.filter(
         SubscriptionPayment.brand_id == brand_id,
-        db.func.date(SubscriptionPayment.payment_date) == target_date
+        db.func.date(SubscriptionPayment.payment_date) == target_date,
+        SubscriptionPayment.is_deleted == False,
     ).all()
 
     return {
