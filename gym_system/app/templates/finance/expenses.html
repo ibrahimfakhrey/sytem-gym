@@ -141,13 +141,15 @@
             </table>
         </div>
 
-        <!-- Pagination -->
+        <!-- Pagination (GYM-35: strip 'page' before splatting request.args) -->
         {% if expenses.pages > 1 %}
+        {% set qargs = request.args.to_dict() %}
+        {% set _ = qargs.pop('page', None) %}
         <nav class="mt-4">
             <ul class="pagination justify-content-center">
                 {% if expenses.has_prev %}
                 <li class="page-item">
-                    <a class="page-link" href="{{ url_for('finance.expenses', page=expenses.prev_num, **request.args) }}">
+                    <a class="page-link" href="{{ url_for('finance.expenses', page=expenses.prev_num, **qargs) }}">
                         <i class="bi bi-chevron-right"></i>
                     </a>
                 </li>
@@ -156,7 +158,7 @@
                 {% for page_num in expenses.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                 {% if page_num %}
                 <li class="page-item {{ 'active' if page_num == expenses.page else '' }}">
-                    <a class="page-link" href="{{ url_for('finance.expenses', page=page_num, **request.args) }}">
+                    <a class="page-link" href="{{ url_for('finance.expenses', page=page_num, **qargs) }}">
                         {{ page_num }}
                     </a>
                 </li>
@@ -167,7 +169,7 @@
 
                 {% if expenses.has_next %}
                 <li class="page-item">
-                    <a class="page-link" href="{{ url_for('finance.expenses', page=expenses.next_num, **request.args) }}">
+                    <a class="page-link" href="{{ url_for('finance.expenses', page=expenses.next_num, **qargs) }}">
                         <i class="bi bi-chevron-left"></i>
                     </a>
                 </li>

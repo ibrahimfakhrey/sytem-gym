@@ -97,11 +97,15 @@
 
         <!-- Pagination -->
         {% if income.pages > 1 %}
+        {# GYM-35: strip 'page' from query args before splatting; otherwise
+           url_for receives `page` twice when we're already on page≥2. #}
+        {% set qargs = request.args.to_dict() %}
+        {% set _ = qargs.pop('page', None) %}
         <nav class="mt-4">
             <ul class="pagination justify-content-center">
                 {% if income.has_prev %}
                 <li class="page-item">
-                    <a class="page-link" href="{{ url_for('finance.income_list', page=income.prev_num, **request.args) }}">
+                    <a class="page-link" href="{{ url_for('finance.income_list', page=income.prev_num, **qargs) }}">
                         <i class="bi bi-chevron-right"></i>
                     </a>
                 </li>
@@ -110,7 +114,7 @@
                 {% for page_num in income.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                 {% if page_num %}
                 <li class="page-item {{ 'active' if page_num == income.page else '' }}">
-                    <a class="page-link" href="{{ url_for('finance.income_list', page=page_num, **request.args) }}">
+                    <a class="page-link" href="{{ url_for('finance.income_list', page=page_num, **qargs) }}">
                         {{ page_num }}
                     </a>
                 </li>
@@ -121,7 +125,7 @@
 
                 {% if income.has_next %}
                 <li class="page-item">
-                    <a class="page-link" href="{{ url_for('finance.income_list', page=income.next_num, **request.args) }}">
+                    <a class="page-link" href="{{ url_for('finance.income_list', page=income.next_num, **qargs) }}">
                         <i class="bi bi-chevron-left"></i>
                     </a>
                 </li>

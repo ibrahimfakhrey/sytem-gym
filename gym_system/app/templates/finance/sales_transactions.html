@@ -154,52 +154,46 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for transaction in transactions.items %}
+                    {# GYM-36 — rows are unified SaleRow objects: kind is
+                       'subscription' or 'day_pass'. Day-passes don't have a
+                       member, so we render the customer name as plain text. #}
+                    {% for t in transactions.items %}
                     <tr>
-                        <td>{{ transaction.payment_date.strftime('%Y-%m-%d %H:%M') }}</td>
+                        <td>{{ t.when.strftime('%Y-%m-%d %H:%M') if t.when else '—' }}</td>
                         <td>
-                            <a href="{{ url_for('members.view', member_id=transaction.subscription.member_id) }}">
-                                {{ transaction.subscription.member.name }}
-                            </a>
+                            {% if t.who_url %}
+                                <a href="{{ t.who_url }}">{{ t.who_name }}</a>
+                            {% else %}
+                                {{ t.who_name }}
+                                <span class="badge bg-warning text-dark ms-1">تذكرة يومية</span>
+                            {% endif %}
                         </td>
                         <td>
-                            <span class="badge bg-info">
-                                {{ transaction.subscription.plan.name }}
+                            <span class="badge {% if t.kind == 'day_pass' %}bg-info{% else %}bg-primary{% endif %}">
+                                {{ t.what_label }}
                             </span>
                         </td>
                         {% if current_user.can_view_all_brands %}
-                        <td>{{ transaction.subscription.brand.name }}</td>
+                        <td>{{ t.brand_name }}</td>
                         {% endif %}
                         <td>
-                            {% if transaction.subscription.creator %}
-                            {{ transaction.subscription.creator.name }}
-                            {% else %}
-                            <span class="text-muted">-</span>
-                            {% endif %}
+                            {% if t.creator_name %}{{ t.creator_name }}{% else %}<span class="text-muted">-</span>{% endif %}
                         </td>
                         <td>
                             <span class="badge
-                                {% if transaction.payment_method == 'cash' %}bg-success
-                                {% elif transaction.payment_method == 'card' %}bg-primary
-                                {% elif transaction.payment_method == 'transfer' %}bg-info
+                                {% if t.payment_method == 'cash' %}bg-success
+                                {% elif t.payment_method == 'card' %}bg-primary
+                                {% elif t.payment_method == 'transfer' %}bg-info
                                 {% else %}bg-secondary{% endif %}">
-                                {{ transaction.payment_method_text }}
+                                {{ t.payment_method_text }}
                             </span>
                         </td>
-                        <td><strong>{{ "{:,.2f}".format(transaction.amount) }} ر.س</strong></td>
+                        <td><strong>{{ "{:,.2f}".format(t.amount) }} ر.س</strong></td>
                         <td>
-                            <a href="{{ url_for('subscriptions.view', subscription_id=transaction.subscription_id) }}"
-                               class="btn btn-sm btn-outline-primary">
+                            <a href="{{ t.detail_url }}" class="btn btn-sm btn-outline-primary">
                                 <i class="bi bi-eye"></i>
-                                عرض الاشتراك
+                                {% if t.kind == 'day_pass' %}عرض التذكرة{% else %}عرض الاشتراك{% endif %}
                             </a>
-                            {% if transaction.invoice %}
-                            <a href="{{ url_for('invoices.view', invoice_id=transaction.invoice[0].id) }}"
-                               class="btn btn-sm btn-outline-secondary">
-                                <i class="bi bi-receipt"></i>
-                                الفاتورة
-                            </a>
-                            {% endif %}
                         </td>
                     </tr>
                     {% endfor %}

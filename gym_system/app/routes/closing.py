@@ -148,6 +148,10 @@ def view_daily_summary(closing_date):
     ).first()
 
     if existing_closing:
+        # GYM-37 — friendly message + jump to the existing record so the user
+        # can see when + by whom it was closed.
+        when_str = existing_closing.submitted_at.strftime('%Y-%m-%d %H:%M') if existing_closing.submitted_at else '—'
+        flash(f'يوم {summary_date.isoformat()} تم إقفاله سابقاً (في {when_str}).', 'info')
         return redirect(url_for('closing.view_closing', closing_id=existing_closing.id))
 
     # Calculate statistics
@@ -182,7 +186,9 @@ def create():
     ).first()
 
     if existing:
-        flash('تم إقفال هذا اليوم مسبقاً', 'warning')
+        # GYM-37 — friendly message: name the day + when it was closed.
+        when_str = existing.submitted_at.strftime('%Y-%m-%d %H:%M') if existing.submitted_at else '—'
+        flash(f'يوم {closing_date.isoformat()} تم إقفاله سابقاً (في {when_str}).', 'warning')
         return redirect(url_for('closing.view_closing', closing_id=existing.id))
 
     # Calculate statistics

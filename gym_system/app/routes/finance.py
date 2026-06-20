@@ -158,87 +158,174 @@ class SalaryForm(FlaskForm):
 @login_required
 @finance_required
 def sales_transactions():
-    """Detailed sales transactions view"""
+    """Detailed sales transactions view.
+
+    GYM-36 — also includes day-pass tickets in the list. We build a
+    unified ``SaleRow`` list from two sources (SubscriptionPayment +
+    DayPass), sort by timestamp desc, and paginate by hand using
+    ``_ManualPage`` (mimics Flask-SQLAlchemy's Pagination so the
+    existing template keeps working).
+    """
+    from app.models.day_pass import DayPass
+    from app.models.member import Member
+
     page, per_page = pagination_args(request)
     date_from = request.args.get('date_from', date.today().replace(day=1).isoformat())
     date_to = request.args.get('date_to', date.today().isoformat())
 
-    # Parse dates
     try:
         from_date = datetime.fromisoformat(date_from).date()
         to_date = datetime.fromisoformat(date_to).date()
-    except:
+    except Exception:
         from_date = date.today().replace(day=1)
         to_date = date.today()
 
-    # Base query - join with subscription and member to get all details
-    query = db.session.query(SubscriptionPayment).join(Subscription).join(
-        Subscription.member
-    )
+    payment_method = request.args.get('payment_method', '')
+    service_id = request.args.get('service_id', type=int)
+    receptionist_id = request.args.get('receptionist_id', type=int)
+    search = (request.args.get('search', '') or '').strip()
+    brand_id = request.args.get('brand_id', type=int) if current_user.can_view_all_brands else None
 
-    # Brand filter
+    # ── Subscription payments ────────────────────────────────────────
+    sub_q = db.session.query(SubscriptionPayment).join(Subscription).join(Subscription.member)
     if current_user.can_view_all_brands:
-        brand_id = request.args.get('brand_id', type=int)
         if brand_id:
-            query = query.filter(Subscription.brand_id == brand_id)
+            sub_q = sub_q.filter(Subscription.brand_id == brand_id)
     else:
-        query = query.filter(Subscription.brand_id == current_user.brand_id)
-
-    # Date filter (GYM-32 — skip soft-deleted subscriptions)
-    query = query.filter(
+        sub_q = sub_q.filter(Subscription.brand_id == current_user.brand_id)
+    sub_q = sub_q.filter(
         db.func.date(SubscriptionPayment.payment_date) >= from_date,
         db.func.date(SubscriptionPayment.payment_date) <= to_date,
-        Subscription.is_deleted == False,
+        Subscription.is_deleted == False,  # GYM-32
     )
-
-    # Payment method filter
-    payment_method = request.args.get('payment_method', '')
     if payment_method:
-        query = query.filter(SubscriptionPayment.payment_method == payment_method)
-
-    # Service filter (subscription plan)
-    service_id = request.args.get('service_id', type=int)
+        sub_q = sub_q.filter(SubscriptionPayment.payment_method == payment_method)
     if service_id:
-        query = query.filter(Subscription.plan_id == service_id)
-
-    # Receptionist filter
-    receptionist_id = request.args.get('receptionist_id', type=int)
+        sub_q = sub_q.filter(Subscription.plan_id == service_id)
     if receptionist_id:
-        query = query.filter(Subscription.created_by == receptionist_id)
-
-    # Member search
-    search = request.args.get('search', '').strip()
+        sub_q = sub_q.filter(Subscription.created_by == receptionist_id)
     if search:
-        from app.models.member import Member
-        query = query.filter(Member.name.like(f'%{search}%'))
+        sub_q = sub_q.filter(Member.name.like(f'%{search}%'))
 
-    # Calculate totals
-    total_amount = query.with_entities(
-        db.func.sum(SubscriptionPayment.amount)
-    ).scalar() or 0
+    sub_payments = sub_q.all()
 
-    # Count by payment method
-    payment_method_counts = {}
-    if current_user.can_view_all_brands and not brand_id:
-        base_query = db.session.query(SubscriptionPayment).join(Subscription)
-    else:
-        base_query = query
-
-    for method in ['cash', 'card', 'transfer']:
-        count_query = base_query.filter(
-            SubscriptionPayment.payment_method == method,
-            db.func.date(SubscriptionPayment.payment_date) >= from_date,
-            db.func.date(SubscriptionPayment.payment_date) <= to_date
-        )
-        if not current_user.can_view_all_brands or brand_id:
-            payment_method_counts[method] = count_query.count()
-        else:
-            payment_method_counts[method] = count_query.count()
-
-    # Pagination
-    transactions = query.order_by(SubscriptionPayment.payment_date.desc()).paginate(
-        page=page, per_page=per_page, error_out=False
+    # ── Day-pass tickets ─────────────────────────────────────────────
+    dp_q = DayPass.query.filter(
+        DayPass.pass_date >= from_date,
+        DayPass.pass_date <= to_date,
     )
+    if current_user.can_view_all_brands:
+        if brand_id:
+            dp_q = dp_q.filter(DayPass.brand_id == brand_id)
+    else:
+        dp_q = dp_q.filter(DayPass.brand_id == current_user.brand_id)
+    if payment_method:
+        dp_q = dp_q.filter(DayPass.payment_method == payment_method)
+    # Day-passes have no plan_id; service_id filter excludes them.
+    if service_id:
+        dp_q = dp_q.filter(False)
+    if receptionist_id:
+        dp_q = dp_q.filter(DayPass.created_by == receptionist_id)
+    if search:
+        dp_q = dp_q.filter(DayPass.customer_name.like(f'%{search}%'))
+
+    day_passes = dp_q.all()
+
+    # ── Unified row shape ────────────────────────────────────────────
+    class SaleRow:
+        __slots__ = ('kind', 'when', 'who_name', 'who_url', 'what_label',
+                     'brand_name', 'creator_name', 'payment_method',
+                     'payment_method_text', 'amount', 'detail_url', 'invoice_url')
+
+        def __init__(self, **kw):
+            for k, v in kw.items():
+                setattr(self, k, v)
+
+    _MTEXT = {'cash': 'نقدي', 'card': 'بطاقة', 'transfer': 'تحويل'}
+    rows: list[SaleRow] = []
+
+    # Resolve creator names in one shot so we don't N+1 the users table.
+    creator_ids = {s.created_by for s in [p.subscription for p in sub_payments] if s and s.created_by}
+    creator_ids |= {dp.created_by for dp in day_passes if dp.created_by}
+    creator_map = {}
+    if creator_ids:
+        creator_map = {u.id: u.name for u in User.query.filter(User.id.in_(creator_ids)).all()}
+
+    # Same for brand names — DayPass has no `brand` relationship, just brand_id.
+    brand_ids = {dp.brand_id for dp in day_passes if dp.brand_id}
+    brand_name_map = {b.id: b.name for b in Brand.query.filter(Brand.id.in_(brand_ids)).all()} if brand_ids else {}
+
+    for p in sub_payments:
+        sub = p.subscription
+        mem = sub.member if sub else None
+        net = float(p.amount or 0)
+        rows.append(SaleRow(
+            kind='subscription',
+            when=p.payment_date,
+            who_name=(mem.name if mem else '—'),
+            who_url=(url_for('members.view', member_id=mem.id) if mem else None),
+            what_label=(sub.plan.name if sub and sub.plan else '—'),
+            brand_name=(sub.brand.name if sub and sub.brand else ''),
+            creator_name=(creator_map.get(sub.created_by) if sub else None),
+            payment_method=p.payment_method,
+            payment_method_text=_MTEXT.get(p.payment_method, p.payment_method),
+            amount=net,
+            detail_url=url_for('subscriptions.view', subscription_id=sub.id) if sub else '#',
+            invoice_url=None,
+        ))
+
+    for dp in day_passes:
+        net = float(dp.price or 0) - float(dp.discount or 0)
+        rows.append(SaleRow(
+            kind='day_pass',
+            when=dp.created_at or datetime.combine(dp.pass_date, datetime.min.time()),
+            who_name=dp.customer_name,
+            who_url=None,
+            what_label=(dp.service_type.name if dp.service_type else 'تذكرة يومية'),
+            brand_name=brand_name_map.get(dp.brand_id, ''),
+            creator_name=creator_map.get(dp.created_by),
+            payment_method=dp.payment_method,
+            payment_method_text=_MTEXT.get(dp.payment_method, dp.payment_method),
+            amount=net,
+            detail_url=url_for('day_pass.print_pass', pass_id=dp.id),
+            invoice_url=None,
+        ))
+
+    rows.sort(key=lambda r: r.when or datetime.min, reverse=True)
+
+    total_amount = sum(r.amount for r in rows)
+    payment_method_counts = {
+        'cash': sum(1 for r in rows if r.payment_method == 'cash'),
+        'card': sum(1 for r in rows if r.payment_method == 'card'),
+        'transfer': sum(1 for r in rows if r.payment_method == 'transfer'),
+    }
+
+    # ── Manual pagination wrapper ────────────────────────────────────
+    class _ManualPage:
+        def __init__(self, items, page, per_page, total):
+            self.items = items
+            self.page = page
+            self.per_page = per_page
+            self.total = total
+            self.pages = max(1, (total + per_page - 1) // per_page) if total else 0
+            self.has_prev = page > 1
+            self.has_next = page < self.pages
+            self.prev_num = page - 1 if self.has_prev else None
+            self.next_num = page + 1 if self.has_next else None
+
+        def iter_pages(self, left_edge=1, right_edge=1, left_current=1, right_current=2):
+            last = 0
+            for num in range(1, self.pages + 1):
+                if (num <= left_edge
+                    or (self.page - left_current - 1 < num < self.page + right_current)
+                    or num > self.pages - right_edge):
+                    if last + 1 != num and last != 0:
+                        yield None
+                    yield num
+                    last = num
+
+    start = (page - 1) * per_page
+    transactions = _ManualPage(rows[start:start + per_page], page, per_page, len(rows))
 
     # Get filter options
     brands = None

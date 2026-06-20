@@ -13,6 +13,30 @@
     </div>
 </div>
 
+{# GYM-37 — backdated closing picker. Default to today; if you pick a past
+   date and a closing already exists for it, the route flashes a friendly
+   "هذا اليوم تم إقفاله سابقاً" message + opens the existing record. #}
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" action="{{ url_for('closing.view_daily_summary', closing_date='__PLACEHOLDER__') }}" class="row g-3 align-items-end"
+              onsubmit="event.preventDefault(); var d=document.getElementById('backdated_date').value || '{{ date.today().isoformat() }}'; window.location='/closing/view/'+d;">
+            <div class="col-md-4">
+                <label class="form-label">إقفال يوم سابق</label>
+                <input type="date" id="backdated_date" name="closing_date"
+                       value="{{ date.today().isoformat() }}"
+                       max="{{ date.today().isoformat() }}"
+                       class="form-control">
+            </div>
+            <div class="col-md-3">
+                <button type="submit" class="btn btn-outline-primary w-100">
+                    <i class="bi bi-calendar-check"></i>
+                    اذهب لإقفال هذا اليوم
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <!-- Filters -->
 {% if current_user.can_view_all_brands and brands %}
 <div class="card mb-4">

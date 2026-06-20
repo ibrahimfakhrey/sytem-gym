@@ -130,13 +130,15 @@
             </table>
         </div>
 
-        <!-- Pagination -->
+        <!-- Pagination (GYM-35: strip 'page' before splatting request.args) -->
         {% if attendances.pages > 1 %}
+        {% set qargs = request.args.to_dict() %}
+        {% set _ = qargs.pop('page', None) %}
         <nav class="mt-4">
             <ul class="pagination justify-content-center">
                 {% if attendances.has_prev %}
                 <li class="page-item">
-                    <a class="page-link" href="{{ url_for('attendance.history', page=attendances.prev_num, **request.args) }}">
+                    <a class="page-link" href="{{ url_for('attendance.members_list', page=attendances.prev_num, **qargs) }}">
                         <i class="bi bi-chevron-right"></i>
                     </a>
                 </li>
@@ -145,7 +147,7 @@
                 {% for page_num in attendances.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                 {% if page_num %}
                 <li class="page-item {{ 'active' if page_num == attendances.page else '' }}">
-                    <a class="page-link" href="{{ url_for('attendance.history', page=page_num, **request.args) }}">
+                    <a class="page-link" href="{{ url_for('attendance.members_list', page=page_num, **qargs) }}">
                         {{ page_num }}
                     </a>
                 </li>
@@ -156,7 +158,7 @@
 
                 {% if attendances.has_next %}
                 <li class="page-item">
-                    <a class="page-link" href="{{ url_for('attendance.history', page=attendances.next_num, **request.args) }}">
+                    <a class="page-link" href="{{ url_for('attendance.members_list', page=attendances.next_num, **qargs) }}">
                         <i class="bi bi-chevron-left"></i>
                     </a>
                 </li>
