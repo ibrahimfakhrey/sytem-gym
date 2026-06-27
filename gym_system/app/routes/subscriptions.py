@@ -1166,9 +1166,30 @@ def edit(subscription_id):
         return redirect(url_for('subscriptions.index'))
 
     if request.method == 'POST':
-        # end_date — allow extending or shortening; reject obviously bad values.
         new_end_str = (request.form.get('end_date') or '').strip()
+        new_start_str = (request.form.get('start_date') or '').strip()
         new_notes = (request.form.get('notes') or '').strip() or None
+
+        # GYM-47 — owner / admin can also move start_date; end_date follows
+        # automatically (server-side default: start + plan.duration_days).
+        # The form's JS does the same calc client-side so the submitted
+        # end_date usually already matches, but the server recomputes when
+        # end_date wasn't sent or is older than the new start_date.
+        if new_start_str and (current_user.is_owner or current_user.is_brand_manager):
+            try:
+                new_start = date.fromisoformat(new_start_str)
+            except ValueError:
+                flash('تاريخ البداية غير صالح', 'danger')
+                return redirect(url_for('subscriptions.edit', subscription_id=subscription.id))
+            subscription.start_date = new_start
+            # Auto-recompute end_date from plan duration when the receptionist
+            # didn't explicitly send a new end_date, or sent one < start.
+            duration = subscription.plan.duration_days if subscription.plan else None
+            if duration and (not new_end_str or
+                             date.fromisoformat(new_end_str) < new_start):
+                subscription.end_date = new_start + timedelta(days=duration)
+                new_end_str = ''  # already applied
+
         if new_end_str:
             try:
                 new_end = date.fromisoformat(new_end_str)
@@ -1179,6 +1200,7 @@ def edit(subscription_id):
                 flash('تاريخ النهاية أقدم من تاريخ البداية', 'danger')
                 return redirect(url_for('subscriptions.edit', subscription_id=subscription.id))
             subscription.end_date = new_end
+
         subscription.notes = new_notes
         db.session.commit()
         flash('تم تحديث الاشتراك', 'success')

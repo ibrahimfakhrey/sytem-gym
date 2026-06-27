@@ -27,15 +27,41 @@
 
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">تاريخ البداية</label>
+                            <label for="start_date" class="form-label">تاريخ البداية</label>
+                            {# GYM-47 — owner / admin can move start_date; end_date follows automatically. #}
+                            {% if current_user.is_owner or current_user.is_brand_manager %}
+                            <input id="start_date" name="start_date" type="date" class="form-control"
+                                   value="{{ subscription.start_date }}"
+                                   data-plan-duration="{{ subscription.plan.duration_days if subscription.plan else 0 }}">
+                            <div class="form-text">تغيير البداية يحدّث النهاية تلقائياً حسب مدة الباقة.</div>
+                            {% else %}
                             <input type="text" class="form-control bg-light" value="{{ subscription.start_date }}" readonly>
+                            {% endif %}
                         </div>
                         <div class="col-md-6 mb-3">
                             <label for="end_date" class="form-label">تاريخ النهاية</label>
                             <input id="end_date" name="end_date" type="date" class="form-control" value="{{ subscription.end_date }}">
-                            <div class="form-text">يمكن مدّ أو تقصير الاشتراك من هنا.</div>
+                            <div class="form-text">يمكن تعديل النهاية يدوياً بعد البداية إذا أردت.</div>
                         </div>
                     </div>
+
+                    {# GYM-47 — auto-recompute end_date when start_date changes #}
+                    {% if current_user.is_owner or current_user.is_brand_manager %}
+                    <script>
+                    (function () {
+                        var s = document.getElementById('start_date');
+                        var e = document.getElementById('end_date');
+                        if (!s || !e) return;
+                        var duration = parseInt(s.dataset.planDuration) || 0;
+                        s.addEventListener('change', function () {
+                            if (!s.value || !duration) return;
+                            var d = new Date(s.value + 'T00:00:00');
+                            d.setDate(d.getDate() + duration);
+                            e.value = d.toISOString().slice(0, 10);
+                        });
+                    })();
+                    </script>
+                    {% endif %}
 
                     <div class="mb-3">
                         <label for="notes" class="form-label">ملاحظات</label>
