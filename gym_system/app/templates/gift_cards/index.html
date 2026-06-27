@@ -17,7 +17,7 @@
                         <td><code>{{ gc.code }}</code></td>
                         <td>{{ "{:,.0f}".format(gc.original_amount) }} ر.س</td>
                         <td>{{ "{:,.0f}".format(gc.remaining_amount) }} ر.س</td>
-                        <td>{% if gc.expires_at %}{{ gc.expires_at.strftime('%Y-%m-%d') }}{% else %}بدون انتهاء{% endif %}</td>
+                        <td>{% if gc.expires_at %}{{ gc.expires_at| local_date }}{% else %}بدون انتهاء{% endif %}</td>
                         <td><span class="badge bg-{{ 'success' if gc.status == 'active' else 'secondary' }}">{{ gc.status }}</span></td>
                         <td>
                             <div class="d-flex flex-wrap gap-1">

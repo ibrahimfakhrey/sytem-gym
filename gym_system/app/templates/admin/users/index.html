@@ -84,7 +84,7 @@
                         </td>
                         <td>
                             {% if user.last_login %}
-                            {{ user.last_login.strftime('%Y-%m-%d %H:%M') }}
+                            {{ user.last_login| local_dt }}
                             {% else %}
                             <span class="text-muted">لم يسجل دخول</span>
                             {% endif %}

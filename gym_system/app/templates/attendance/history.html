@@ -104,8 +104,8 @@
                 <tbody>
                     {% for att in attendances.items %}
                     <tr>
-                        <td>{{ att.check_in.strftime('%Y-%m-%d') }}</td>
-                        <td>{{ att.check_in.strftime('%H:%M:%S') }}</td>
+                        <td>{{ att.check_in| local_date }}</td>
+                        <td>{{ att.check_in| local_time }}</td>
                         <td>
                             <a href="{{ url_for('members.view', member_id=att.member.id) }}">
                                 {{ att.member.name }}

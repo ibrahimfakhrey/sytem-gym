@@ -87,7 +87,7 @@ def staff_performance():
         start_date = today.replace(day=1)
     
     # Base query for employees
-    emp_query = User.query.filter(User.is_active == True)
+    emp_query = User.query.filter(User.is_active == True, User.is_deleted == False)  # GYM-43
     
     if brand_id:
         emp_query = emp_query.filter(User.brand_id == brand_id)
@@ -506,7 +506,7 @@ def staff_performance_export():
     else:
         start_date = today.replace(day=1)
 
-    emp_query = User.query.filter(User.is_active == True)
+    emp_query = User.query.filter(User.is_active == True, User.is_deleted == False)  # GYM-43
     if brand_id:
         emp_query = emp_query.filter(User.brand_id == brand_id)
     if branch_id:

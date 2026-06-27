@@ -125,7 +125,7 @@
                             {% for att in recent_attendance %}
                             <tr>
                                 <td>{{ att.member.name }}</td>
-                                <td>{{ att.check_in.strftime('%H:%M') }}</td>
+                                <td>{{ att.check_in| local_time }}</td>
                                 <td>
                                     <span class="badge bg-secondary">{{ att.source_text }}</span>
                                 </td>
@@ -239,7 +239,7 @@
                                         {{ 'قيد الانتظار' if complaint.status == 'pending' else ('قيد المعالجة' if complaint.status == 'in_progress' else 'تم الحل') }}
                                     </span>
                                 </td>
-                                <td>{{ complaint.created_at.strftime('%m/%d %H:%M') }}</td>
+                                <td>{{ complaint.created_at| local_dt }}</td>
                             </tr>
                             {% endfor %}
                         </tbody>

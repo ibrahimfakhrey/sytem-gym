@@ -176,19 +176,19 @@ def employees_list():
 @csrf.exempt
 def search_member():
     """Search member for check-in (AJAX)"""
-    q = request.args.get('q', '')
+    q = (request.args.get('q', '') or '').strip()
 
-    if len(q) < 2:
+    # GYM-42 — return results immediately from the first character so the
+    # receptionist sees matches as they type. Also search by fingerprint_id
+    # when the input is purely numeric.
+    if len(q) < 1:
         return jsonify({'results': []})
 
-    # Build base query - search by name or phone
-    query = Member.query.filter(
-        Member.is_active == True,
-        db.or_(
-            Member.name.ilike(f'%{q}%'),
-            Member.phone.ilike(f'%{q}%')
-        )
-    )
+    clauses = [Member.name.ilike(f'%{q}%'), Member.phone.ilike(f'%{q}%')]
+    if q.isdigit():
+        clauses.append(Member.fingerprint_id == int(q))
+
+    query = Member.query.filter(Member.is_active == True, db.or_(*clauses))
 
     # Filter by brand if user is not owner
     if not current_user.can_view_all_brands:

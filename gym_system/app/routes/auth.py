@@ -36,7 +36,8 @@ def login():
 
     if request.method == 'POST':
         if form.validate_on_submit():
-            user = User.query.filter_by(email=form.email.data.lower()).first()
+            # GYM-43 — soft-deleted users can't log in even if is_active is True.
+            user = User.query.filter_by(email=form.email.data.lower(), is_deleted=False).first()
 
             if user is None or not user.check_password(form.password.data):
                 flash('البريد الإلكتروني أو كلمة المرور غير صحيحة', 'danger')

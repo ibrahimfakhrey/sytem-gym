@@ -163,7 +163,7 @@
                         <tbody>
                             {% for payment in recent_payments %}
                             <tr>
-                                <td>{{ payment.payment_date.strftime('%H:%M') }}</td>
+                                <td>{{ payment.payment_date| local_time }}</td>
                                 <td>{{ payment.subscription.member.name }}</td>
                                 <td><strong>{{ "{:,.2f}".format(payment.amount) }} ر.س</strong></td>
                                 <td>

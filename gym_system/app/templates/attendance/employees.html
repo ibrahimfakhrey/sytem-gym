@@ -52,8 +52,8 @@
                     <tr>
                         <td>{{ record.user.name }}</td>
                         <td>{{ record.date.strftime('%Y-%m-%d') }}</td>
-                        <td>{{ record.check_in.strftime('%H:%M') if record.check_in else '-' }}</td>
-                        <td>{{ record.check_out.strftime('%H:%M') if record.check_out else '-' }}</td>
+                        <td>{{ record.check_in| local_time if record.check_in else '-' }}</td>
+                        <td>{{ record.check_out| local_time if record.check_out else '-' }}</td>
                         <td>{{ record.hours_worked|round(2) if record.hours_worked else '-' }}</td>
                     </tr>
                     {% endfor %}

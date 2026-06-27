@@ -124,6 +124,10 @@ class User(UserMixin, db.Model):
     salary_amount = db.Column(db.Numeric(10, 2))
 
     is_active = db.Column(db.Boolean, default=True)
+    # GYM-43 — soft-delete. is_active stays user-facing ("معطل/نشط"); is_deleted
+    # is a separate, finer-grained flag that hides the user from lists and
+    # blocks login but keeps their FK relationships intact.
+    is_deleted = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_login = db.Column(db.DateTime)
 
@@ -242,5 +246,9 @@ class User(UserMixin, db.Model):
 
 @login_manager.user_loader
 def load_user(user_id):
-    """Load user for Flask-Login"""
-    return User.query.get(int(user_id))
+    """Load user for Flask-Login. GYM-43 — soft-deleted users get logged out
+    on their next request because their session ID won't resolve."""
+    u = User.query.get(int(user_id))
+    if u is None or u.is_deleted:
+        return None
+    return u

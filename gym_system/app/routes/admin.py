@@ -277,12 +277,13 @@ def users_list():
     hidden_roles = Role.query.filter(Role.name_en.in_(['admin', 'finance_admin'])).all()
     hidden_role_ids = [r.id for r in hidden_roles]
 
-    if current_user.is_owner:  # admin sees all
-        users = User.query.order_by(User.created_at.desc()).all()
+    if current_user.is_owner:  # admin sees all (GYM-43: hide soft-deleted)
+        users = User.query.filter(User.is_deleted == False).order_by(User.created_at.desc()).all()
     elif (current_user.is_brand_manager or current_user.is_branch_manager) and current_user.brand_id:
         # Owner/branch_manager sees brand users (except admin/finance_admin)
         query = User.query.filter(
             User.brand_id == current_user.brand_id,
+            User.is_deleted == False,  # GYM-43
             ~User.role_id.in_(hidden_role_ids)
         )
         # Branch manager with branch_id sees only their branch
@@ -558,19 +559,15 @@ def users_delete(user_id):
             flash('لا يمكنك حذف مستخدم بنفس مستواك أو أعلى', 'danger')
             return redirect(url_for('admin.users_list'))
 
-    # Block delete if user has linked records — must deactivate instead
-    has_members = user.created_members.count() > 0
-    has_subscriptions = user.created_subscriptions.count() > 0
-    has_attendance = user.employee_attendance.count() > 0
-    has_salaries = user.salaries.count() > 0
-
-    if has_members or has_subscriptions or has_attendance or has_salaries:
-        flash('لا يمكن حذف هذا المستخدم لوجود سجلات مرتبطة به (أعضاء، اشتراكات، حضور، أو رواتب). قم بتعطيله بدلاً من حذفه.', 'warning')
-        return redirect(url_for('admin.users_edit', user_id=user.id))
-
-    db.session.delete(user)
+    # GYM-43 — soft-delete. Linked records (members created, subscriptions,
+    # attendance, salaries) are preserved because the row stays in the DB.
+    # is_deleted=True hides the user from lists, blocks login, and excludes
+    # them from staff-performance + employee aggregations. Reversible by
+    # flipping the flag back via SQL.
+    user.is_deleted = True
+    user.is_active = False  # also flip the legacy flag so login fails immediately
     db.session.commit()
-    flash('تم حذف المستخدم بنجاح', 'success')
+    flash(f'تم حذف المستخدم "{user.name}". (سجلاته محفوظة، لن يظهر في القوائم ولن يستطيع تسجيل الدخول.)', 'success')
     return redirect(url_for('admin.users_list'))
 
 

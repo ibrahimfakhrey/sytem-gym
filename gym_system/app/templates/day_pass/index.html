@@ -92,8 +92,8 @@
                         {# GYM-39 — automatic created_at + creator (no manual entry) #}
                         <td class="text-center small text-muted" dir="ltr">
                             {% if p.created_at %}
-                                <div>{{ p.created_at.strftime('%Y-%m-%d') }}</div>
-                                <div class="fw-bold">{{ p.created_at.strftime('%H:%M') }}</div>
+                                <div>{{ p.created_at| local_date }}</div>
+                                <div class="fw-bold">{{ p.created_at| local_time }}</div>
                             {% else %}—{% endif %}
                         </td>
                         <td class="text-center small text-muted">

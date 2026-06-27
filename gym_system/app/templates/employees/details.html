@@ -136,7 +136,7 @@
                                 <td>
                                     {{ s.month_name }} {{ s.year }}
                                     {% if s.paid_date %}
-                                    <div class="small text-muted">دُفع {{ s.paid_date.strftime('%Y-%m-%d') }}</div>
+                                    <div class="small text-muted">دُفع {{ s.paid_date| local_date }}</div>
                                     {% endif %}
                                 </td>
                                 <td class="text-center">{{ "{:,.0f}".format(s.net_salary) }} ر.س</td>
@@ -212,8 +212,8 @@
                             {% for att in attendance %}
                             <tr>
                                 <td>{{ att.date.strftime('%Y-%m-%d') }}</td>
-                                <td>{{ att.check_in.strftime('%H:%M') if att.check_in else '-' }}</td>
-                                <td>{{ att.check_out.strftime('%H:%M') if att.check_out else '-' }}</td>
+                                <td>{{ att.check_in| local_time if att.check_in else '-' }}</td>
+                                <td>{{ att.check_out| local_time if att.check_out else '-' }}</td>
                                 <td>
                                     {% if att.late_minutes and att.late_minutes > 0 %}
                                     <span class="text-warning">{{ att.late_minutes }} دقيقة</span>

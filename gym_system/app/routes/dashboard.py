@@ -422,7 +422,7 @@ def branch_detail(branch_id):
     stats['profit'] = stats['income'] - stats['expenses']
     
     # Branch employees
-    employees = User.query.filter_by(branch_id=branch_id, is_active=True).all()
+    employees = User.query.filter_by(branch_id=branch_id, is_active=True, is_deleted=False).all()  # GYM-43
     
     # Recent subscriptions for this branch
     recent_subscriptions = Subscription.query.filter_by(
@@ -1080,7 +1080,7 @@ def get_brand_stats(brand_id, start_date, end_date):
     today_attendance = MemberAttendance.get_today_count(brand_id)
 
     # Count employees for this brand
-    employee_count = User.query.filter_by(brand_id=brand_id, is_active=True).count()
+    employee_count = User.query.filter_by(brand_id=brand_id, is_active=True, is_deleted=False).count()  # GYM-43
 
     # Service demand analytics - Revenue by service type
     from app.models.service import ServiceType

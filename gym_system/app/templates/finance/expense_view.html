@@ -60,7 +60,7 @@
                             </tr>
                             <tr>
                                 <th>تاريخ الإنشاء:</th>
-                                <td>{{ expense.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                                <td>{{ expense.created_at| local_dt }}</td>
                             </tr>
                             {% if expense.approved_by %}
                             <tr>
@@ -69,7 +69,7 @@
                             </tr>
                             <tr>
                                 <th>تاريخ المعالجة:</th>
-                                <td>{{ expense.approved_at.strftime('%Y-%m-%d %H:%M') if expense.approved_at else '-' }}</td>
+                                <td>{{ expense.approved_at| local_dt if expense.approved_at else '-' }}</td>
                             </tr>
                             {% endif %}
                         </table>

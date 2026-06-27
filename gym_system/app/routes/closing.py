@@ -262,10 +262,35 @@ def view_closing(closing_id):
         if i.payment_method == 'cash':
             income_cash_by_type[t] = income_cash_by_type.get(t, 0) + amount
 
+    # GYM-46 — pass the per-transaction detail to the closing view so the
+    # detail page shows the same breakdown as the summary (not just totals).
+    payments_q = SubscriptionPayment.query.filter(
+        SubscriptionPayment.brand_id == closing.brand_id,
+        db.func.date(SubscriptionPayment.payment_date) == closing.closing_date,
+        SubscriptionPayment.is_deleted == False,
+    )
+    payments = payments_q.order_by(SubscriptionPayment.payment_date.desc()).all()
+
+    from app.models.day_pass import DayPass
+    dp_q = DayPass.query.filter(
+        DayPass.brand_id == closing.brand_id,
+        DayPass.pass_date == closing.closing_date,
+    )
+    if closing.branch_id:
+        dp_q = dp_q.filter(DayPass.branch_id == closing.branch_id)
+    day_passes = dp_q.order_by(DayPass.created_at.desc()).all()
+    day_pass_total = sum(
+        float(dp.price or 0) - float(dp.discount or 0) for dp in day_passes
+    )
+
     return render_template('closing/view.html',
                            closing=closing,
                            income_by_type=income_by_type,
-                           income_cash_by_type=income_cash_by_type)
+                           income_cash_by_type=income_cash_by_type,
+                           payments=payments,
+                           day_passes=day_passes,
+                           day_pass_count=len(day_passes),
+                           day_pass_total=day_pass_total)
 
 
 def calculate_daily_stats(brand_id, target_date):
@@ -310,7 +335,19 @@ def calculate_daily_stats(brand_id, target_date):
         SubscriptionPayment.brand_id == brand_id,
         db.func.date(SubscriptionPayment.payment_date) == target_date,
         SubscriptionPayment.is_deleted == False,
-    ).all()
+    ).order_by(SubscriptionPayment.payment_date.desc()).all()
+
+    # GYM-46 — day-pass tickets for the day. The closing report needs the
+    # count + the per-ticket detail so the receptionist can reconcile the
+    # "تذاكر يومية" line on the breakdown card with the actual sales.
+    from app.models.day_pass import DayPass
+    day_passes = DayPass.query.filter(
+        DayPass.brand_id == brand_id,
+        DayPass.pass_date == target_date,
+    ).order_by(DayPass.created_at.desc()).all()
+    day_pass_total = sum(
+        float(dp.price or 0) - float(dp.discount or 0) for dp in day_passes
+    )
 
     return {
         'new_subscriptions_count': new_subscriptions_count,
@@ -320,6 +357,9 @@ def calculate_daily_stats(brand_id, target_date):
         'card_sales': card_sales,
         'transfer_sales': transfer_sales,
         'payments': payments,
+        'day_passes': day_passes,
+        'day_pass_count': len(day_passes),
+        'day_pass_total': day_pass_total,
         'incomes': incomes,
         'income_by_type': by_type,
         'new_subscriptions': new_subs,

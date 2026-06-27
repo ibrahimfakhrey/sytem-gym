@@ -78,8 +78,8 @@
     {% endif %}
 
     <div class="d-flex justify-content-between gc-meta">
-        <div>تاريخ الإصدار: {{ gift_card.created_at.strftime('%Y-%m-%d') }}</div>
-        {% if gift_card.expires_at %}<div>صالح حتى: {{ gift_card.expires_at.strftime('%Y-%m-%d') }}</div>{% endif %}
+        <div>تاريخ الإصدار: {{ gift_card.created_at| local_date }}</div>
+        {% if gift_card.expires_at %}<div>صالح حتى: {{ gift_card.expires_at| local_date }}</div>{% endif %}
     </div>
 </div>
 

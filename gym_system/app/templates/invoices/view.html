@@ -31,7 +31,7 @@
             <div class="col-6 text-end">
                 <h3 class="text-primary mb-2">فاتورة</h3>
                 <p class="mb-1"><strong>رقم الفاتورة:</strong> {{ invoice.invoice_number }}</p>
-                <p class="mb-1"><strong>التاريخ:</strong> {{ invoice.invoice_date.strftime('%Y-%m-%d %H:%M') }}</p>
+                <p class="mb-1"><strong>التاريخ:</strong> {{ invoice.invoice_date| local_dt }}</p>
             </div>
         </div>
 

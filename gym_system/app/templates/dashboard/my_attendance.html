@@ -51,8 +51,8 @@
                     {% for att in rows %}
                     <tr>
                         <td>{{ att.date.strftime('%Y-%m-%d') }} ({{ att.day_name if att.day_name is defined else '' }})</td>
-                        <td class="text-center">{{ att.check_in.strftime('%H:%M') if att.check_in else '—' }}</td>
-                        <td class="text-center">{{ att.check_out.strftime('%H:%M') if att.check_out else '—' }}</td>
+                        <td class="text-center">{{ att.check_in| local_time if att.check_in else '—' }}</td>
+                        <td class="text-center">{{ att.check_out| local_time if att.check_out else '—' }}</td>
                         <td class="text-center text-muted small">
                             {% if att.check_in and att.check_out %}
                             {% set diff = (att.check_out - att.check_in).total_seconds() / 3600 %}

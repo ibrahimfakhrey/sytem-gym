@@ -54,7 +54,7 @@
             </div>
             <div class="card-footer text-muted small">
                 <i class="bi bi-clock"></i>
-                {{ complaint.created_at.strftime('%Y-%m-%d %H:%M') }}
+                {{ complaint.created_at| local_dt }}
                 {% if complaint.submitted_by == 'customer' %}
                 <span class="badge bg-info ms-2">عبر رابط العميل</span>
                 {% else %}
@@ -75,7 +75,7 @@
             </div>
             <div class="card-footer text-muted small">
                 <i class="bi bi-clock"></i>
-                تم الحل في {{ complaint.resolved_at.strftime('%Y-%m-%d %H:%M') if complaint.resolved_at else '-' }}
+                تم الحل في {{ complaint.resolved_at| local_dt if complaint.resolved_at else '-' }}
                 {% if complaint.resolver %}
                 بواسطة {{ complaint.resolver.name }}
                 {% endif %}
@@ -172,7 +172,7 @@
                     <li class="mb-2">
                         <i class="bi bi-plus-circle text-primary"></i>
                         <strong>تم الإنشاء</strong>
-                        <br><span class="text-muted me-3">{{ complaint.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                        <br><span class="text-muted me-3">{{ complaint.created_at| local_dt }}</span>
                         {% if complaint.creator %}بواسطة {{ complaint.creator.name }}{% endif %}
                     </li>
                     {% if complaint.assignee %}
@@ -186,7 +186,7 @@
                     <li class="mb-2">
                         <i class="bi bi-check-circle text-success"></i>
                         <strong>تم الحل</strong>
-                        <br><span class="text-muted">{{ complaint.resolved_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                        <br><span class="text-muted">{{ complaint.resolved_at| local_dt }}</span>
                         {% if complaint.resolver %}بواسطة {{ complaint.resolver.name }}{% endif %}
                     </li>
                     {% endif %}

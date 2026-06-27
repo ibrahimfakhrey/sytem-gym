@@ -149,7 +149,7 @@
                             {% if item.closing.submitter %}
                             {{ item.closing.submitter.name }}
                             <br>
-                            <small class="text-muted">{{ item.closing.submitted_at.strftime('%H:%M') }}</small>
+                            <small class="text-muted">{{ item.closing.submitted_at| local_time }}</small>
                             {% else %}
                             <span class="text-muted">-</span>
                             {% endif %}

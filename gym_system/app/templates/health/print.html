@@ -152,7 +152,7 @@
 <body>
     <div class="header">
         <h1>التقرير الصحي</h1>
-        <p>{{ report.created_at.strftime('%Y-%m-%d') }}</p>
+        <p>{{ report.created_at| local_date }}</p>
     </div>
 
     <div class="member-info">
@@ -260,7 +260,7 @@
 
     <div class="footer">
         <p>تم إنشاء هذا التقرير بواسطة نظام إدارة الجيم</p>
-        <p>{{ report.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+        <p>{{ report.created_at| local_dt }}</p>
     </div>
 
     <div class="no-print" style="text-align: center; margin-top: 20px;">

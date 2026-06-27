@@ -289,7 +289,7 @@
                     {% endif %}
                 </div>
                 <div class="text-end">
-                    <small class="text-muted">{{ complaint.created_at.strftime('%m/%d %H:%M') }}</small>
+                    <small class="text-muted">{{ complaint.created_at| local_dt }}</small>
                     <br>
                     <span class="badge bg-{{ complaint.status_class }}">{{ complaint.status_arabic }}</span>
                     <br>

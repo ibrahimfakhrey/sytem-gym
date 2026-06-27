@@ -153,7 +153,7 @@
                         {% endif %}
                     </li>
                     <li class="mb-1"><strong>آخر اتصال:</strong>
-                        {{ bridge_status.last_heartbeat.strftime('%Y-%m-%d %H:%M') if bridge_status.last_heartbeat else '-' }}
+                        {{ bridge_status.last_heartbeat| local_dt if bridge_status.last_heartbeat else '-' }}
                     </li>
                     <li class="mb-1"><strong>عمليات المزامنة:</strong> {{ bridge_status.total_syncs or 0 }}</li>
                     {% if bridge_status.last_error %}

@@ -135,7 +135,7 @@
                             <td class="text-center">{{ e.attendance }}</td>
                             <td class="text-end">{{ "{:,.0f}".format(e.revenue) }} ر.س</td>
                             <td class="small text-muted">{{ e.last_attendance.strftime('%Y-%m-%d') if e.last_attendance else '—' }}</td>
-                            <td class="small text-muted">{{ e.m.created_at.strftime('%Y-%m-%d') if e.m.created_at else '—' }}</td>
+                            <td class="small text-muted">{{ e.m.created_at| local_date if e.m.created_at else '—' }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>

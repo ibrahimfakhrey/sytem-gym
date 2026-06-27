@@ -38,6 +38,8 @@ _ADDITIONS = [
     ('income',                'is_deleted', 'ALTER TABLE income ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT 0'),
     # GYM-38 — soft-delete per individual subscription_payment row.
     ('subscription_payments', 'is_deleted', 'ALTER TABLE subscription_payments ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT 0'),
+    # GYM-43 — soft-delete for staff users.
+    ('users',                 'is_deleted', 'ALTER TABLE users ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT 0'),
 ]
 
 

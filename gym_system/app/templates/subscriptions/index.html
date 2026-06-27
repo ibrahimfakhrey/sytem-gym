@@ -42,6 +42,13 @@
                     <option value="30" {{ 'selected' if request.args.get('expiring') == '30' }}>ينتهي خلال 30 يوم</option>
                 </select>
             </div>
+            {# GYM-45 — search by member's fingerprint id #}
+            <div class="col-md-2">
+                <input type="text" name="fingerprint_id" inputmode="numeric" pattern="[0-9]*"
+                       class="form-control"
+                       placeholder="بحث برقم البصمة"
+                       value="{{ request.args.get('fingerprint_id', '') }}">
+            </div>
             {% if current_user.role.can_view_all_brands %}
             <div class="col-md-3">
                 <select name="brand_id" class="form-select">

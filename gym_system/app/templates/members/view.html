@@ -226,7 +226,7 @@
                     {% endif %}
                     <tr>
                         <th>تاريخ التسجيل:</th>
-                        <td>{{ member.created_at.strftime('%Y-%m-%d') }}</td>
+                        <td>{{ member.created_at| local_date }}</td>
                     </tr>
                 </table>
 
@@ -298,7 +298,7 @@
 
                 {% if latest_health and latest_health.bmi %}
                 <hr>
-                <h6 class="mb-2">آخر تقرير <small class="text-muted">{{ latest_health.created_at.strftime('%Y-%m-%d') }}</small></h6>
+                <h6 class="mb-2">آخر تقرير <small class="text-muted">{{ latest_health.created_at| local_date }}</small></h6>
                 <div class="row text-center">
                     <div class="col-4">
                         <div class="h6 text-{{ 'success' if latest_health.bmi < 25 else ('warning' if latest_health.bmi < 30 else 'danger') }} mb-0">{{ "%.1f"|format(latest_health.bmi) }}</div>
@@ -493,8 +493,8 @@
                         <tbody>
                             {% for att in attendance %}
                             <tr>
-                                <td>{{ att.check_in.strftime('%Y-%m-%d') }}</td>
-                                <td>{{ att.check_in.strftime('%H:%M') }}</td>
+                                <td>{{ att.check_in| local_date }}</td>
+                                <td>{{ att.check_in| local_time }}</td>
                                 <td><span class="badge bg-secondary">{{ att.source_text }}</span></td>
                             </tr>
                             {% endfor %}
@@ -523,7 +523,7 @@
                         <div>
                             <strong>{{ complaint.subject[:30] }}{% if complaint.subject|length > 30 %}...{% endif %}</strong>
                             <br>
-                            <small class="text-muted">{{ complaint.created_at.strftime('%Y-%m-%d') }}</small>
+                            <small class="text-muted">{{ complaint.created_at| local_date }}</small>
                         </div>
                         <div>
                             <span class="badge bg-{{ 'warning' if complaint.status == 'pending' else ('info' if complaint.status == 'in_progress' else 'success') }}">

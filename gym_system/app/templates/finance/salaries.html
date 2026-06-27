@@ -186,7 +186,7 @@
                             {% if item.has_record %}
                             <span class="badge bg-{{ item.salary.status_class }}">{{ item.salary.status_text }}</span>
                             {% if item.salary.paid_date %}
-                            <div class="small text-muted mt-1">{{ item.salary.paid_date.strftime('%Y-%m-%d') }}</div>
+                            <div class="small text-muted mt-1">{{ item.salary.paid_date| local_date }}</div>
                             {% endif %}
                             {% else %}
                             <span class="badge bg-warning text-dark">غير منشأ</span>

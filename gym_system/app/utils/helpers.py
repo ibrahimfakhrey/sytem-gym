@@ -1,8 +1,56 @@
 import os
 import uuid
-from datetime import datetime, date
+from datetime import datetime, date, timezone, timedelta
 from flask import current_app
 from werkzeug.utils import secure_filename
+
+
+# ─── GYM-44 — local-time rendering helpers ───────────────────────────────
+# DB stays in UTC (default=datetime.utcnow on every timestamp column). The
+# filters below convert at render time to Asia/Riyadh + 12-hour with ص/م,
+# so existing rows + new rows look identical and we don't need to migrate
+# historical timestamps.
+try:
+    from zoneinfo import ZoneInfo
+    _RIYADH = ZoneInfo('Asia/Riyadh')
+except ImportError:
+    # Python < 3.9 fallback. KSA doesn't observe DST so +03:00 is correct.
+    _RIYADH = timezone(timedelta(hours=3))
+
+
+def to_local(dt):
+    """UTC (or naive == UTC) → Asia/Riyadh. None passes through."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(_RIYADH)
+
+
+def _fmt_12h(hour, minute):
+    mer = 'م' if hour >= 12 else 'ص'
+    h12 = hour % 12 or 12
+    return f"{h12:02d}:{minute:02d} {mer}"
+
+
+def local_dt(dt):
+    """Jinja filter: 'YYYY-MM-DD hh:MM ص/م'."""
+    d = to_local(dt)
+    if d is None: return '—'
+    return f"{d.strftime('%Y-%m-%d')} {_fmt_12h(d.hour, d.minute)}"
+
+
+def local_time(dt):
+    """Jinja filter: 'hh:MM ص/م' (no date)."""
+    d = to_local(dt)
+    if d is None: return '—'
+    return _fmt_12h(d.hour, d.minute)
+
+
+def local_date(dt):
+    """Jinja filter: 'YYYY-MM-DD' from a datetime, evaluated in Riyadh time."""
+    d = to_local(dt)
+    return d.strftime('%Y-%m-%d') if d else '—'
 
 
 def allowed_file(filename, allowed=None):

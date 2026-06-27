@@ -81,7 +81,7 @@
                         {% endif %}
                         <tr>
                             <td class="text-muted">آخر اتصال:</td>
-                            <td>{{ bridge.last_heartbeat.strftime('%Y-%m-%d %H:%M') if bridge.last_heartbeat else '-' }}</td>
+                            <td>{{ bridge.last_heartbeat| local_dt if bridge.last_heartbeat else '-' }}</td>
                         </tr>
                         <tr>
                             <td class="text-muted">عدد المزامنات:</td>
@@ -149,7 +149,7 @@
                 <tbody>
                     {% for log in sync_logs %}
                     <tr>
-                        <td>{{ log.synced_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                        <td>{{ log.synced_at| local_dt }}</td>
                         <td>
                             {% if log.sync_type == 'attendance' %}
                             <span class="badge bg-primary">حضور</span>

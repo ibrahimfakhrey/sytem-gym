@@ -46,8 +46,16 @@
                     <div class="row" id="dates-container">
                         <div class="col-md-6 mb-3">
                             <label for="start-date" class="form-label">تاريخ البدء</label>
+                            {# GYM-41 — owner / admin can pick a past start_date.
+                               Everyone else gets a read-only "today" input. #}
+                            {% if current_user.is_owner or current_user.is_brand_manager %}
+                            <input type="date" class="form-control" id="start-date" name="start_date"
+                                   value="{{ today }}" max="{{ today }}">
+                            <small class="text-muted">يمكنك اختيار تاريخ قديم — يحتسب الانتهاء تلقائياً</small>
+                            {% else %}
                             <input type="date" class="form-control" id="start-date" value="{{ today }}" readonly>
                             <small class="text-muted">يبدأ من اليوم</small>
+                            {% endif %}
                         </div>
                         <div class="col-md-6 mb-3">
                             <label for="end-date" class="form-label">تاريخ الانتهاء</label>
@@ -424,6 +432,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     discount.addEventListener('input', updateCalculations);
     amountPaid.addEventListener('input', updateCalculations);
+    // GYM-41 — owner picks a backdated start_date → end_date follows.
+    startDate.addEventListener('change', updateCalculations);
     if (offerSelect) offerSelect.addEventListener('change', updateCalculations);
 
     // Gift-card validation via the brand's existing /gift-cards/api/check endpoint

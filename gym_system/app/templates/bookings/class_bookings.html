@@ -168,7 +168,7 @@
                         </td>
                         <td>
                             {% if booking.check_in_time %}
-                            {{ booking.check_in_time.strftime('%H:%M') }}
+                            {{ booking.check_in_time| local_time }}
                             {% else %}
                             -
                             {% endif %}

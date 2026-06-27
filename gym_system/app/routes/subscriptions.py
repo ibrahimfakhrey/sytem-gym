@@ -124,6 +124,8 @@ def index():
     created_by = request.args.get('created_by', type=int)
     date_from = request.args.get('date_from', '')
     date_to = request.args.get('date_to', '')
+    # GYM-45 — search by member's fingerprint id.
+    fingerprint_id = (request.args.get('fingerprint_id', '') or '').strip()
 
     # Base query — honor GYM-12 owner branch picker
     query = apply_branch_filter(Subscription.query, Subscription,
@@ -145,6 +147,12 @@ def index():
             query = query.filter(Subscription.created_at < date.fromisoformat(date_to) + timedelta(days=1))
         except ValueError:
             pass
+
+    # GYM-45 — fingerprint search joins to Member; accepts exact id only.
+    if fingerprint_id and fingerprint_id.isdigit():
+        query = query.join(Member, Subscription.member_id == Member.id).filter(
+            Member.fingerprint_id == int(fingerprint_id)
+        )
 
     # Status filter
     if status:
@@ -437,8 +445,17 @@ def create():
         
         remaining_amount = max(0, total_amount - paid_amount)
 
-        # Calculate dates
+        # Calculate dates. GYM-41 — owner / admin can choose a backdated
+        # start_date; everyone else gets today.
         start_date = date.today()
+        raw_start = (request.form.get('start_date') or '').strip()
+        if raw_start and (current_user.is_owner or current_user.is_brand_manager):
+            try:
+                picked = date.fromisoformat(raw_start)
+                if picked <= date.today():
+                    start_date = picked
+            except ValueError:
+                pass
         end_date = start_date + timedelta(days=plan.duration_days)
 
         # Activate member when creating subscription

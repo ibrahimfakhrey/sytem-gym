@@ -18,7 +18,8 @@
 
             <div class="mb-3">
                 <input type="text" id="member-search" class="form-control search-input"
-                       placeholder="ابحث برقم الهاتف أو الاسم..."
+                       placeholder="ابحث بالاسم أو رقم الهاتف أو رقم البصمة..."
+                       autocomplete="off"
                        autocomplete="off">
             </div>
 
@@ -61,7 +62,7 @@
                             </a>
                         </td>
                         <td>{{ att.member.phone }}</td>
-                        <td>{{ att.check_in.strftime('%H:%M:%S') }}</td>
+                        <td>{{ att.check_in| local_time }}</td>
                         <td>
                             {% if att.source == 'fingerprint' %}
                             <span class="badge bg-info"><i class="bi bi-fingerprint"></i> بصمة</span>
@@ -99,15 +100,20 @@ document.addEventListener('DOMContentLoaded', function() {
     const checkInResult = document.getElementById('check-in-result');
     let searchTimeout;
 
+    // GYM-42 — auto-focus so receptionist can type immediately.
+    searchInput.focus();
+
     searchInput.addEventListener('input', function() {
         clearTimeout(searchTimeout);
         const query = this.value.trim();
 
-        if (query.length < 2) {
+        if (query.length < 1) {
             searchResults.style.display = 'none';
             return;
         }
 
+        // GYM-42 — fire faster (was 300ms). 120ms feels instant on a
+        // healthy connection but still coalesces rapid keystrokes.
         searchTimeout = setTimeout(() => {
             fetch(`{{ url_for('attendance.search_member') }}?q=${encodeURIComponent(query)}`)
                 .then(response => response.json())
@@ -136,7 +142,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         searchResults.style.display = 'block';
                     }
                 });
-        }, 300);
+        }, 120);
     });
 
     window.checkIn = function(memberId) {

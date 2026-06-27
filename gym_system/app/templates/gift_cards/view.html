@@ -21,7 +21,7 @@
                 <hr>
                 <p><strong>القيمة الأصلية:</strong> {{ "{:,.0f}".format(gift_card.original_amount) }} ر.س</p>
                 <p><strong>المتبقي:</strong> {{ "{:,.0f}".format(gift_card.remaining_amount) }} ر.س</p>
-                <p><strong>الصلاحية:</strong> {% if gift_card.expires_at %}{{ gift_card.expires_at.strftime('%Y-%m-%d') }}{% else %}بدون انتهاء{% endif %}</p>
+                <p><strong>الصلاحية:</strong> {% if gift_card.expires_at %}{{ gift_card.expires_at| local_date }}{% else %}بدون انتهاء{% endif %}</p>
                 <p><strong>الحالة:</strong> <span class="badge bg-{{ 'success' if gift_card.status == 'active' else 'secondary' }}">{{ gift_card.status }}</span></p>
                 {% if gift_card.status == 'active' %}
                 <form method="post" action="{{ url_for('gift_cards.deactivate', gift_card_id=gift_card.id) }}">

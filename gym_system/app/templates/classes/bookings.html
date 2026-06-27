@@ -90,7 +90,7 @@
                                         {{ booking.status_arabic }}
                                     </span>
                                     {% if booking.check_in_time %}
-                                    <br><small class="text-muted">{{ booking.check_in_time.strftime('%H:%M') }}</small>
+                                    <br><small class="text-muted">{{ booking.check_in_time| local_time }}</small>
                                     {% endif %}
                                 </td>
                                 <td>

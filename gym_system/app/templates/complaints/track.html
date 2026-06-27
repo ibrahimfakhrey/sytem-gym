@@ -78,7 +78,7 @@
                     <h5>{{ complaint.subject }}</h5>
                     <p class="text-muted mb-0">
                         <i class="bi bi-calendar"></i>
-                        {{ complaint.created_at.strftime('%Y-%m-%d %H:%M') }}
+                        {{ complaint.created_at| local_dt }}
                         {% if complaint.category %}
                         <span class="badge bg-secondary ms-2">{{ complaint.category.name }}</span>
                         {% endif %}
@@ -90,7 +90,7 @@
                 <div class="timeline">
                     <div class="timeline-item completed">
                         <strong>تم الاستلام</strong>
-                        <br><small class="text-muted">{{ complaint.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
+                        <br><small class="text-muted">{{ complaint.created_at| local_dt }}</small>
                     </div>
 
                     {% if complaint.status in ['in_progress', 'resolved', 'closed'] %}
@@ -108,7 +108,7 @@
                     {% if complaint.status in ['resolved', 'closed'] %}
                     <div class="timeline-item completed">
                         <strong>تم الحل</strong>
-                        <br><small class="text-muted">{{ complaint.resolved_at.strftime('%Y-%m-%d %H:%M') if complaint.resolved_at else '' }}</small>
+                        <br><small class="text-muted">{{ complaint.resolved_at| local_dt if complaint.resolved_at else '' }}</small>
                     </div>
                     {% endif %}
                 </div>

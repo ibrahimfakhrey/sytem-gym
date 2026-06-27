@@ -139,8 +139,8 @@
                             </span>
                         </td>
                         <td>
-                            <small>{{ complaint.created_at.strftime('%Y-%m-%d') }}</small>
-                            <br><small class="text-muted">{{ complaint.created_at.strftime('%H:%M') }}</small>
+                            <small>{{ complaint.created_at| local_date }}</small>
+                            <br><small class="text-muted">{{ complaint.created_at| local_time }}</small>
                         </td>
                         <td>
                             <a href="{{ url_for('complaints.view', complaint_id=complaint.id) }}"

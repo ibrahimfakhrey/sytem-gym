@@ -33,6 +33,15 @@ def create_app(config_name=None):
     migrate.init_app(app, db)
     csrf.init_app(app)
 
+    # GYM-44 — Jinja filters that render UTC datetimes as Asia/Riyadh +
+    # 12-hour with ص/م. Templates use {{ x | local_dt }} etc. instead of
+    # {{ x.strftime('...') }} so existing rows look correct without a
+    # data migration.
+    from app.utils.helpers import local_dt, local_time, local_date
+    app.jinja_env.filters['local_dt'] = local_dt
+    app.jinja_env.filters['local_time'] = local_time
+    app.jinja_env.filters['local_date'] = local_date
+
     # Create upload folders if they don't exist
     upload_folders = ['logos', 'members', 'receipts', 'subscriptions', 'complaints']
     for folder in upload_folders:
@@ -160,6 +169,14 @@ def create_app(config_name=None):
                     if sp_cols and 'is_deleted' not in sp_cols:
                         conn.exec_driver_sql(
                             "ALTER TABLE subscription_payments ADD COLUMN is_deleted BOOLEAN DEFAULT 0 NOT NULL"
+                        )
+                    # GYM-43 — users.is_deleted (soft-delete for staff).
+                    u_cols = [r[1] for r in conn.exec_driver_sql(
+                        "PRAGMA table_info(users)"
+                    ).fetchall()]
+                    if u_cols and 'is_deleted' not in u_cols:
+                        conn.exec_driver_sql(
+                            "ALTER TABLE users ADD COLUMN is_deleted BOOLEAN DEFAULT 0 NOT NULL"
                         )
                 except Exception:
                     pass

@@ -90,7 +90,7 @@
                     <tbody>
                         {% for payment in live_payments %}
                         <tr>
-                            <td>{{ payment.payment_date.strftime('%Y-%m-%d') }}</td>
+                            <td>{{ payment.payment_date| local_date }}</td>
                             <td>{{ payment.amount }} ر.س</td>
                             <td>
                                 {% if payment.payment_method == 'cash' %}نقدي{% endif %}

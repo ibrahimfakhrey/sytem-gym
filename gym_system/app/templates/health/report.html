@@ -183,7 +183,7 @@
             <div class="card-body">
                 <p><strong>الاسم:</strong> {{ member.name }}</p>
                 <p><strong>الهاتف:</strong> {{ member.phone }}</p>
-                <p><strong>تاريخ التقرير:</strong> {{ report.created_at.strftime('%Y-%m-%d') }}</p>
+                <p><strong>تاريخ التقرير:</strong> {{ report.created_at| local_date }}</p>
             </div>
             <div class="card-footer">
                 <a href="{{ url_for('members.view', member_id=member.id) }}" class="btn btn-outline-primary btn-sm w-100">
@@ -235,7 +235,7 @@
                 <ul class="list-group list-group-flush">
                     {% for old_report in member.health_reports[:5] %}
                     <li class="list-group-item d-flex justify-content-between align-items-center">
-                        <span>{{ old_report.created_at.strftime('%Y-%m-%d') }}</span>
+                        <span>{{ old_report.created_at| local_date }}</span>
                         <span class="badge bg-{{ old_report.status_class }}">{{ old_report.bmi }}</span>
                     </li>
                     {% endfor %}

@@ -128,7 +128,7 @@
     {% if dp.created_at %}
     <div class="pass-meta mt-1 text-center" style="opacity:.7;">
         <i class="bi bi-clock"></i>
-        أُصدرت في {{ dp.created_at.strftime('%Y-%m-%d') }} الساعة {{ dp.created_at.strftime('%H:%M') }}
+        أُصدرت في {{ dp.created_at| local_date }} الساعة {{ dp.created_at| local_time }}
     </div>
     {% endif %}
 </div>
