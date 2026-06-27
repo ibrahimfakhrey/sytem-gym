@@ -13,7 +13,7 @@ from app.models.finance import Income, Expense, Salary, Refund, ExpenseCategory
 from app.models.daily_closing import DailyClosing
 from app.models.subscription import Subscription, SubscriptionPayment
 from app.utils.decorators import finance_required, brand_manager_required
-from app.utils.helpers import pagination_args, save_uploaded_file, apply_branch_filter, check_entity_access
+from app.utils.helpers import pagination_args, save_uploaded_file, apply_branch_filter, check_entity_access, local_dt
 
 finance_bp = Blueprint('finance', __name__)
 
@@ -1266,7 +1266,7 @@ def sales_transactions_export():
         rows.append((
             p.payment_date or None,
             ['اشتراك',
-             p.payment_date.strftime('%Y-%m-%d %H:%M') if p.payment_date else '',
+             local_dt(p.payment_date),  # GYM-44 — xlsx shows Riyadh local
              m.name if m else '-',
              sub.plan.name if sub and sub.plan else '-',
              float(p.amount or 0),
@@ -1297,7 +1297,7 @@ def sales_transactions_export():
         rows.append((
             when,
             ['تذكرة يومية',
-             when.strftime('%Y-%m-%d %H:%M'),
+             local_dt(when),  # GYM-44 — xlsx shows Riyadh local
              dp.customer_name or '-',
              dp.service_type.name if dp.service_type else '-',
              net,

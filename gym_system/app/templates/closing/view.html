@@ -124,7 +124,7 @@
                     {% if closing.cash_difference > 0 %}
                     <strong>فائض:</strong> هناك زيادة في النقدية بمبلغ {{ "{:,.2f}".format(closing.cash_difference or 0) }} ر.س
                     {% else %}
-                    <strong>عجز:</strong> هناك نقص في النقدية بمبلغ {{ "{:,.2f}".format(abs(closing.cash_difference)) }} ر.س
+                    <strong>عجز:</strong> هناك نقص في النقدية بمبلغ {{ "{:,.2f}".format((closing.cash_difference or 0) | abs) }} ر.س
                     {% endif %}
                 </div>
                 {% endif %}

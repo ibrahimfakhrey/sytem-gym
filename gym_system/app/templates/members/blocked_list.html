@@ -68,7 +68,7 @@
                                 {{ blocked.reason[:50] }}{% if blocked.reason|length > 50 %}...{% endif %}
                             </span>
                         </td>
-                        <td>{{ blocked.blocked_at.strftime('%Y-%m-%d') }}</td>
+                        <td>{{ blocked.blocked_at | local_date }}</td>
                         <td>{{ blocked.blocker.name if blocked.blocker else '-' }}</td>
                         <td>
                             <form action="{{ url_for('members.unblock', blocked_id=blocked.id) }}" method="POST" class="d-inline">

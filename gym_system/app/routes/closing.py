@@ -11,7 +11,7 @@ from app.models.schedule import DailyClosing
 from app.models.subscription import Subscription, SubscriptionPayment
 from app.models.finance import Income
 from app.utils.decorators import members_required, finance_required
-from app.utils.helpers import pagination_args, apply_branch_filter, check_entity_access
+from app.utils.helpers import pagination_args, apply_branch_filter, check_entity_access, local_dt
 from app.models.company import Branch
 
 closing_bp = Blueprint('closing', __name__)
@@ -150,7 +150,7 @@ def view_daily_summary(closing_date):
     if existing_closing:
         # GYM-37 — friendly message + jump to the existing record so the user
         # can see when + by whom it was closed.
-        when_str = existing_closing.submitted_at.strftime('%Y-%m-%d %H:%M') if existing_closing.submitted_at else '—'
+        when_str = local_dt(existing_closing.submitted_at)  # GYM-44 — show Riyadh local time in the flash
         flash(f'يوم {summary_date.isoformat()} تم إقفاله سابقاً (في {when_str}).', 'info')
         return redirect(url_for('closing.view_closing', closing_id=existing_closing.id))
 
@@ -187,7 +187,7 @@ def create():
 
     if existing:
         # GYM-37 — friendly message: name the day + when it was closed.
-        when_str = existing.submitted_at.strftime('%Y-%m-%d %H:%M') if existing.submitted_at else '—'
+        when_str = local_dt(existing.submitted_at)  # GYM-44 — Riyadh local in the flash
         flash(f'يوم {closing_date.isoformat()} تم إقفاله سابقاً (في {when_str}).', 'warning')
         return redirect(url_for('closing.view_closing', closing_id=existing.id))
 

@@ -168,7 +168,7 @@
             <tbody>
                 {% for log in recent_merges %}
                 <tr>
-                    <td>{{ log.performed_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td>{{ log.performed_at | local_dt }}</td>
                     <td>#{{ log.keeper_id }} — {{ log.keeper.name if log.keeper else '—' }}</td>
                     <td>#{{ log.loser_id }} — {{ log.loser.name if log.loser else '—' }}</td>
                     <td>{{ log.performer.name if log.performer else '—' }}</td>

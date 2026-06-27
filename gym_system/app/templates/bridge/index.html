@@ -96,7 +96,7 @@
                     </table>
                 </div>
                 <div class="card-footer text-muted small">
-                    أول اتصال: {{ bridge.first_seen.strftime('%Y-%m-%d') if bridge.first_seen else '-' }}
+                    أول اتصال: {{ bridge.first_seen | local_date if bridge.first_seen else '-' }}
                 </div>
             </div>
         </div>

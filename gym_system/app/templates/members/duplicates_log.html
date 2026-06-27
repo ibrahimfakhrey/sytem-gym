@@ -36,7 +36,7 @@
                     {% for log in logs %}
                     <tr {% if not log.is_active %}class="table-secondary"{% endif %}>
                         <td>{{ log.id }}</td>
-                        <td>{{ log.performed_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                        <td>{{ log.performed_at | local_dt }}</td>
                         <td>
                             <a href="{{ url_for('members.view', member_id=log.keeper_id) }}" target="_blank" rel="noopener">
                                 #{{ log.keeper_id }}
@@ -73,7 +73,7 @@
                                 </button>
                             </form>
                             {% else %}
-                            <span class="text-muted small">{{ log.undone_at.strftime('%Y-%m-%d') if log.undone_at else '' }}</span>
+                            <span class="text-muted small">{{ log.undone_at | local_date if log.undone_at else '' }}</span>
                             {% endif %}
                         </td>
                     </tr>

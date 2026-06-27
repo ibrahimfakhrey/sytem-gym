@@ -1348,7 +1348,8 @@ def build_user_alerts():
     offline_bridges = bridge_q.all()
     if offline_bridges:
         first = offline_bridges[0]
-        last_seen = first.last_heartbeat.strftime('%Y-%m-%d %H:%M') if first.last_heartbeat else 'لم يسجل'
+        from app.utils.helpers import local_dt as _local_dt
+        last_seen = _local_dt(first.last_heartbeat) if first.last_heartbeat else 'لم يسجل'  # GYM-44
         title = (f'برنامج البصمة غير متصل ({len(offline_bridges)} فرع)' if len(offline_bridges) > 1
                  else f'برنامج البصمة غير متصل — آخر اتصال: {last_seen}')
         try:
