@@ -448,17 +448,37 @@
                                 <td>{{ sub.plan.name }}</td>
                                 <td>{{ sub.start_date.strftime('%Y-%m-%d') }}</td>
                                 <td>{{ sub.end_date.strftime('%Y-%m-%d') }}</td>
-                                <td>{{ "{:,.0f}".format(sub.amount_paid or 0) }} ر.س</td>
+                                {# GYM-48 — column on the model is `paid_amount`, not `amount_paid`.
+                                   The old typo silently rendered 0. Show paid + remaining when partial. #}
+                                <td>
+                                    <strong>{{ "{:,.0f}".format(sub.paid_amount or 0) }}</strong> ر.س
+                                    {% if (sub.remaining_amount or 0) > 0 %}
+                                    <br><small class="text-danger">
+                                        متبقي: {{ "{:,.0f}".format(sub.remaining_amount) }} ر.س
+                                    </small>
+                                    {% endif %}
+                                </td>
                                 <td><span class="badge bg-{{ sub.status_class }}">{{ sub.status_text }}</span></td>
                                 <td>
+                                    {# GYM-48 — open the real invoice (with itemized detail) and
+                                       fall back to the proof image when no invoice exists. #}
+                                    {% set sub_invoice = sub.invoices[0] if sub.invoices else None %}
+                                    {% if sub_invoice %}
+                                    <a href="{{ url_for('invoices.view', invoice_id=sub_invoice.id) }}"
+                                       target="_blank" rel="noopener"
+                                       class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-receipt"></i> الفاتورة
+                                    </a>
+                                    {% endif %}
                                     {% if sub.proof_image %}
-                                    <a href="{{ url_for('static', filename=sub.proof_image) }}" target="_blank" rel="noopener">
+                                    <a href="{{ url_for('static', filename=sub.proof_image) }}" target="_blank" rel="noopener" class="ms-1">
                                         <img src="{{ url_for('static', filename=sub.proof_image) }}"
                                              alt="إثبات"
                                              loading="lazy"
                                              style="height:36px; border-radius:4px; border:1px solid var(--border-color);">
                                     </a>
-                                    {% else %}
+                                    {% endif %}
+                                    {% if not sub_invoice and not sub.proof_image %}
                                     <span class="text-muted small">—</span>
                                     {% endif %}
                                 </td>
