@@ -448,29 +448,18 @@
                                 <td>{{ sub.plan.name }}</td>
                                 <td>{{ sub.start_date.strftime('%Y-%m-%d') }}</td>
                                 <td>{{ sub.end_date.strftime('%Y-%m-%d') }}</td>
-                                {# GYM-48 — display rules:
-                                   • paid > total   → headline = paid; subtitle "فاتورة: total"
-                                                       (e.g., legacy data where payments accumulated
-                                                       past the invoice — show the receipt total
-                                                       prominently so the receptionist sees real cash).
-                                   • paid < total   → headline = total (the invoice); subtitle
-                                                       "متبقي: total-paid" so partial payments stand out.
-                                   • paid == total or paid == 0 → just the invoice total. #}
-                                {% set _total = (sub.total_amount or 0)|float %}
-                                {% set _paid  = (sub.paid_amount  or 0)|float %}
+                                {# GYM-48 — always lead with total_amount (the invoice amount).
+                                   When paid_amount > total_amount (data anomaly on some legacy
+                                   rows), we intentionally suppress the conflicting "مدفوع: …"
+                                   line so the receptionist isn't shown two contradictory
+                                   numbers. Partial payments (paid < total) still surface as
+                                   "متبقي: …" since that's a meaningful business signal. #}
                                 <td>
-                                    {% if _paid > _total %}
-                                        <strong>{{ "{:,.0f}".format(_paid) }}</strong> ر.س
-                                        <br><small class="text-muted">
-                                            فاتورة: {{ "{:,.0f}".format(_total) }} ر.س
-                                        </small>
-                                    {% else %}
-                                        <strong>{{ "{:,.0f}".format(_total) }}</strong> ر.س
-                                        {% if (sub.remaining_amount or 0)|float > 0 %}
-                                        <br><small class="text-danger">
-                                            متبقي: {{ "{:,.0f}".format(sub.remaining_amount) }} ر.س
-                                        </small>
-                                        {% endif %}
+                                    <strong>{{ "{:,.0f}".format(sub.total_amount or 0) }}</strong> ر.س
+                                    {% if (sub.remaining_amount or 0)|float > 0 %}
+                                    <br><small class="text-danger">
+                                        متبقي: {{ "{:,.0f}".format(sub.remaining_amount) }} ر.س
+                                    </small>
                                     {% endif %}
                                 </td>
                                 <td><span class="badge bg-{{ sub.status_class }}">{{ sub.status_text }}</span></td>
