@@ -448,13 +448,21 @@
                                 <td>{{ sub.plan.name }}</td>
                                 <td>{{ sub.start_date.strftime('%Y-%m-%d') }}</td>
                                 <td>{{ sub.end_date.strftime('%Y-%m-%d') }}</td>
-                                {# GYM-48 — column on the model is `paid_amount`, not `amount_paid`.
-                                   The old typo silently rendered 0. Show paid + remaining when partial. #}
+                                {# GYM-48 — "المبلغ" header means "invoice amount" in Arabic,
+                                   so lead with total_amount (the plan's price). Show paid + remaining
+                                   underneath when the subscription is only partially paid. The previous
+                                   typo (sub.amount_paid) and the v1 fix (sub.paid_amount) both showed
+                                   0 ر.س whenever the receptionist hadn't recorded a payment yet —
+                                   misleading. total_amount is the right primary signal. #}
                                 <td>
-                                    <strong>{{ "{:,.0f}".format(sub.paid_amount or 0) }}</strong> ر.س
+                                    <strong>{{ "{:,.0f}".format(sub.total_amount or 0) }}</strong> ر.س
                                     {% if (sub.remaining_amount or 0) > 0 %}
                                     <br><small class="text-danger">
                                         متبقي: {{ "{:,.0f}".format(sub.remaining_amount) }} ر.س
+                                    </small>
+                                    {% elif (sub.paid_amount or 0) > 0 and (sub.paid_amount or 0) != (sub.total_amount or 0) %}
+                                    <br><small class="text-muted">
+                                        مدفوع: {{ "{:,.0f}".format(sub.paid_amount) }} ر.س
                                     </small>
                                     {% endif %}
                                 </td>

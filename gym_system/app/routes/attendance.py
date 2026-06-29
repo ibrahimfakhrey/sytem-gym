@@ -188,7 +188,24 @@ def search_member():
     if q.isdigit():
         clauses.append(Member.fingerprint_id == int(q))
 
-    query = Member.query.filter(Member.is_active == True, db.or_(*clauses))
+    # GYM-49 — KSA-phone normalization. The user types `05397745070`, but
+    # the phone might be stored as `+966539...`, `9665...`, `00966539...`,
+    # or any variant. Strip everything down to the tail (everything after
+    # `00966` / `966` / leading `0`) and match `%tail%` so all forms hit.
+    digits = ''.join(ch for ch in q if ch.isdigit())
+    if digits:
+        tail = digits
+        if tail.startswith('00966'): tail = tail[5:]
+        elif tail.startswith('966'): tail = tail[3:]
+        if tail.startswith('0'):     tail = tail.lstrip('0')
+        if tail and tail != q:
+            clauses.append(Member.phone.ilike(f'%{tail}%'))
+
+    # GYM-49 — drop the is_active==True filter so deactivated members ALSO
+    # surface in the dropdown. can_check_in() returns a message that's
+    # already rendered in the UI ("blocked"/"no subscription"), so the
+    # receptionist sees why the row can't be used.
+    query = Member.query.filter(db.or_(*clauses))
 
     # Filter by brand if user is not owner
     if not current_user.can_view_all_brands:
