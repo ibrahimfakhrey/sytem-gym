@@ -5,6 +5,8 @@
 {% block content %}
 <div class="page-header">
     <h1><i class="bi bi-people"></i> الأعضاء</h1>
+    {# GYM-50 — "عضو جديد" visible only to the brand owner (المالك) and system admin.
+       Receptionists, branch managers, finance, employees do NOT see it. #}
     {% if current_user.is_owner and brands %}
     <div class="dropdown">
         <button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
@@ -23,7 +25,7 @@
             {% endfor %}
         </ul>
     </div>
-    {% elif current_user.brand_id %}
+    {% elif current_user.is_brand_manager and current_user.brand_id %}
     <a href="{{ url_for('members.create', brand_id=current_user.brand_id) }}" class="btn btn-primary">
         <i class="bi bi-person-plus"></i>
         عضو جديد
@@ -265,6 +267,7 @@
                 قم بإضافة أول عضو للبدء
                 {% endif %}
             </p>
+            {# GYM-50 — same owner-only gate as the page header button. #}
             {% if current_user.is_owner and brands %}
             <div class="dropdown">
                 <button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
@@ -283,7 +286,7 @@
                     {% endfor %}
                 </ul>
             </div>
-            {% elif current_user.brand_id %}
+            {% elif current_user.is_brand_manager and current_user.brand_id %}
             <a href="{{ url_for('members.create', brand_id=current_user.brand_id) }}" class="btn btn-primary">
                 <i class="bi bi-person-plus"></i>
                 عضو جديد

@@ -150,7 +150,13 @@ def index():
 @login_required
 @members_required
 def create():
-    """Create new member"""
+    """Create new member. GYM-50 — owner/admin only; receptionists, branch
+    managers, finance staff cannot create members anymore. Server-side gate
+    so the URL can't be hit directly by non-owners."""
+    if not (current_user.is_owner or current_user.is_brand_manager):
+        flash('إنشاء عضو جديد مقتصر على مالك البراند.', 'danger')
+        return redirect(url_for('members.index'))
+
     from app.models.company import Branch
     form = MemberForm()
 

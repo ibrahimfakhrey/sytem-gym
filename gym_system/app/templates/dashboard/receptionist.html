@@ -9,10 +9,7 @@
 
 <!-- Quick Actions -->
 <div class="quick-actions">
-    <a href="{{ url_for('members.create', brand_id=brand.id) }}" class="quick-action-btn">
-        <i class="bi bi-person-plus text-primary"></i>
-        <span>عضو جديد</span>
-    </a>
+    {# GYM-50 — "عضو جديد" is owner-only; removed from the receptionist dashboard. #}
     <a href="{{ url_for('subscriptions.index') }}" class="quick-action-btn">
         <i class="bi bi-card-checklist text-success"></i>
         <span>الاشتراكات</span>
