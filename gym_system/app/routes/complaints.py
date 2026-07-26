@@ -57,7 +57,10 @@ def index():
     status_filter = request.args.get('status', '')
     category_filter = request.args.get('category', type=int)
 
-    query = apply_branch_filter(Complaint.query, Complaint)
+    # GYM-51 — main list hides archived; /complaints/archive shows them.
+    query = apply_branch_filter(Complaint.query, Complaint).filter(
+        Complaint.is_archived == False
+    )
 
     if status_filter:
         query = query.filter_by(status=status_filter)
@@ -67,9 +70,14 @@ def index():
     complaints = query.order_by(Complaint.created_at.desc()).all()
     categories = ComplaintCategory.query.filter_by(is_active=True).all()
 
-    # Stats
+    # Stats — same is_archived filter so the "pending" badge doesn't count
+    # archived rows.
     pending_count = apply_branch_filter(
-        Complaint.query.filter_by(status='pending'), Complaint
+        Complaint.query.filter_by(status='pending').filter(Complaint.is_archived == False),
+        Complaint,
+    ).count()
+    archived_count = apply_branch_filter(
+        Complaint.query.filter(Complaint.is_archived == True), Complaint
     ).count()
 
     # Get brands for owner dropdown
@@ -79,6 +87,7 @@ def index():
                          complaints=complaints,
                          categories=categories,
                          pending_count=pending_count,
+                         archived_count=archived_count,
                          status_filter=status_filter,
                          category_filter=category_filter,
                          brands=brands)
@@ -325,3 +334,82 @@ def seed_categories():
     ComplaintCategory.seed_defaults()
     flash('تم إضافة تصنيفات الشكاوى الافتراضية', 'success')
     return redirect(url_for('complaints.index'))
+
+
+# ─── GYM-51 — archive / unarchive / hard-delete ───────────────────────────
+
+@complaints_bp.route('/archive')
+@login_required
+def archive_index():
+    """List archived complaints (soft-hidden from the main list)."""
+    if not (current_user.role and current_user.role.can_view_complaints):
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('dashboard.index'))
+    q = apply_branch_filter(Complaint.query, Complaint).filter(
+        Complaint.is_archived == True
+    ).order_by(Complaint.archived_at.desc().nullslast(),
+               Complaint.created_at.desc())
+    return render_template('complaints/archive.html', complaints=q.all())
+
+
+@complaints_bp.route('/<int:complaint_id>/archive', methods=['POST'])
+@login_required
+def archive(complaint_id):
+    """Soft-archive — moves the complaint to /complaints/archive."""
+    if not (current_user.role and current_user.role.can_view_complaints):
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('complaints.index'))
+    from datetime import datetime as _dt
+    c = Complaint.query.get_or_404(complaint_id)
+    if not check_entity_access(c):
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('complaints.index'))
+    c.is_archived = True
+    c.archived_at = _dt.utcnow()
+    c.archived_by = current_user.id
+    db.session.commit()
+    flash(f'تم أرشفة الشكوى #{c.id}.', 'success')
+    return redirect(url_for('complaints.index'))
+
+
+@complaints_bp.route('/<int:complaint_id>/unarchive', methods=['POST'])
+@login_required
+def unarchive(complaint_id):
+    """Restore an archived complaint back to the main list."""
+    if not (current_user.role and current_user.role.can_view_complaints):
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('complaints.index'))
+    c = Complaint.query.get_or_404(complaint_id)
+    if not check_entity_access(c):
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('complaints.archive_index'))
+    c.is_archived = False
+    c.archived_at = None
+    c.archived_by = None
+    db.session.commit()
+    flash(f'تمت إعادة الشكوى #{c.id} من الأرشيف.', 'success')
+    return redirect(url_for('complaints.archive_index'))
+
+
+@complaints_bp.route('/<int:complaint_id>/delete', methods=['POST'])
+@login_required
+def delete(complaint_id):
+    """Hard-delete — permanently removes the complaint + its attachments.
+    Owner / admin only since it's irreversible."""
+    if not (current_user.is_owner or current_user.is_brand_manager):
+        flash('الحذف النهائي مقتصر على مالك البراند.', 'danger')
+        return redirect(url_for('complaints.index'))
+    c = Complaint.query.get_or_404(complaint_id)
+    if not check_entity_access(c):
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('complaints.index'))
+    # Attachments cascade via ORM if defined; otherwise clear children first
+    from app.models.complaint import ComplaintAttachment
+    ComplaintAttachment.query.filter_by(complaint_id=c.id).delete(
+        synchronize_session=False)
+    was_archived = c.is_archived
+    db.session.delete(c)
+    db.session.commit()
+    flash(f'تم حذف الشكوى نهائياً.', 'success')
+    return redirect(url_for('complaints.archive_index' if was_archived
+                            else 'complaints.index'))

@@ -39,7 +39,11 @@ _ADDITIONS = [
     # GYM-38 — soft-delete per individual subscription_payment row.
     ('subscription_payments', 'is_deleted', 'ALTER TABLE subscription_payments ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT 0'),
     # GYM-43 — soft-delete for staff users.
-    ('users',                 'is_deleted', 'ALTER TABLE users ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT 0'),
+    ('users',                 'is_deleted',  'ALTER TABLE users ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT 0'),
+    # GYM-51 — archive-then-delete flow for complaints.
+    ('complaints',            'is_archived', 'ALTER TABLE complaints ADD COLUMN is_archived BOOLEAN NOT NULL DEFAULT 0'),
+    ('complaints',            'archived_at', 'ALTER TABLE complaints ADD COLUMN archived_at DATETIME'),
+    ('complaints',            'archived_by', 'ALTER TABLE complaints ADD COLUMN archived_by INTEGER'),
 ]
 
 

@@ -12,6 +12,12 @@
         {% endif %}
     </h1>
     <div class="btn-group">
+        {# GYM-51 — link to the archive page #}
+        <a href="{{ url_for('complaints.archive_index') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-archive"></i>
+            الأرشيف
+            {% if archived_count %}<span class="badge bg-secondary ms-1">{{ archived_count }}</span>{% endif %}
+        </a>
         {% if current_user.is_owner %}
         <div class="dropdown">
             <button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
@@ -147,6 +153,26 @@
                                class="btn btn-sm btn-outline-primary">
                                 <i class="bi bi-eye"></i> عرض
                             </a>
+                            {# GYM-51 — archive moves it to /complaints/archive (soft-hidden).
+                               Owner/admin also gets a permanent-delete button. #}
+                            <form method="post" action="{{ url_for('complaints.archive', complaint_id=complaint.id) }}"
+                                  class="d-inline"
+                                  onsubmit="return confirm('نقل الشكوى إلى الأرشيف؟ يمكن استعادتها لاحقاً.');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm btn-outline-secondary" title="أرشفة">
+                                    <i class="bi bi-archive"></i>
+                                </button>
+                            </form>
+                            {% if current_user.is_owner or current_user.is_brand_manager %}
+                            <form method="post" action="{{ url_for('complaints.delete', complaint_id=complaint.id) }}"
+                                  class="d-inline"
+                                  onsubmit="return confirm('حذف نهائي للشكوى؟ الإجراء غير قابل للاسترجاع.');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="حذف نهائي">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                            {% endif %}
                         </td>
                     </tr>
                     {% endfor %}

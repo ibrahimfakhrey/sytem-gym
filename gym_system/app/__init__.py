@@ -178,6 +178,23 @@ def create_app(config_name=None):
                         conn.exec_driver_sql(
                             "ALTER TABLE users ADD COLUMN is_deleted BOOLEAN DEFAULT 0 NOT NULL"
                         )
+                    # GYM-51 — complaints.is_archived + archived_at/by
+                    c_cols = [r[1] for r in conn.exec_driver_sql(
+                        "PRAGMA table_info(complaints)"
+                    ).fetchall()]
+                    if c_cols:
+                        if 'is_archived' not in c_cols:
+                            conn.exec_driver_sql(
+                                "ALTER TABLE complaints ADD COLUMN is_archived BOOLEAN DEFAULT 0 NOT NULL"
+                            )
+                        if 'archived_at' not in c_cols:
+                            conn.exec_driver_sql(
+                                "ALTER TABLE complaints ADD COLUMN archived_at DATETIME"
+                            )
+                        if 'archived_by' not in c_cols:
+                            conn.exec_driver_sql(
+                                "ALTER TABLE complaints ADD COLUMN archived_by INTEGER"
+                            )
                 except Exception:
                     pass
                 # complaint_attachments (GYM-21)

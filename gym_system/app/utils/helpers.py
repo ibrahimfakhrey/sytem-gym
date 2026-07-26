@@ -19,7 +19,13 @@ except ImportError:
 
 
 def to_local(dt):
-    """UTC (or naive == UTC) → Asia/Riyadh. None passes through."""
+    """UTC (or naive == UTC) datetime → Asia/Riyadh. None passes through.
+
+    NB: This function assumes ``dt`` is a ``datetime``. Bare ``date`` and
+    ``time`` objects don't need conversion (a date has no time, a time
+    has no date), so the Jinja filters below short-circuit for those
+    types BEFORE calling this. Don't call to_local() on a bare date/time.
+    """
     if dt is None:
         return None
     if dt.tzinfo is None:
@@ -35,22 +41,43 @@ def _fmt_12h(hour, minute):
 
 def local_dt(dt):
     """Jinja filter: 'YYYY-MM-DD hh:MM ص/م'."""
+    if dt is None:
+        return '—'
+    # Bare `date` (no time-of-day) — just render the date; no timezone shift.
+    if not isinstance(dt, datetime):
+        try:
+            return dt.strftime('%Y-%m-%d')
+        except AttributeError:
+            return '—'
     d = to_local(dt)
-    if d is None: return '—'
     return f"{d.strftime('%Y-%m-%d')} {_fmt_12h(d.hour, d.minute)}"
 
 
 def local_time(dt):
     """Jinja filter: 'hh:MM ص/م' (no date)."""
+    if dt is None:
+        return '—'
+    # Bare `time` (no date) — no timezone to apply, format as-is.
+    if not isinstance(dt, datetime):
+        try:
+            return _fmt_12h(dt.hour, dt.minute)
+        except AttributeError:
+            return '—'
     d = to_local(dt)
-    if d is None: return '—'
     return _fmt_12h(d.hour, d.minute)
 
 
 def local_date(dt):
-    """Jinja filter: 'YYYY-MM-DD' from a datetime, evaluated in Riyadh time."""
+    """Jinja filter: 'YYYY-MM-DD'. Bare date → format directly (no tz shift)."""
+    if dt is None:
+        return '—'
+    if not isinstance(dt, datetime):
+        try:
+            return dt.strftime('%Y-%m-%d')
+        except AttributeError:
+            return '—'
     d = to_local(dt)
-    return d.strftime('%Y-%m-%d') if d else '—'
+    return d.strftime('%Y-%m-%d')
 
 
 def allowed_file(filename, allowed=None):

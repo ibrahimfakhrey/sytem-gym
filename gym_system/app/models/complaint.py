@@ -83,6 +83,13 @@ class Complaint(db.Model):
     status = db.Column(db.String(20), default='pending')
     resolution = db.Column(db.Text)
 
+    # GYM-51 — soft-archive (moves the row to /complaints/archive; excluded
+    # from the main list but preserved for audit). Hard-delete is a separate
+    # destructive action on the same page.
+    is_archived = db.Column(db.Boolean, default=False, nullable=False)
+    archived_at = db.Column(db.DateTime)
+    archived_by = db.Column(db.Integer, db.ForeignKey('users.id'))
+
     # Who submitted: 'customer' (via public link) or 'receptionist'
     submitted_by = db.Column(db.String(20), default='receptionist')
 
