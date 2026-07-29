@@ -90,10 +90,32 @@
     {% if gift_card.recipient_phone %}
     {% set wa_phone = gift_card.recipient_phone|replace('+','')|replace(' ','')|replace('-','') %}
     {% if wa_phone.startswith('0') and not wa_phone.startswith('00') %}{% set wa_phone = '966' + wa_phone.lstrip('0') %}{% endif %}
+    {# GYM-52 — send a public URL to the pretty card page + a formatted
+       invitation. WhatsApp fetches the OpenGraph meta on the URL and
+       renders a link-preview card, so the recipient sees a visual
+       invitation instead of raw text. #}
+    {% set _brand = gift_card.brand.name if gift_card.brand else '' %}
+    {% set _amount = '{:,.0f}'.format(gift_card.original_amount) %}
+    {% set _url = url_for('gift_cards.public_view', code=gift_card.code, _external=True) %}
+    {% set _greeting = 'مرحباً ' ~ gift_card.recipient_name if gift_card.recipient_name else 'مرحباً' %}
+    {% set _msg %}🎁 {{ _greeting }}!
+
+أُرسل لك كرت إهداء{% if _brand %} من {{ _brand }}{% endif %}
+
+💰 القيمة: {{ _amount }} ر.س
+🔑 الكود: {{ gift_card.code }}
+
+افتح الكرت من هنا 👇
+{{ _url }}{% endset %}
     <a class="btn btn-success" target="_blank" rel="noopener"
-       href="https://wa.me/{{ wa_phone }}?text={{ ('كرت إهداء بقيمة ' + '{:,.0f}'.format(gift_card.original_amount) + ' ر.س. الكود: ' + gift_card.code)|urlencode }}">
+       href="https://wa.me/{{ wa_phone }}?text={{ _msg | urlencode }}">
         <i class="bi bi-whatsapp"></i> إرسال عبر واتساب
     </a>
+    {# Also expose a "copy link" button so the sender can share elsewhere. #}
+    <button type="button" class="btn btn-outline-primary"
+            onclick="navigator.clipboard.writeText('{{ _url }}'); this.innerText='✓ تم النسخ';">
+        <i class="bi bi-link-45deg"></i> نسخ رابط الكرت
+    </button>
     {% endif %}
     <a class="btn btn-secondary" href="{{ url_for('gift_cards.view', gift_card_id=gift_card.id) }}">
         رجوع

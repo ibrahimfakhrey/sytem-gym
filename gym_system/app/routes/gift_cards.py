@@ -164,6 +164,18 @@ def print_card(gift_card_id):
     return render_template('gift_cards/print.html', gift_card=gift_card)
 
 
+@gift_cards_bp.route('/public/<code>')
+def public_view(code):
+    """GYM-52 — public gift-card page used as the WhatsApp share target.
+    No login required; the code itself acts as the unguessable token
+    (16 random uppercase alphanumeric chars). Ships with OpenGraph meta
+    so WhatsApp / Twitter / LinkedIn render a rich preview card instead
+    of a plain URL. If the code is unknown or the card is inactive we
+    still render a small 'invalid' page instead of a 500."""
+    gc = GiftCard.query.filter_by(code=(code or '').upper()).first()
+    return render_template('gift_cards/public.html', gift_card=gc)
+
+
 @gift_cards_bp.route('/api/check/<code>')
 @login_required
 def check_code(code):
