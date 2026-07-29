@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+{% block title %}الكلاسات — {{ month_label }} {{ year }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .cal-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 6px;
+    }
+    .cal-head {
+        text-align: center;
+        font-weight: 600;
+        font-size: .85rem;
+        color: var(--muted, #6c757d);
+        padding: .5rem 0;
+    }
+    .cal-cell {
+        min-height: 96px;
+        padding: .5rem;
+        border: 1px solid var(--border-color, #e5e7eb);
+        border-radius: .5rem;
+        background: #fff;
+        display: flex; flex-direction: column;
+        text-decoration: none; color: inherit;
+        transition: transform .1s ease, box-shadow .1s ease, border-color .1s ease;
+    }
+    .cal-cell:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0,0,0,.06);
+        border-color: #94a3b8;
+    }
+    .cal-cell.empty {
+        background: transparent; border-color: transparent;
+        pointer-events: none;
+    }
+    .cal-cell.today {
+        border-color: #0d6efd; box-shadow: 0 0 0 2px rgba(13,110,253,.12);
+    }
+    .cal-cell.focused {
+        border-color: #198754; box-shadow: 0 0 0 2px rgba(25,135,84,.15);
+    }
+    .cal-day { font-weight: 700; font-size: 1.05rem; }
+    .cal-badges { margin-top: auto; display: flex; gap: .35rem; flex-wrap: wrap; }
+    .cal-badge {
+        font-size: .72rem; padding: .1rem .45rem; border-radius: 999px;
+        background: #eef2ff; color: #4338ca; font-weight: 600;
+    }
+    .cal-badge.b { background: #ecfdf5; color: #047857; }
+    .cal-empty-hint { color: var(--muted, #adb5bd); font-size: .72rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <h1>
+        <i class="bi bi-calendar-event"></i>
+        الكلاسات — {{ month_label }} {{ year }}
+    </h1>
+    <div class="btn-group">
+        <a href="{{ url_for('classes.calendar', month=prev_month) }}" class="btn btn-outline-secondary">
+            <i class="bi bi-chevron-right"></i>
+        </a>
+        <a href="{{ url_for('classes.calendar') }}" class="btn btn-outline-primary">اليوم</a>
+        <a href="{{ url_for('classes.calendar', month=next_month) }}" class="btn btn-outline-secondary">
+            <i class="bi bi-chevron-left"></i>
+        </a>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        {# Column headers — Arabic week: Sat → Fri #}
+        <div class="cal-grid mb-2">
+            {% for d in ['السبت','الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة'] %}
+            <div class="cal-head">{{ d }}</div>
+            {% endfor %}
+        </div>
+
+        {% for week in weeks %}
+        <div class="cal-grid mb-2">
+            {% for cell in week %}
+                {% if cell is none %}
+                <div class="cal-cell empty"></div>
+                {% else %}
+                <a href="{{ url_for('classes.calendar', month='%d-%02d'|format(year, month), date=cell.date.isoformat()) }}"
+                   class="cal-cell {% if cell.is_today %}today{% endif %} {% if day_focus == cell.date %}focused{% endif %}">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <span class="cal-day">{{ cell.day }}</span>
+                        {% if cell.is_today %}<span class="badge bg-primary">اليوم</span>{% endif %}
+                    </div>
+                    <div class="cal-badges">
+                        {% if cell.class_count %}
+                        <span class="cal-badge" title="عدد الكلاسات المجدولة">
+                            <i class="bi bi-calendar2-event"></i> {{ cell.class_count }}
+                        </span>
+                        {% endif %}
+                        {% if cell.booking_count %}
+                        <span class="cal-badge b" title="عدد الحجوزات">
+                            <i class="bi bi-person-check"></i> {{ cell.booking_count }}
+                        </span>
+                        {% endif %}
+                        {% if not cell.class_count and not cell.booking_count %}
+                        <span class="cal-empty-hint">—</span>
+                        {% endif %}
+                    </div>
+                </a>
+                {% endif %}
+            {% endfor %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{% if day_focus %}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span>
+            <i class="bi bi-calendar-check"></i>
+            {{ day_focus.strftime('%Y-%m-%d') }}
+            <span class="text-muted small ms-2">
+                {{ day_classes|length }} كلاس · {{ day_bookings|length }} حجز
+            </span>
+        </span>
+        <a href="{{ url_for('classes.calendar', month='%d-%02d'|format(year, month)) }}"
+           class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-x-lg"></i> إغلاق
+        </a>
+    </div>
+    <div class="card-body">
+        {% if day_classes %}
+        <h6 class="text-muted small mb-2"><i class="bi bi-calendar2-event"></i> الكلاسات المجدولة</h6>
+        <div class="row g-2 mb-4">
+            {% for gc in day_classes %}
+            <div class="col-md-6">
+                <div class="border rounded p-2">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <strong>{{ gc.name }}</strong>
+                            {% if gc.service_type %}
+                            <span class="badge bg-info ms-1">{{ gc.service_type.name }}</span>
+                            {% endif %}
+                            <div class="small text-muted">
+                                {% if gc.start_time %}{{ gc.start_time.strftime('%H:%M') }}{% endif %}
+                                {% if gc.end_time %}– {{ gc.end_time.strftime('%H:%M') }}{% endif %}
+                            </div>
+                        </div>
+                        <a href="{{ url_for('bookings.class_bookings', class_id=gc.id) }}"
+                           class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-people"></i> الحجوزات
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if day_bookings %}
+        <h6 class="text-muted small mb-2"><i class="bi bi-person-check"></i> الحجوزات على هذا اليوم</h6>
+        <div class="table-responsive">
+            <table class="table table-sm mb-0">
+                <thead>
+                    <tr>
+                        <th>العضو</th>
+                        <th>الكلاس</th>
+                        <th>الحالة</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for b in day_bookings %}
+                    <tr>
+                        <td>
+                            {% if b.member %}
+                            <a href="{{ url_for('members.view', member_id=b.member.id) }}">{{ b.member.name }}</a>
+                            {% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                        <td>
+                            {% if b.gym_class %}
+                            <a href="{{ url_for('bookings.class_bookings', class_id=b.gym_class.id) }}">
+                                {{ b.gym_class.name }}
+                            </a>
+                            {% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                        <td>
+                            <span class="badge bg-{% if b.status == 'confirmed' %}success{% elif b.status == 'cancelled' %}danger{% else %}secondary{% endif %}">
+                                {{ b.status }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        {% if not day_classes and not day_bookings %}
+        <p class="text-muted text-center mb-0">لا توجد كلاسات ولا حجوزات في هذا اليوم.</p>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}

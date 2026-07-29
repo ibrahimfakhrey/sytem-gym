@@ -90,6 +90,20 @@
                                 </span>
                             </li>
                             <li><hr class="dropdown-divider"></li>
+                            {# GYM-53 — personal HR info moved out of the sidebar. #}
+                            <li>
+                                <a class="dropdown-item" href="{{ url_for('dashboard.my_salary') }}">
+                                    <i class="bi bi-cash-coin"></i>
+                                    راتبي
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="{{ url_for('dashboard.my_attendance') }}">
+                                    <i class="bi bi-calendar-week"></i>
+                                    حضوري
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
                             <li>
                                 <a class="dropdown-item" href="{{ url_for('auth.change_password') }}">
                                     <i class="bi bi-key"></i>
@@ -171,39 +185,23 @@
                             </a>
                         </li>
 
-                        {# Personal — visible to everyone with an account.
-                           Each item goes to its own page. #}
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.endpoint == 'dashboard.my_salary' %}active{% endif %}"
-                               href="{{ url_for('dashboard.my_salary') }}">
-                                <i class="bi bi-cash-coin"></i>
-                                راتبي
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.endpoint == 'dashboard.my_attendance' %}active{% endif %}"
-                               href="{{ url_for('dashboard.my_attendance') }}">
-                                <i class="bi bi-calendar-week"></i>
-                                حضوري
-                            </a>
-                        </li>
+                        {# GYM-53 — راتبي + حضوري moved to the top-right user
+                           dropdown so the sidebar stays focused on daily
+                           workflow, not personal HR pages. #}
 
-                        {% if current_user.role and current_user.role.can_manage_classes %}
+                        {# GYM-53 — الكلاسات + الحصص والحجوزات merged into a
+                           single "الكلاسات" link that lands on the monthly
+                           calendar. Each day shows session count + booking
+                           dots; clicking a day drills into sessions +
+                           bookings for that day. #}
+                        {% if (current_user.role and current_user.role.can_manage_classes)
+                              or current_user.can_manage_members
+                              or (current_user.role and current_user.role.name_en == 'branch_receptionist') %}
                         <li class="nav-item">
-                            <a class="nav-link {% if request.endpoint and 'classes' in request.endpoint %}active{% endif %}"
-                               href="{{ url_for('classes.index') }}">
+                            <a class="nav-link {% if request.endpoint and ('classes' in request.endpoint or 'bookings' in request.endpoint) %}active{% endif %}"
+                               href="{{ url_for('classes.calendar') }}">
                                 <i class="bi bi-calendar-event"></i>
                                 الكلاسات
-                            </a>
-                        </li>
-                        {% endif %}
-
-                        {% if current_user.can_manage_members or (current_user.role and current_user.role.name_en == 'branch_receptionist') %}
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.endpoint and 'bookings' in request.endpoint %}active{% endif %}"
-                               href="{{ url_for('bookings.sessions_list') }}">
-                                <i class="bi bi-calendar-check"></i>
-                                الحصص والحجوزات
                             </a>
                         </li>
                         {% endif %}

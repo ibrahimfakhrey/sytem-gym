@@ -90,6 +90,138 @@ def index():
                          service_filter=service_filter)
 
 
+# ─── GYM-53 — consolidated month calendar (sidebar landing) ───────────────
+
+@classes_bp.route('/calendar')
+@login_required
+def calendar():
+    """Monthly calendar view — the new sidebar landing for الكلاسات.
+
+    Each day cell shows how many classes are scheduled that weekday +
+    how many bookings exist for that specific date. Optional ?date=YYYY-MM-DD
+    param populates a "sessions on this day" panel below the grid so the
+    receptionist can drill down without a second page load.
+    """
+    from calendar import monthrange
+    from app.models.classes import GymClass, ClassBooking
+
+    # Permission — same as either الكلاسات or الحصص والحجوزات used to require.
+    can_view = (
+        (current_user.role and current_user.role.can_manage_classes)
+        or current_user.can_manage_members
+        or (current_user.role and current_user.role.name_en == 'branch_receptionist')
+    )
+    if not can_view:
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('dashboard.index'))
+
+    # Month picker — default to today's month in Riyadh.
+    from app.utils.helpers import to_local
+    now_local = to_local(datetime.utcnow())
+    default_month = f'{now_local.year}-{now_local.month:02d}'
+    raw_month = request.args.get('month', default_month)
+    try:
+        y, m = raw_month.split('-')
+        year, month = int(y), int(m)
+    except (ValueError, TypeError):
+        year, month = now_local.year, now_local.month
+
+    # Compute prev / next month for the pager.
+    prev_month_dt = date(year, month, 1) - timedelta(days=1)
+    next_month_dt = date(year, month, 28) + timedelta(days=10)
+    prev_month = f'{prev_month_dt.year}-{prev_month_dt.month:02d}'
+    next_month = f'{next_month_dt.year}-{next_month_dt.month:02d}'
+
+    # Brand scope — same as classes.index.
+    if current_user.is_owner:
+        brand_id = request.args.get('brand_id', type=int)
+        brands = Brand.query.filter_by(is_active=True).all()
+        brand = Brand.query.get(brand_id) if brand_id else (brands[0] if brands else None)
+    else:
+        brands = []
+        brand = current_user.brand
+    if not brand:
+        flash('يرجى اختيار براند', 'warning')
+        return redirect(url_for('dashboard.index'))
+
+    # Classes for this brand keyed by day_of_week (0..6).
+    gym_classes = apply_branch_filter(
+        GymClass.query.filter_by(brand_id=brand.id, is_active=True), GymClass
+    ).all()
+    classes_by_dow: dict[int, list] = {i: [] for i in range(7)}
+    for gc in gym_classes:
+        if gc.day_of_week is not None:
+            classes_by_dow.setdefault(gc.day_of_week, []).append(gc)
+
+    # Bookings in the whole month — one query, group in Python.
+    _, days_in_month = monthrange(year, month)
+    first_day = date(year, month, 1)
+    last_day = date(year, month, days_in_month)
+    bookings_in_month = apply_branch_filter(
+        ClassBooking.query.filter(
+            ClassBooking.booking_date >= first_day,
+            ClassBooking.booking_date <= last_day,
+        ), ClassBooking
+    ).all()
+    bookings_by_date: dict[date, int] = {}
+    for b in bookings_in_month:
+        bookings_by_date[b.booking_date] = bookings_by_date.get(b.booking_date, 0) + 1
+
+    # Build the grid. Arabic week starts on Saturday: dow 0=Sat..6=Fri, but
+    # Python's date.weekday() is 0=Mon..6=Sun. Map to Arabic week.
+    def to_arabic_dow(d):  # 0=Sat..6=Fri
+        py_dow = d.weekday()   # 0=Mon..6=Sun
+        return (py_dow + 2) % 7  # Sat=0, Sun=1, ..., Fri=6
+
+    # Pad the grid: leading blanks so the first day of the month lines up.
+    first_dow = to_arabic_dow(first_day)
+    cells = []
+    for _ in range(first_dow):
+        cells.append(None)
+    for day in range(1, days_in_month + 1):
+        d = date(year, month, day)
+        cells.append({
+            'date': d,
+            'day': day,
+            'class_count': len(classes_by_dow.get(to_arabic_dow(d), [])),
+            'booking_count': bookings_by_date.get(d, 0),
+            'is_today': d == now_local.date(),
+        })
+    # Pad trailing to complete the last row (multiple of 7).
+    while len(cells) % 7:
+        cells.append(None)
+    weeks = [cells[i:i + 7] for i in range(0, len(cells), 7)]
+
+    # Drill-down: when ?date=X, render the day's sessions + bookings below.
+    day_focus = None
+    day_classes = []
+    day_bookings = []
+    raw_date = request.args.get('date')
+    if raw_date:
+        try:
+            day_focus = date.fromisoformat(raw_date)
+            day_classes = classes_by_dow.get(to_arabic_dow(day_focus), [])
+            day_bookings = [b for b in bookings_in_month
+                            if b.booking_date == day_focus]
+        except ValueError:
+            day_focus = None
+
+    return render_template(
+        'classes/calendar_month.html',
+        year=year, month=month,
+        prev_month=prev_month, next_month=next_month,
+        weeks=weeks,
+        brand=brand, brands=brands,
+        day_focus=day_focus,
+        day_classes=day_classes,
+        day_bookings=day_bookings,
+        month_label={
+            1: 'يناير', 2: 'فبراير', 3: 'مارس', 4: 'أبريل', 5: 'مايو', 6: 'يونيو',
+            7: 'يوليو', 8: 'أغسطس', 9: 'سبتمبر', 10: 'أكتوبر', 11: 'نوفمبر', 12: 'ديسمبر',
+        }.get(month, ''),
+    )
+
+
 @classes_bp.route('/create', methods=['GET', 'POST'])
 @login_required
 def create():
@@ -344,41 +476,9 @@ def cancel_booking(booking_id):
                           date=booking.booking_date.strftime('%Y-%m-%d')))
 
 
-@classes_bp.route('/calendar')
-@login_required
-def calendar():
-    """Calendar view of classes"""
-    if not (current_user.role and current_user.role.can_manage_classes):
-        flash('ليس لديك صلاحية', 'danger')
-        return redirect(url_for('dashboard.index'))
-
-    # Get brand
-    if current_user.is_owner:
-        brand_id = request.args.get('brand_id', type=int)
-        if not brand_id:
-            brands = Brand.query.filter_by(is_active=True).all()
-            brand = brands[0] if brands else None
-            brand_id = brand.id if brand else None
-        else:
-            brand = Brand.query.get(brand_id)
-    else:
-        brand_id = current_user.brand_id
-        brand = current_user.brand
-
-    if not brand:
-        flash('يرجى اختيار براند', 'warning')
-        return redirect(url_for('dashboard.index'))
-
-    # Get classes for the week
-    classes = GymClass.query.filter_by(brand_id=brand_id, is_active=True).all()
-
-    # Build schedule grid
-    schedule = {i: [] for i in range(7)}
-    for cls in classes:
-        if cls.day_of_week is not None:
-            schedule[cls.day_of_week].append(cls)
-
-    return render_template('classes/calendar.html', schedule=schedule, brand=brand)
+    # GYM-53 — the old week-grid /classes/calendar route (which rendered
+    # classes/calendar.html) was replaced by the month-grid version defined
+    # earlier in this file. Endpoint name kept, template swapped.
 
 
 # API for member search
