@@ -141,6 +141,38 @@
     .navbar, .sidebar {
         display: none;
     }
+    .no-print { display: none !important; }
 }
 </style>
+
+{# GYM-61 — owner/admin only: edit the invoice_date. Audit-logged. #}
+{% if current_user.is_owner or current_user.is_brand_manager %}
+<div class="card mt-3 no-print">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-calendar2-event"></i> تعديل تاريخ الفاتورة</span>
+        <span class="badge bg-warning text-dark">للمدير فقط</span>
+    </div>
+    <div class="card-body">
+        <p class="small text-muted mb-2">
+            التعديل يُسجَّل في سجل عمليات التعديل (Audit Log) مع التاريخ القديم والجديد واسم المستخدم.
+        </p>
+        <form method="post" action="{{ url_for('invoices.edit_date', invoice_id=invoice.id) }}"
+              class="row g-2 align-items-end"
+              onsubmit="return confirm('تأكيد تعديل تاريخ الفاتورة؟');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token else '' }}">
+            <div class="col-md-6">
+                <label class="form-label small">التاريخ الجديد</label>
+                <input type="datetime-local" name="invoice_date" class="form-control"
+                       value="{{ invoice.invoice_date.strftime('%Y-%m-%dT%H:%M') if invoice.invoice_date else '' }}"
+                       required>
+            </div>
+            <div class="col-md-3">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="bi bi-check-lg"></i> حفظ
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
 {% endblock %}

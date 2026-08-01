@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+{% block title %}سجل الحضور من البصمة{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-fingerprint"></i>
+        سجل الحضور من البصمة
+        <span class="badge bg-secondary">{{ total }} سجل</span>
+    </h1>
+    <a href="{{ url_for('attendance.fingerprint_export', **request.args) }}"
+       class="btn btn-outline-success">
+        <i class="bi bi-file-earmark-excel"></i> تصدير Excel
+    </a>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="GET" class="row g-2">
+            <div class="col-md-3">
+                <label class="form-label small">بحث بالاسم</label>
+                <input type="search" name="q" class="form-control"
+                       value="{{ q_name or '' }}" placeholder="اسم عضو أو موظف...">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">النوع</label>
+                <select name="kind" class="form-select">
+                    <option value="">الكل</option>
+                    <option value="member" {{ 'selected' if kind == 'member' }}>عضو</option>
+                    <option value="employee" {{ 'selected' if kind == 'employee' }}>موظف</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">من تاريخ</label>
+                <input type="date" name="date_from" class="form-control" value="{{ d_from.isoformat() }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">إلى تاريخ</label>
+                <input type="date" name="date_to" class="form-control" value="{{ d_to.isoformat() }}">
+            </div>
+            <div class="col-md-3 d-flex align-items-end gap-2">
+                <button type="submit" class="btn btn-primary flex-grow-1">
+                    <i class="bi bi-funnel"></i> تصفية
+                </button>
+                {% if q_name or kind or request.args.get('date_from') %}
+                <a href="{{ url_for('attendance.fingerprint_log') }}"
+                   class="btn btn-outline-secondary" title="مسح">
+                    <i class="bi bi-x-lg"></i>
+                </a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+</div>
+
+{# Latest activity — auto-refreshes every 30s. #}
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-broadcast"></i> آخر الحركات</span>
+        <small class="text-muted">تحديث تلقائي كل 30 ثانية</small>
+    </div>
+    <div class="card-body">
+        <div id="latest-strip">
+            {% if latest %}
+            <div class="d-flex flex-wrap gap-2">
+                {% for r in latest[:10] %}
+                <div class="border rounded px-2 py-1 small">
+                    <span class="badge bg-{{ 'primary' if r.kind == 'member' else 'success' }}">{{ r.kind_ar }}</span>
+                    <strong>{{ r.name }}</strong>
+                    <span class="text-muted">· {{ r.when | local_time if r.when else '—' }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <span class="text-muted">لا توجد حركات في آخر يومين.</span>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        {% if rows %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>النوع</th>
+                        <th>الاسم</th>
+                        <th>التاريخ</th>
+                        <th>حضور</th>
+                        <th>انصراف</th>
+                        <th>الحالة</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in rows %}
+                    <tr>
+                        <td>
+                            <span class="badge bg-{{ 'primary' if r.kind == 'member' else 'success' }}">
+                                {{ r.kind_ar }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if r.kind == 'member' %}
+                            <a href="{{ url_for('members.view', member_id=r.entity_id) }}">{{ r.name }}</a>
+                            {% else %}
+                            {{ r.name }}
+                            {% endif %}
+                        </td>
+                        <td>{{ r.date.isoformat() if r.date else '—' }}</td>
+                        <td>
+                            {% if r.kind == 'member' %}
+                                {{ r.check_in | local_time if r.check_in else '—' }}
+                            {% else %}
+                                {{ r.check_in.strftime('%H:%M') if r.check_in else '—' }}
+                            {% endif %}
+                        </td>
+                        <td>{{ r.check_out.strftime('%H:%M') if r.check_out else '—' }}</td>
+                        <td><span class="badge bg-secondary">{{ r.status_ar }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if total_pages > 1 %}
+        {% set qargs = request.args.to_dict() %}
+        {% set _ = qargs.pop('page', None) %}
+        <nav>
+            <ul class="pagination justify-content-center mt-3">
+                {% for p in range(1, total_pages + 1) %}
+                <li class="page-item {{ 'active' if p == page else '' }}">
+                    <a class="page-link" href="{{ url_for('attendance.fingerprint_log', page=p, **qargs) }}">{{ p }}</a>
+                </li>
+                {% endfor %}
+            </ul>
+        </nav>
+        {% endif %}
+        {% else %}
+        <div class="empty-state text-center py-5">
+            <i class="bi bi-fingerprint display-1 text-muted"></i>
+            <h4 class="mt-3">لا توجد سجلات مطابقة</h4>
+            <p class="text-muted">جرّب توسيع نطاق التاريخ أو مسح الفلاتر.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+(function () {
+    // GYM-59 — poll /attendance/fingerprint/api/latest every 30s and rebuild
+    // the "آخر الحركات" strip. Silent on error.
+    var strip = document.getElementById('latest-strip');
+    if (!strip) return;
+    function refresh() {
+        fetch('{{ url_for("attendance.fingerprint_latest") }}')
+            .then(function (r) { return r.json(); })
+            .then(function (js) {
+                if (!js || !js.items || !js.items.length) return;
+                var html = '<div class="d-flex flex-wrap gap-2">';
+                js.items.slice(0, 10).forEach(function (it) {
+                    var t = it.when ? new Date(it.when).toLocaleTimeString('ar-SA', {
+                        hour: '2-digit', minute: '2-digit'
+                    }) : '—';
+                    html += '<div class="border rounded px-2 py-1 small">'
+                          + '<span class="badge bg-primary">' + it.kind + '</span> '
+                          + '<strong>' + it.name + '</strong>'
+                          + ' <span class="text-muted">· ' + t + '</span></div>';
+                });
+                html += '</div>';
+                strip.innerHTML = html;
+            })
+            .catch(function () { /* silent */ });
+    }
+    setInterval(refresh, 30000);
+})();
+</script>
+{% endblock %}

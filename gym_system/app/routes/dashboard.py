@@ -1363,6 +1363,73 @@ def build_user_alerts():
             'link': link,
         })
 
+    # GYM-55 + GYM-58 — pending approvals badge in the bell (manager-only).
+    if current_user.role and current_user.role.name_en in ('admin', 'owner', 'branch_manager'):
+        from app.models.approvals import SubscriptionFreezeRequest, PendingEdit
+        fr_q = SubscriptionFreezeRequest.query.filter_by(status='pending')
+        pe_q = PendingEdit.query.filter_by(status='pending')
+        if not is_owner and user_brand_id:
+            pe_q = pe_q.filter(PendingEdit.brand_id == user_brand_id)
+            fr_q = fr_q.join(Subscription).filter(Subscription.brand_id == user_brand_id)
+        n_freeze = fr_q.count()
+        n_edit = pe_q.count()
+        if n_freeze:
+            alerts.append({
+                'type': 'warning', 'icon': 'snow',
+                'title': f'{n_freeze} طلب تجميد قيد المراجعة',
+                'link': url_for('approvals.freeze_requests'),
+            })
+        if n_edit:
+            alerts.append({
+                'type': 'warning', 'icon': 'pencil-square',
+                'title': f'{n_edit} طلب تعديل قيد الاعتماد',
+                'link': url_for('approvals.pending_edits'),
+            })
+
+    # GYM-57 — iqama expiry. Manager-visible only. Fires at each threshold
+    # BEFORE expiry (30/14/7/3/2/1/0 days) and DAILY after expiry until the
+    # date is updated. The threshold table is inclusive of "today or past".
+    if current_user.role and current_user.role.name_en in ('admin', 'owner', 'branch_manager'):
+        iqama_thresholds = (30, 14, 7, 3, 2, 1, 0)  # days remaining
+        user_q = User.query.filter(
+            User.is_active == True,
+            User.is_deleted == False,
+            User.iqama_end_date != None,
+        )
+        if not is_owner and user_brand_id:
+            user_q = user_q.filter(User.brand_id == user_brand_id)
+        for u in user_q.all():
+            days_left = (u.iqama_end_date - today).days
+            fire = False
+            severity = 'warning'
+            note = ''
+            if days_left < 0:
+                fire = True
+                severity = 'danger'
+                note = f'انتهت منذ {-days_left} يوم — تحديث مطلوب'
+            elif days_left in iqama_thresholds:
+                fire = True
+                if days_left == 0:
+                    severity = 'danger'; note = 'تنتهي اليوم'
+                elif days_left <= 3:
+                    severity = 'danger'; note = f'تنتهي خلال {days_left} يوم'
+                elif days_left <= 14:
+                    severity = 'warning'; note = f'تنتهي خلال {days_left} يوم'
+                else:
+                    severity = 'info'; note = f'تنتهي خلال {days_left} يوم'
+            if fire:
+                iq_num = f' (رقم {u.iqama_number})' if u.iqama_number else ''
+                try:
+                    link = url_for('admin.users_edit', user_id=u.id)
+                except Exception:
+                    link = url_for('admin.users_list')
+                alerts.append({
+                    'type': severity,
+                    'icon': 'card-heading',
+                    'title': f'إقامة {u.name}{iq_num} — {note}',
+                    'link': link,
+                })
+
     return alerts
 
 

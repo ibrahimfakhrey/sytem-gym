@@ -381,6 +381,20 @@ def users_create():
             flash('البريد الإلكتروني مستخدم مسبقاً', 'danger')
             return render_template('admin/users/form.html', form=form)
 
+        # GYM-57 — iqama fields (manual form read; no WTForms field defined)
+        from datetime import date as _date
+        iqama_num = (request.form.get('iqama_number') or '').strip() or None
+        iqama_s = (request.form.get('iqama_start_date') or '').strip()
+        iqama_e = (request.form.get('iqama_end_date') or '').strip()
+        try:
+            iqama_start = _date.fromisoformat(iqama_s) if iqama_s else None
+        except ValueError:
+            iqama_start = None
+        try:
+            iqama_end = _date.fromisoformat(iqama_e) if iqama_e else None
+        except ValueError:
+            iqama_end = None
+
         user = User(
             name=form.name.data,
             email=form.email.data.lower(),
@@ -391,7 +405,10 @@ def users_create():
             salary_type=form.salary_type.data if form.salary_type.data else None,
             salary_amount=form.salary_amount.data,
             is_trainer=form.is_trainer.data,
-            is_active=form.is_active.data
+            is_active=form.is_active.data,
+            iqama_number=iqama_num,
+            iqama_start_date=iqama_start,
+            iqama_end_date=iqama_end,
         )
         user.set_password(form.password.data)
 
@@ -493,6 +510,23 @@ def users_edit(user_id):
         user.salary_amount = form.salary_amount.data
         user.is_trainer = form.is_trainer.data
         user.is_active = form.is_active.data
+
+        # GYM-57 — iqama (residence permit) fields. Manual raw-form read
+        # since WTForms fields aren't defined for these; keeps the diff
+        # small and lets us add them without touching UserForm.
+        from datetime import date as _date
+        iqama_num = (request.form.get('iqama_number') or '').strip() or None
+        iqama_s = (request.form.get('iqama_start_date') or '').strip()
+        iqama_e = (request.form.get('iqama_end_date') or '').strip()
+        user.iqama_number = iqama_num
+        try:
+            user.iqama_start_date = _date.fromisoformat(iqama_s) if iqama_s else None
+        except ValueError:
+            pass
+        try:
+            user.iqama_end_date = _date.fromisoformat(iqama_e) if iqama_e else None
+        except ValueError:
+            pass
 
         # Update password only if provided
         if form.password.data and len(form.password.data) >= 6:

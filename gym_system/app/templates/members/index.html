@@ -151,7 +151,10 @@
                 <tbody>
                     {% for member in members.items %}
                     <tr>
-                        <td>{{ member.id }}</td>
+                        {# GYM-60 — display the per-branch number (independent
+                           sequence per branch); global id shown as a fallback
+                           for legacy rows where the backfill somehow missed. #}
+                        <td>#{{ member.display_number or member.id }}</td>
                         <td>
                             <strong>{{ member.name }}</strong>
                             {% if member.fingerprint_id %}

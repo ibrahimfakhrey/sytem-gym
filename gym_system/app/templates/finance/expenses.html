@@ -63,10 +63,31 @@
                 </select>
             </div>
             {% endif %}
-            <div class="col-md-3 d-flex align-items-end">
-                <button type="submit" class="btn btn-secondary w-100">
+            {# GYM-56 — description search + category filter #}
+            <div class="col-md-3">
+                <label class="form-label">بحث في الوصف</label>
+                <input type="search" name="search" class="form-control"
+                       placeholder="اكتب جزء من الوصف..."
+                       value="{{ search or '' }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">التصنيف</label>
+                <select name="category" class="form-select">
+                    <option value="">جميع التصنيفات</option>
+                    {% for c in categories %}
+                    <option value="{{ c }}" {{ 'selected' if category == c }}>{{ c }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 d-flex align-items-end gap-2">
+                <button type="submit" class="btn btn-secondary flex-grow-1">
                     <i class="bi bi-funnel"></i> تصفية
                 </button>
+                {% if search or category or request.args.get('status') %}
+                <a href="{{ url_for('finance.expenses') }}" class="btn btn-outline-secondary" title="مسح">
+                    <i class="bi bi-x-lg"></i>
+                </a>
+                {% endif %}
             </div>
         </form>
     </div>

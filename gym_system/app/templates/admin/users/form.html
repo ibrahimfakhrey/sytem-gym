@@ -127,6 +127,31 @@
                         </div>
                     </div>
 
+                    {# GYM-57 — iqama (residence permit) tracking. The system
+                       fires bell notifications at 30/14/7/3/2/1/0 days before
+                       expiry and daily after until updated. #}
+                    <hr>
+                    <h6 class="mb-3"><i class="bi bi-card-heading"></i> بيانات الإقامة</h6>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">رقم الإقامة</label>
+                            <input type="text" name="iqama_number" class="form-control"
+                                   value="{{ user.iqama_number if user else '' }}"
+                                   placeholder="اختياري">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">تاريخ بداية الإقامة</label>
+                            <input type="date" name="iqama_start_date" class="form-control"
+                                   value="{{ user.iqama_start_date.isoformat() if user and user.iqama_start_date else '' }}">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">تاريخ انتهاء الإقامة</label>
+                            <input type="date" name="iqama_end_date" class="form-control"
+                                   value="{{ user.iqama_end_date.isoformat() if user and user.iqama_end_date else '' }}">
+                            <small class="text-muted">التنبيهات: -30/-14/-7/-3/-2/-1/0 يوم قبل الانتهاء + يومياً بعد الانتهاء.</small>
+                        </div>
+                    </div>
+
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-primary">
                             <i class="bi bi-check-lg"></i>

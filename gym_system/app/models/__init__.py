@@ -22,3 +22,4 @@ from .employee import EmployeeSettings, EmployeeShift, EmployeeReward, EmployeeD
 from .blocked_member import BlockedMember
 from .day_pass import DayPass, DayPassPrice  # GYM-23
 from .merge_log import MemberMergeLog  # GYM-28
+from .approvals import SubscriptionFreezeRequest, PendingEdit, EditAuditLog  # GYM-55 / 58 / 61

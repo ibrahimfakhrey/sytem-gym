@@ -230,6 +230,16 @@ def create():
             ).scalar()
             member.fingerprint_id = (max_fp or 0) + 1
 
+        # GYM-60 — assign per-branch display_number (independent sequence
+        # per branch, starting at 1). Members without a branch (rare) get
+        # a per-brand-with-NULL-branch counter, still independent from
+        # other branches.
+        max_dn = db.session.query(db.func.max(Member.display_number)).filter(
+            Member.branch_id.is_(branch_id_val) if branch_id_val is None
+            else Member.branch_id == branch_id_val,
+        ).scalar()
+        member.display_number = (max_dn or 0) + 1
+
         # Handle photo upload
         if 'photo' in request.files:
             photo_file = request.files['photo']

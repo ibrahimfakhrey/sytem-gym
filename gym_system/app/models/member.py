@@ -46,6 +46,11 @@ class Member(db.Model):
     is_active = db.Column(db.Boolean, default=True)
     notes = db.Column(db.Text)
 
+    # GYM-60 — per-branch display number. Independent sequence per branch
+    # starting at 1. members.id is still the global PK; this is the receipt
+    # / lookup number the receptionist uses in-branch.
+    display_number = db.Column(db.Integer)
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
 

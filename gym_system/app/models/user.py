@@ -128,6 +128,11 @@ class User(UserMixin, db.Model):
     # is a separate, finer-grained flag that hides the user from lists and
     # blocks login but keeps their FK relationships intact.
     is_deleted = db.Column(db.Boolean, default=False, nullable=False)
+    # GYM-57 — iqama (residence permit) tracking. The scanner fires bell
+    # notifications at 1mo/2wk/1wk/3d/2d/1d/0d before expiry and daily after.
+    iqama_number = db.Column(db.String(30))
+    iqama_start_date = db.Column(db.Date)
+    iqama_end_date = db.Column(db.Date)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_login = db.Column(db.DateTime)
 

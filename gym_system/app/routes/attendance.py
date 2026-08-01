@@ -229,3 +229,193 @@ def search_member():
         })
 
     return jsonify({'results': results})
+
+
+# ─── GYM-59 — unified fingerprint attendance log ─────────────────────────
+
+@attendance_bp.route('/fingerprint')
+@login_required
+def fingerprint_log():
+    """Consolidated view of every fingerprint-sourced attendance row —
+    members + employees in one screen with filters, per-entity detail,
+    and xlsx export at /attendance/fingerprint/export.xlsx."""
+    from datetime import timedelta
+    from app.models.user import User
+
+    if not (current_user.is_owner or current_user.is_brand_manager
+            or (current_user.role and current_user.role.name_en == 'branch_manager')):
+        flash('صفحة سجل البصمة مقتصرة على المدير.', 'danger')
+        return redirect(url_for('dashboard.index'))
+
+    page, per_page = pagination_args(request)
+    q_name = (request.args.get('q') or '').strip()
+    kind = (request.args.get('kind') or '').strip()  # 'member' | 'employee' | ''
+    date_from_str = (request.args.get('date_from') or '').strip()
+    date_to_str = (request.args.get('date_to') or '').strip()
+    branch_id = request.args.get('branch_id', type=int)
+
+    today = date.today()
+    try:
+        d_from = date.fromisoformat(date_from_str) if date_from_str else today - timedelta(days=30)
+        d_to = date.fromisoformat(date_to_str) if date_to_str else today
+    except ValueError:
+        d_from, d_to = today - timedelta(days=30), today
+
+    # Members side
+    mq = MemberAttendance.query.join(Member).filter(
+        MemberAttendance.source == 'fingerprint',
+        db.func.date(MemberAttendance.check_in) >= d_from,
+        db.func.date(MemberAttendance.check_in) <= d_to,
+    )
+    # Employees side
+    eq = EmployeeAttendance.query.join(User).filter(
+        EmployeeAttendance.source == 'fingerprint',
+        EmployeeAttendance.date >= d_from,
+        EmployeeAttendance.date <= d_to,
+    )
+
+    if not current_user.is_owner and current_user.brand_id:
+        mq = mq.filter(MemberAttendance.brand_id == current_user.brand_id)
+        eq = eq.filter(EmployeeAttendance.brand_id == current_user.brand_id)
+    if branch_id:
+        mq = mq.filter(MemberAttendance.branch_id == branch_id)
+        eq = eq.filter(EmployeeAttendance.branch_id == branch_id)
+    if q_name:
+        mq = mq.filter(Member.name.ilike(f'%{q_name}%'))
+        eq = eq.filter(User.name.ilike(f'%{q_name}%'))
+
+    rows = []
+    if kind != 'employee':
+        for att in mq.order_by(MemberAttendance.check_in.desc()).all():
+            rows.append({
+                'when': att.check_in,
+                'kind': 'member',
+                'kind_ar': 'عضو',
+                'name': att.member.name if att.member else '—',
+                'entity_id': att.member_id,
+                'date': att.check_in.date() if att.check_in else None,
+                'check_in': att.check_in,
+                'check_out': None,
+                'branch': att.brand.name if getattr(att, 'brand', None) else '',
+                'status_ar': 'حضور',
+            })
+    if kind != 'member':
+        for att in eq.order_by(EmployeeAttendance.date.desc(),
+                               EmployeeAttendance.check_in.desc()).all():
+            rows.append({
+                'when': datetime.combine(att.date, att.check_in) if att.check_in else datetime.combine(att.date, datetime.min.time()),
+                'kind': 'employee',
+                'kind_ar': 'موظف',
+                'name': att.employee.name if att.employee else '—',
+                'entity_id': att.user_id,
+                'date': att.date,
+                'check_in': att.check_in,
+                'check_out': att.check_out,
+                'branch': att.brand.name if getattr(att, 'brand', None) else '',
+                'status_ar': att.status_text,
+            })
+
+    rows.sort(key=lambda r: r['when'] or datetime.min, reverse=True)
+
+    # Latest 10 for the auto-refresh strip
+    latest = rows[:10]
+
+    # Simple in-memory pagination
+    start = (page - 1) * per_page
+    page_rows = rows[start:start + per_page]
+    total_pages = max(1, (len(rows) + per_page - 1) // per_page)
+
+    return render_template('attendance/fingerprint_log.html',
+        rows=page_rows, latest=latest, total=len(rows),
+        page=page, per_page=per_page, total_pages=total_pages,
+        q_name=q_name, kind=kind,
+        d_from=d_from, d_to=d_to,
+        branch_id=branch_id,
+    )
+
+
+@attendance_bp.route('/fingerprint/api/latest')
+@login_required
+def fingerprint_latest():
+    """JSON feed for the auto-refresh strip on /attendance/fingerprint."""
+    from datetime import timedelta
+    from app.models.user import User
+    if not (current_user.is_owner or current_user.is_brand_manager):
+        return jsonify({'items': []})
+    since = datetime.utcnow() - timedelta(days=2)
+    items = []
+    mq = MemberAttendance.query.join(Member).filter(
+        MemberAttendance.source == 'fingerprint',
+        MemberAttendance.check_in >= since,
+    )
+    if not current_user.is_owner and current_user.brand_id:
+        mq = mq.filter(MemberAttendance.brand_id == current_user.brand_id)
+    for att in mq.order_by(MemberAttendance.check_in.desc()).limit(20).all():
+        items.append({
+            'when': att.check_in.isoformat() if att.check_in else None,
+            'kind': 'عضو',
+            'name': att.member.name if att.member else '—',
+        })
+    return jsonify({'items': items[:20]})
+
+
+@attendance_bp.route('/fingerprint/export.xlsx')
+@login_required
+def fingerprint_export():
+    """xlsx export of whatever the current filters return on
+    /attendance/fingerprint."""
+    from app.routes.finance import _xlsx_response
+    from app.utils.helpers import local_dt
+    if not (current_user.is_owner or current_user.is_brand_manager):
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('dashboard.index'))
+    # Simplest — reuse the main handler and pull rows.
+    from datetime import timedelta
+    from app.models.user import User
+    date_from_str = request.args.get('date_from') or ''
+    date_to_str = request.args.get('date_to') or ''
+    q_name = (request.args.get('q') or '').strip()
+    kind = request.args.get('kind') or ''
+    today = date.today()
+    try:
+        d_from = date.fromisoformat(date_from_str) if date_from_str else today - timedelta(days=30)
+        d_to = date.fromisoformat(date_to_str) if date_to_str else today
+    except ValueError:
+        d_from, d_to = today - timedelta(days=30), today
+    rows = []
+    if kind != 'employee':
+        mq = MemberAttendance.query.join(Member).filter(
+            MemberAttendance.source == 'fingerprint',
+            db.func.date(MemberAttendance.check_in) >= d_from,
+            db.func.date(MemberAttendance.check_in) <= d_to,
+        )
+        if not current_user.is_owner and current_user.brand_id:
+            mq = mq.filter(MemberAttendance.brand_id == current_user.brand_id)
+        if q_name:
+            mq = mq.filter(Member.name.ilike(f'%{q_name}%'))
+        for att in mq.order_by(MemberAttendance.check_in.desc()).all():
+            rows.append(['عضو',
+                         att.member.name if att.member else '',
+                         local_dt(att.check_in),
+                         '', ''])
+    if kind != 'member':
+        eq = EmployeeAttendance.query.join(User).filter(
+            EmployeeAttendance.source == 'fingerprint',
+            EmployeeAttendance.date >= d_from,
+            EmployeeAttendance.date <= d_to,
+        )
+        if not current_user.is_owner and current_user.brand_id:
+            eq = eq.filter(EmployeeAttendance.brand_id == current_user.brand_id)
+        if q_name:
+            eq = eq.filter(User.name.ilike(f'%{q_name}%'))
+        for att in eq.order_by(EmployeeAttendance.date.desc()).all():
+            rows.append(['موظف',
+                         att.employee.name if att.employee else '',
+                         att.date.isoformat(),
+                         att.check_in.strftime('%H:%M') if att.check_in else '',
+                         att.check_out.strftime('%H:%M') if att.check_out else ''])
+    return _xlsx_response(
+        f'fingerprint-log-{d_from.isoformat()}-to-{d_to.isoformat()}',
+        ['النوع', 'الاسم', 'التاريخ / الوقت', 'حضور', 'انصراف'],
+        rows,
+    )

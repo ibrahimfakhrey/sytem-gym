@@ -464,6 +464,8 @@ def expenses():
     category = request.args.get('category', '')
     user_id = request.args.get('user_id', type=int)
     branch_id_filter = request.args.get('branch_id', type=int)
+    # GYM-56 — free-text search on the expense description.
+    search = (request.args.get('search', '') or '').strip()
 
     try:
         from_date = date.fromisoformat(date_from)
@@ -496,6 +498,10 @@ def expenses():
 
     if category:
         query = query.filter(Expense.category_name == category)
+
+    # GYM-56 — description search (case-insensitive substring).
+    if search:
+        query = query.filter(Expense.description.ilike(f'%{search}%'))
 
     if user_id:
         query = query.filter(Expense.created_by == user_id)
@@ -558,7 +564,8 @@ def expenses():
                           user_id=user_id,
                           branch_id_filter=branch_id_filter,
                           date_from=date_from,
-                          date_to=date_to)
+                          date_to=date_to,
+                          search=search)
 
 
 @finance_bp.route('/expenses/create', methods=['GET', 'POST'])
@@ -1043,6 +1050,23 @@ def expense_edit(expense_id):
             brand_id=expense.brand_id, name=cat_name
         ).first()
 
+        # GYM-58 — non-managers need approval.
+        if not (current_user.is_owner or current_user.is_brand_manager):
+            from app.routes.approvals import create_pending_edit
+            create_pending_edit(
+                entity_type='expense', entity_id=expense.id,
+                action='update',
+                payload_dict={
+                    'amount': new_amount,
+                    'category_name': cat_name,
+                    'description': (request.form.get('description') or '').strip() or None,
+                },
+                summary=f'تعديل مصروف #{expense.id} — {cat_name}',
+                brand_id=expense.brand_id,
+            )
+            flash('تم إرسال طلب التعديل للمدير للاعتماد.', 'info')
+            return redirect(url_for('finance.expenses'))
+
         expense.amount = new_amount
         expense.category_name = cat_name
         if cat_row:
@@ -1075,6 +1099,18 @@ def expense_delete(expense_id):
         return redirect(url_for('finance.expenses'))
     if expense.is_deleted:
         flash('المصروف محذوف مسبقاً.', 'warning')
+        return redirect(url_for('finance.expenses'))
+
+    # GYM-58 — non-managers need approval.
+    if not (current_user.is_owner or current_user.is_brand_manager):
+        from app.routes.approvals import create_pending_edit
+        create_pending_edit(
+            entity_type='expense', entity_id=expense.id,
+            action='delete', payload_dict={},
+            summary=f'حذف مصروف #{expense.id} — {expense.category_name}',
+            brand_id=expense.brand_id,
+        )
+        flash('تم إرسال طلب الحذف للمدير للاعتماد.', 'info')
         return redirect(url_for('finance.expenses'))
 
     expense.is_deleted = True

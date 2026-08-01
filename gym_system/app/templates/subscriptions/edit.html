@@ -63,6 +63,23 @@
                     </script>
                     {% endif %}
 
+                    {# GYM-61 — owner/admin only: registration timestamp
+                       (subscription.created_at). Backdated corrections are
+                       audit-logged (edit_audit_logs). #}
+                    {% if current_user.is_owner or current_user.is_brand_manager %}
+                    <div class="mb-3">
+                        <label for="registration_datetime" class="form-label">
+                            تاريخ تسجيل الاشتراك <span class="badge bg-warning text-dark ms-1">للمدير فقط</span>
+                        </label>
+                        <input id="registration_datetime" name="registration_datetime" type="datetime-local"
+                               class="form-control"
+                               value="{{ subscription.created_at.strftime('%Y-%m-%dT%H:%M') if subscription.created_at else '' }}">
+                        <div class="form-text">
+                            التعديل يُسجَّل في سجل عمليات التعديل مع التاريخ القديم والجديد.
+                        </div>
+                    </div>
+                    {% endif %}
+
                     <div class="mb-3">
                         <label for="notes" class="form-label">ملاحظات</label>
                         <textarea id="notes" name="notes" class="form-control" rows="3">{{ subscription.notes or '' }}</textarea>

@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}طلبات تجميد الاشتراكات{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-snow"></i>
+        طلبات تجميد الاشتراكات
+        {% if pending_count %}<span class="badge bg-warning">{{ pending_count }} قيد المراجعة</span>{% endif %}
+    </h1>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="btn-group">
+            {% for s, label in [('pending','قيد المراجعة'), ('approved','مقبولة'), ('rejected','مرفوضة')] %}
+            <a href="{{ url_for('approvals.freeze_requests', status=s) }}"
+               class="btn btn-{{ 'primary' if status == s else 'outline-secondary' }}">
+                {{ label }}
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+    {% if reqs %}
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>الاشتراك / العضو</th>
+                        <th>بداية التجميد</th>
+                        <th>المدة</th>
+                        <th>السبب</th>
+                        <th>مقدّم الطلب</th>
+                        <th>وقت الطلب</th>
+                        <th>الحالة</th>
+                        <th>إجراء</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in reqs %}
+                    <tr>
+                        <td>{{ r.id }}</td>
+                        <td>
+                            <a href="{{ url_for('subscriptions.view', subscription_id=r.subscription_id) }}">
+                                #{{ r.subscription_id }}
+                            </a>
+                            {% if r.subscription and r.subscription.member %}
+                            <br><small class="text-muted">{{ r.subscription.member.name }}</small>
+                            {% endif %}
+                        </td>
+                        <td>{{ r.freeze_start | local_date }}</td>
+                        <td>{{ r.freeze_days }} يوم</td>
+                        <td><small>{{ r.reason or '—' }}</small></td>
+                        <td>{{ r.requester.name if r.requester else '—' }}</td>
+                        <td>
+                            <small>{{ r.requested_at | local_dt }}</small>
+                        </td>
+                        <td>
+                            {% if r.status == 'pending' %}
+                                <span class="badge bg-warning">قيد المراجعة</span>
+                            {% elif r.status == 'approved' %}
+                                <span class="badge bg-success">مقبول</span>
+                                {% if r.reviewer %}<br><small class="text-muted">بواسطة {{ r.reviewer.name }}</small>{% endif %}
+                            {% else %}
+                                <span class="badge bg-danger">مرفوض</span>
+                                {% if r.rejection_reason %}<br><small class="text-muted">{{ r.rejection_reason }}</small>{% endif %}
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if r.status == 'pending' %}
+                            <form method="post" action="{{ url_for('approvals.freeze_approve', req_id=r.id) }}"
+                                  class="d-inline"
+                                  onsubmit="return confirm('تنفيذ التجميد على الاشتراك؟');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm btn-success">
+                                    <i class="bi bi-check-lg"></i> موافقة
+                                </button>
+                            </form>
+                            <button type="button" class="btn btn-sm btn-outline-danger"
+                                    data-bs-toggle="collapse" data-bs-target="#reject-{{ r.id }}">
+                                <i class="bi bi-x-lg"></i> رفض
+                            </button>
+                            <div class="collapse mt-2" id="reject-{{ r.id }}">
+                                <form method="post" action="{{ url_for('approvals.freeze_reject', req_id=r.id) }}">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <input type="text" name="rejection_reason" class="form-control form-control-sm mb-1"
+                                           placeholder="سبب الرفض (اختياري)">
+                                    <button type="submit" class="btn btn-sm btn-danger">تأكيد الرفض</button>
+                                </form>
+                            </div>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p class="text-muted text-center mb-0">لا توجد طلبات في هذه الحالة.</p>
+    {% endif %}
+    </div>
+</div>
+{% endblock %}

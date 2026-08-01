@@ -71,6 +71,7 @@ def create_app(config_name=None):
     from .routes.bookings import bookings_bp
     from .routes.invoices import invoices_bp
     from .routes.day_pass import day_pass_bp  # GYM-23
+    from .routes.approvals import approvals_bp  # GYM-55 / 58
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(dashboard_bp)
@@ -94,6 +95,7 @@ def create_app(config_name=None):
     app.register_blueprint(bookings_bp, url_prefix='/bookings')
     app.register_blueprint(invoices_bp, url_prefix='/invoices')
     app.register_blueprint(day_pass_bp)  # /day-pass/* — GYM-23
+    app.register_blueprint(approvals_bp)  # /admin/freeze-requests + /admin/pending-edits
     csrf.exempt(api_bp)  # API uses API key auth, not CSRF
     csrf.exempt(fingerprint_bp)  # /fp/* is open by design (single-tenant desktop client)
 
@@ -195,6 +197,93 @@ def create_app(config_name=None):
                             conn.exec_driver_sql(
                                 "ALTER TABLE complaints ADD COLUMN archived_by INTEGER"
                             )
+                    # GYM-57 — iqama tracking columns on users.
+                    u_cols2 = [r[1] for r in conn.exec_driver_sql(
+                        "PRAGMA table_info(users)"
+                    ).fetchall()]
+                    for col, ddl in (
+                        ('iqama_number',     'ALTER TABLE users ADD COLUMN iqama_number VARCHAR(30)'),
+                        ('iqama_start_date', 'ALTER TABLE users ADD COLUMN iqama_start_date DATE'),
+                        ('iqama_end_date',   'ALTER TABLE users ADD COLUMN iqama_end_date DATE'),
+                    ):
+                        if u_cols2 and col not in u_cols2:
+                            conn.exec_driver_sql(ddl)
+                    # GYM-60 — per-branch member display_number.
+                    m_cols = [r[1] for r in conn.exec_driver_sql(
+                        "PRAGMA table_info(members)"
+                    ).fetchall()]
+                    if m_cols and 'display_number' not in m_cols:
+                        conn.exec_driver_sql(
+                            "ALTER TABLE members ADD COLUMN display_number INTEGER"
+                        )
+                        # Backfill in-place, per branch, ordered by created_at.
+                        # (idempotent — only runs when the column doesn't exist)
+                        rows = conn.exec_driver_sql(
+                            "SELECT id, branch_id FROM members "
+                            "ORDER BY branch_id, created_at, id"
+                        ).fetchall()
+                        counters = {}
+                        for mid, bid in rows:
+                            counters[bid] = counters.get(bid, 0) + 1
+                            conn.exec_driver_sql(
+                                "UPDATE members SET display_number = ? WHERE id = ?",
+                                (counters[bid], mid),
+                            )
+                    # GYM-55 / 58 / 61 — approval + audit tables.
+                    for ddl in (
+                        """CREATE TABLE IF NOT EXISTS subscription_freeze_requests (
+                             id INTEGER PRIMARY KEY AUTOINCREMENT,
+                             subscription_id INTEGER NOT NULL,
+                             freeze_start DATE NOT NULL,
+                             freeze_days INTEGER NOT NULL,
+                             reason TEXT,
+                             status VARCHAR(20) DEFAULT 'pending' NOT NULL,
+                             rejection_reason TEXT,
+                             requested_by INTEGER,
+                             requested_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                             reviewed_by INTEGER,
+                             reviewed_at DATETIME,
+                             FOREIGN KEY(subscription_id) REFERENCES subscriptions(id),
+                             FOREIGN KEY(requested_by) REFERENCES users(id),
+                             FOREIGN KEY(reviewed_by) REFERENCES users(id)
+                           )""",
+                        """CREATE TABLE IF NOT EXISTS pending_edits (
+                             id INTEGER PRIMARY KEY AUTOINCREMENT,
+                             entity_type VARCHAR(40) NOT NULL,
+                             entity_id INTEGER NOT NULL,
+                             action VARCHAR(20) NOT NULL,
+                             payload_json TEXT,
+                             summary VARCHAR(280),
+                             status VARCHAR(20) DEFAULT 'pending' NOT NULL,
+                             rejection_reason TEXT,
+                             brand_id INTEGER,
+                             requested_by INTEGER,
+                             requested_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                             reviewed_by INTEGER,
+                             reviewed_at DATETIME,
+                             FOREIGN KEY(brand_id) REFERENCES brands(id),
+                             FOREIGN KEY(requested_by) REFERENCES users(id),
+                             FOREIGN KEY(reviewed_by) REFERENCES users(id)
+                           )""",
+                        """CREATE TABLE IF NOT EXISTS edit_audit_logs (
+                             id INTEGER PRIMARY KEY AUTOINCREMENT,
+                             entity_type VARCHAR(40) NOT NULL,
+                             entity_id INTEGER NOT NULL,
+                             field_name VARCHAR(40) NOT NULL,
+                             old_value VARCHAR(200),
+                             new_value VARCHAR(200),
+                             brand_id INTEGER,
+                             changed_by INTEGER,
+                             changed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                             note VARCHAR(200),
+                             FOREIGN KEY(brand_id) REFERENCES brands(id),
+                             FOREIGN KEY(changed_by) REFERENCES users(id)
+                           )""",
+                    ):
+                        try:
+                            conn.exec_driver_sql(ddl)
+                        except Exception:
+                            pass
                 except Exception:
                     pass
                 # complaint_attachments (GYM-21)

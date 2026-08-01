@@ -44,6 +44,72 @@ _ADDITIONS = [
     ('complaints',            'is_archived', 'ALTER TABLE complaints ADD COLUMN is_archived BOOLEAN NOT NULL DEFAULT 0'),
     ('complaints',            'archived_at', 'ALTER TABLE complaints ADD COLUMN archived_at DATETIME'),
     ('complaints',            'archived_by', 'ALTER TABLE complaints ADD COLUMN archived_by INTEGER'),
+    # GYM-57 — iqama tracking on users.
+    ('users',                 'iqama_number',     'ALTER TABLE users ADD COLUMN iqama_number VARCHAR(30)'),
+    ('users',                 'iqama_start_date', 'ALTER TABLE users ADD COLUMN iqama_start_date DATE'),
+    ('users',                 'iqama_end_date',   'ALTER TABLE users ADD COLUMN iqama_end_date DATE'),
+    # GYM-60 — per-branch display_number on members. Backfill handled by
+    # the boot guard the first time it sees the missing column (see
+    # app/__init__.py).
+    ('members',               'display_number',   'ALTER TABLE members ADD COLUMN display_number INTEGER'),
+]
+
+# GYM-55 / 58 / 61 — new tables. Additive: create if not exists.
+_NEW_TABLES = [
+    ('subscription_freeze_requests', """
+        CREATE TABLE IF NOT EXISTS subscription_freeze_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            subscription_id INTEGER NOT NULL,
+            freeze_start DATE NOT NULL,
+            freeze_days INTEGER NOT NULL,
+            reason TEXT,
+            status VARCHAR(20) DEFAULT 'pending' NOT NULL,
+            rejection_reason TEXT,
+            requested_by INTEGER,
+            requested_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            reviewed_by INTEGER,
+            reviewed_at DATETIME,
+            FOREIGN KEY(subscription_id) REFERENCES subscriptions(id),
+            FOREIGN KEY(requested_by) REFERENCES users(id),
+            FOREIGN KEY(reviewed_by) REFERENCES users(id)
+        )
+    """),
+    ('pending_edits', """
+        CREATE TABLE IF NOT EXISTS pending_edits (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entity_type VARCHAR(40) NOT NULL,
+            entity_id INTEGER NOT NULL,
+            action VARCHAR(20) NOT NULL,
+            payload_json TEXT,
+            summary VARCHAR(280),
+            status VARCHAR(20) DEFAULT 'pending' NOT NULL,
+            rejection_reason TEXT,
+            brand_id INTEGER,
+            requested_by INTEGER,
+            requested_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            reviewed_by INTEGER,
+            reviewed_at DATETIME,
+            FOREIGN KEY(brand_id) REFERENCES brands(id),
+            FOREIGN KEY(requested_by) REFERENCES users(id),
+            FOREIGN KEY(reviewed_by) REFERENCES users(id)
+        )
+    """),
+    ('edit_audit_logs', """
+        CREATE TABLE IF NOT EXISTS edit_audit_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entity_type VARCHAR(40) NOT NULL,
+            entity_id INTEGER NOT NULL,
+            field_name VARCHAR(40) NOT NULL,
+            old_value VARCHAR(200),
+            new_value VARCHAR(200),
+            brand_id INTEGER,
+            changed_by INTEGER,
+            changed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            note VARCHAR(200),
+            FOREIGN KEY(brand_id) REFERENCES brands(id),
+            FOREIGN KEY(changed_by) REFERENCES users(id)
+        )
+    """),
 ]
 
 
@@ -92,8 +158,36 @@ def run_migration() -> None:
                     conn.exec_driver_sql(ddl)
                     print(f'  +  {table:<14}  added {column}')
                     added += 1
+                    # GYM-60 — one-shot backfill immediately after the
+                    # column is created, per branch, ordered by created_at.
+                    if table == 'members' and column == 'display_number':
+                        try:
+                            rows = conn.exec_driver_sql(
+                                "SELECT id, branch_id FROM members "
+                                "ORDER BY branch_id, created_at, id"
+                            ).fetchall()
+                            counters = {}
+                            for mid, bid in rows:
+                                counters[bid] = counters.get(bid, 0) + 1
+                                conn.exec_driver_sql(
+                                    "UPDATE members SET display_number = ? WHERE id = ?",
+                                    (counters[bid], mid),
+                                )
+                            print(f'     backfilled {len(rows)} members with per-branch numbers')
+                        except Exception as bf_err:
+                            print(f'     !  backfill FAILED: {bf_err}')
                 except Exception as e:
                     print(f'  !  {table:<14}  FAILED to add {column}: {e}')
+
+            # GYM-55 / 58 / 61 — CREATE TABLE IF NOT EXISTS for the new tables.
+            print()
+            for table, ddl in _NEW_TABLES:
+                try:
+                    conn.exec_driver_sql(ddl)
+                    print(f'  ✓  ensured table {table}')
+                except Exception as e:
+                    print(f'  !  ensuring {table} FAILED: {e}')
+
             try:
                 conn.commit()
             except Exception:

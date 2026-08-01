@@ -82,3 +82,49 @@ def view(invoice_id):
         return redirect(url_for('invoices.index'))
 
     return render_template('invoices/view.html', invoice=invoice)
+
+
+@invoices_bp.route('/<int:invoice_id>/edit-date', methods=['POST'])
+@login_required
+@members_required
+def edit_date(invoice_id):
+    """GYM-61 — owner/admin only: edit the invoice_date (issue date).
+
+    Writes an EditAuditLog row with old/new value + user. The invoice row
+    itself is otherwise immutable via the UI; this is the single supported
+    correction path."""
+    from datetime import datetime
+    from app.models.approvals import EditAuditLog
+    invoice = Invoice.query.get_or_404(invoice_id)
+    if not check_entity_access(invoice):
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('invoices.index'))
+    if not (current_user.is_owner or current_user.is_brand_manager):
+        flash('تعديل تاريخ الفاتورة مقتصر على المدير.', 'danger')
+        return redirect(url_for('invoices.view', invoice_id=invoice.id))
+
+    raw = (request.form.get('invoice_date') or '').strip()
+    if not raw:
+        flash('التاريخ مطلوب', 'danger')
+        return redirect(url_for('invoices.view', invoice_id=invoice.id))
+    try:
+        new_dt = datetime.fromisoformat(raw)
+    except ValueError:
+        flash('تنسيق التاريخ غير صالح', 'danger')
+        return redirect(url_for('invoices.view', invoice_id=invoice.id))
+
+    if new_dt != invoice.invoice_date:
+        db.session.add(EditAuditLog(
+            entity_type='invoice',
+            entity_id=invoice.id,
+            field_name='invoice_date',
+            old_value=invoice.invoice_date.isoformat() if invoice.invoice_date else None,
+            new_value=new_dt.isoformat(),
+            brand_id=invoice.brand_id,
+            changed_by=current_user.id,
+            note='GYM-61 direct manager edit',
+        ))
+        invoice.invoice_date = new_dt
+        db.session.commit()
+        flash('تم تحديث تاريخ الفاتورة وسُجّل التعديل.', 'success')
+    return redirect(url_for('invoices.view', invoice_id=invoice.id))

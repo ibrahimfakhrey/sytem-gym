@@ -168,12 +168,39 @@
 
                         {% if current_user.can_manage_attendance %}
                         <li class="nav-item">
-                            <a class="nav-link {% if request.endpoint and 'attendance' in request.endpoint %}active{% endif %}"
+                            <a class="nav-link {% if request.endpoint == 'attendance.index' %}active{% endif %}"
                                href="{{ url_for('attendance.index') }}">
                                 <i class="bi bi-check2-square"></i>
                                 الحضور
                             </a>
                         </li>
+                        {% endif %}
+                        {# GYM-59 — manager-only fingerprint log. #}
+                        {% if current_user.is_owner or current_user.is_brand_manager or (current_user.role and current_user.role.name_en == 'branch_manager') %}
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint and 'fingerprint_log' in request.endpoint %}active{% endif %}"
+                               href="{{ url_for('attendance.fingerprint_log') }}">
+                                <i class="bi bi-fingerprint"></i>
+                                سجل البصمة
+                            </a>
+                        </li>
+                        {# GYM-55 + GYM-58 — approval queues (owner / admin / brand-manager). #}
+                        {% if current_user.is_owner or current_user.is_brand_manager %}
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint == 'approvals.freeze_requests' %}active{% endif %}"
+                               href="{{ url_for('approvals.freeze_requests') }}">
+                                <i class="bi bi-snow"></i>
+                                طلبات التجميد
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint == 'approvals.pending_edits' %}active{% endif %}"
+                               href="{{ url_for('approvals.pending_edits') }}">
+                                <i class="bi bi-pencil-square"></i>
+                                طلبات التعديل
+                            </a>
+                        </li>
+                        {% endif %}
                         {% endif %}
 
                         {# GYM-23 day-pass — visible to everyone with an account. #}

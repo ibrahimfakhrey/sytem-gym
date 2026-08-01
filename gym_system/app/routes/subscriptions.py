@@ -777,7 +777,14 @@ def renew(subscription_id):
 @login_required
 @members_required
 def freeze(subscription_id):
-    """Freeze subscription"""
+    """GYM-55 — freeze goes through manager approval.
+
+    Owner / brand-manager submissions apply the freeze directly (existing
+    flow). Anyone else (receptionist etc.) creates a
+    ``SubscriptionFreezeRequest`` row instead; the freeze isn't applied
+    until the manager approves at /admin/freeze-requests.
+    """
+    from app.models.approvals import SubscriptionFreezeRequest
     subscription = Subscription.query.get_or_404(subscription_id)
 
     if not check_entity_access(subscription):
@@ -786,6 +793,15 @@ def freeze(subscription_id):
 
     if not subscription.can_freeze:
         flash('لا يمكن تجميد هذا الاشتراك', 'danger')
+        return redirect(url_for('subscriptions.view', subscription_id=subscription_id))
+
+    # If there's already a pending request, don't let the receptionist
+    # submit a second one — send them to a "طلبك قيد المراجعة" state.
+    existing_pending = SubscriptionFreezeRequest.query.filter_by(
+        subscription_id=subscription_id, status='pending'
+    ).first()
+    if existing_pending and not (current_user.is_owner or current_user.is_brand_manager):
+        flash('يوجد طلب تجميد قيد المراجعة لهذا الاشتراك بالفعل.', 'info')
         return redirect(url_for('subscriptions.view', subscription_id=subscription_id))
 
     form = FreezeForm()
@@ -801,7 +817,21 @@ def freeze(subscription_id):
             flash(f'الحد الأقصى للتجميد المتبقي {remaining_days} يوم', 'danger')
             return render_template('subscriptions/freeze.html', form=form, subscription=subscription)
 
-        # Create freeze record
+        # GYM-55 — non-manager: create request only, do NOT apply.
+        if not (current_user.is_owner or current_user.is_brand_manager):
+            db.session.add(SubscriptionFreezeRequest(
+                subscription_id=subscription_id,
+                freeze_start=freeze_start,
+                freeze_days=freeze_days,
+                reason=form.reason.data,
+                requested_by=current_user.id,
+                status='pending',
+            ))
+            db.session.commit()
+            flash('تم إرسال طلب التجميد للمدير للمراجعة. لن يتم تنفيذ التجميد إلا بعد الموافقة.', 'info')
+            return redirect(url_for('subscriptions.view', subscription_id=subscription_id))
+
+        # Manager path — apply directly (existing flow).
         freeze_record = SubscriptionFreeze(
             subscription_id=subscription_id,
             freeze_start=freeze_start,
@@ -1170,6 +1200,24 @@ def edit(subscription_id):
         new_start_str = (request.form.get('start_date') or '').strip()
         new_notes = (request.form.get('notes') or '').strip() or None
 
+        # GYM-58 — non-managers CAN'T apply edits directly; they file a
+        # PendingEdit that a manager reviews at /admin/pending-edits.
+        if not (current_user.is_owner or current_user.is_brand_manager):
+            from app.routes.approvals import create_pending_edit
+            create_pending_edit(
+                entity_type='subscription', entity_id=subscription.id,
+                action='update',
+                payload_dict={
+                    'end_date': new_end_str or None,
+                    'start_date': new_start_str or None,
+                    'notes': new_notes,
+                },
+                summary=f'تعديل اشتراك #{subscription.id} — {subscription.member.name if subscription.member else ""}',
+                brand_id=subscription.brand_id,
+            )
+            flash('تم إرسال طلب التعديل للمدير للاعتماد. لن يتم تطبيقه إلا بعد الموافقة.', 'info')
+            return redirect(url_for('subscriptions.view', subscription_id=subscription.id))
+
         # GYM-47 — owner / admin can also move start_date; end_date follows
         # automatically (server-side default: start + plan.duration_days).
         # The form's JS does the same calc client-side so the submitted
@@ -1201,6 +1249,30 @@ def edit(subscription_id):
                 return redirect(url_for('subscriptions.edit', subscription_id=subscription.id))
             subscription.end_date = new_end
 
+        # GYM-61 — owner/admin only: adjust subscription registration
+        # timestamp (created_at) for backdated corrections. Audit-logged.
+        new_created_at_str = (request.form.get('registration_datetime') or '').strip()
+        if new_created_at_str and (current_user.is_owner or current_user.is_brand_manager):
+            from app.models.approvals import EditAuditLog
+            try:
+                # HTML datetime-local yields YYYY-MM-DDTHH:MM
+                new_created_at = datetime.fromisoformat(new_created_at_str)
+            except ValueError:
+                flash('تاريخ التسجيل غير صالح', 'danger')
+                return redirect(url_for('subscriptions.edit', subscription_id=subscription.id))
+            if new_created_at != subscription.created_at:
+                db.session.add(EditAuditLog(
+                    entity_type='subscription',
+                    entity_id=subscription.id,
+                    field_name='created_at',
+                    old_value=subscription.created_at.isoformat() if subscription.created_at else None,
+                    new_value=new_created_at.isoformat(),
+                    brand_id=subscription.brand_id,
+                    changed_by=current_user.id,
+                    note='GYM-61 direct manager edit',
+                ))
+                subscription.created_at = new_created_at
+
         subscription.notes = new_notes
         db.session.commit()
         flash('تم تحديث الاشتراك', 'success')
@@ -1223,6 +1295,18 @@ def delete(subscription_id):
     if subscription.is_deleted:
         flash('الاشتراك محذوف مسبقاً.', 'warning')
         return redirect(url_for('subscriptions.index'))
+
+    # GYM-58 — non-managers need approval to delete.
+    if not (current_user.is_owner or current_user.is_brand_manager):
+        from app.routes.approvals import create_pending_edit
+        create_pending_edit(
+            entity_type='subscription', entity_id=subscription.id,
+            action='delete', payload_dict={},
+            summary=f'حذف اشتراك #{subscription.id} — {subscription.member.name if subscription.member else ""}',
+            brand_id=subscription.brand_id,
+        )
+        flash('تم إرسال طلب الحذف للمدير للاعتماد. لن يتم التنفيذ إلا بعد الموافقة.', 'info')
+        return redirect(url_for('subscriptions.view', subscription_id=subscription.id))
 
     subscription.is_deleted = True
     Income.query.filter_by(subscription_id=subscription.id).update(
@@ -1264,6 +1348,23 @@ def payment_edit(payment_id):
 
         new_method = (request.form.get('payment_method') or payment.payment_method or 'cash').strip()
         new_notes = (request.form.get('notes') or '').strip() or None
+
+        # GYM-58 — non-managers need approval.
+        if not (current_user.is_owner or current_user.is_brand_manager):
+            from app.routes.approvals import create_pending_edit
+            create_pending_edit(
+                entity_type='payment', entity_id=payment.id,
+                action='update',
+                payload_dict={
+                    'amount': new_amount,
+                    'payment_method': new_method,
+                    'notes': new_notes,
+                },
+                summary=f'تعديل دفعة #{payment.id} على اشتراك #{subscription.id}',
+                brand_id=subscription.brand_id,
+            )
+            flash('تم إرسال طلب التعديل للمدير للاعتماد.', 'info')
+            return redirect(url_for('subscriptions.view', subscription_id=subscription.id))
 
         delta = float(new_amount) - float(payment.amount or 0)
 
@@ -1308,6 +1409,18 @@ def payment_delete(payment_id):
     if not subscription or not check_entity_access(subscription):
         flash('ليس لديك صلاحية', 'danger')
         return redirect(url_for('subscriptions.index'))
+
+    # GYM-58 — non-managers need approval.
+    if not (current_user.is_owner or current_user.is_brand_manager):
+        from app.routes.approvals import create_pending_edit
+        create_pending_edit(
+            entity_type='payment', entity_id=payment.id,
+            action='delete', payload_dict={},
+            summary=f'حذف دفعة #{payment.id} على اشتراك #{subscription.id}',
+            brand_id=subscription.brand_id,
+        )
+        flash('تم إرسال طلب الحذف للمدير للاعتماد.', 'info')
+        return redirect(url_for('subscriptions.view', subscription_id=subscription.id))
 
     # Soft-delete so the linked Invoice FK (invoices.payment_id NOT NULL)
     # doesn't break, and so the row stays around for audit / un-delete.
