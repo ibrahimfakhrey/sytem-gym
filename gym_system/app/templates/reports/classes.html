@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% block title %}تقرير الكلاسات{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-bar-chart"></i> تقرير الكلاسات</h1>
+    <a href="{{ url_for('reports.classes_report_export', brand_id=brand_id) }}"
+       class="btn btn-outline-success">
+        <i class="bi bi-file-earmark-excel"></i> تصدير Excel
+    </a>
+</div>
+
+{% if brands %}
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="GET" class="row g-2 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label small">البراند</label>
+                <select name="brand_id" class="form-select" onchange="this.form.submit()">
+                    <option value="">-- كل البراندات --</option>
+                    {% for b in brands %}
+                    <option value="{{ b.id }}" {% if brand_id == b.id %}selected{% endif %}>{{ b.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card border-info"><div class="card-body text-center">
+            <div class="text-muted small">عدد الكلاسات</div>
+            <div class="h3 mb-0">{{ totals.classes }}</div>
+        </div></div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-primary"><div class="card-body text-center">
+            <div class="text-muted small">إجمالي المشتركين النشطين</div>
+            <div class="h3 mb-0">{{ totals.active_enrollments }}</div>
+        </div></div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-success"><div class="card-body text-center">
+            <div class="text-muted small">صافي الإيراد</div>
+            <div class="h3 mb-0">{{ '%.0f'|format(totals.revenue_net) }} ر.س</div>
+            <small class="text-muted">− استرداد {{ '%.0f'|format(totals.refunds) }}</small>
+        </div></div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-{{ 'success' if totals.profit >= 0 else 'danger' }}">
+            <div class="card-body text-center">
+                <div class="text-muted small">صافي الربح</div>
+                <div class="h3 mb-0">{{ '%.0f'|format(totals.profit) }} ر.س</div>
+                <small class="text-muted">− تكلفة {{ '%.0f'|format(totals.cost) }}</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header"><strong>جميع الكلاسات</strong></div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>الكلاس</th>
+                    <th>الفرع</th>
+                    <th class="text-center">مشتركون</th>
+                    <th class="text-center">حصص</th>
+                    <th class="text-end">إيراد</th>
+                    <th class="text-end">تكلفة</th>
+                    <th class="text-end">ربح</th>
+                    <th class="text-center">حضور %</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in rows %}
+                <tr>
+                    <td>
+                        <a href="{{ url_for('classes.dashboard', class_id=r.gym_class.id) }}">
+                            {{ r.gym_class.name }}
+                        </a>
+                    </td>
+                    <td>{{ r.gym_class.branch.name if r.gym_class.branch else '—' }}</td>
+                    <td class="text-center">{{ r.active_enrollments }} / {{ r.total_enrollments }}</td>
+                    <td class="text-center">{{ r.sessions_held }} / {{ r.sessions_held + r.sessions_scheduled }}</td>
+                    <td class="text-end text-success">{{ '%.0f'|format(r.revenue_net) }}</td>
+                    <td class="text-end text-danger">{{ '%.0f'|format(r.cost) }}</td>
+                    <td class="text-end fw-bold text-{{ 'success' if r.profit >= 0 else 'danger' }}">{{ '%.0f'|format(r.profit) }}</td>
+                    <td class="text-center">{% if r.attendance_pct is not none %}{{ '%.0f'|format(r.attendance_pct) }}%{% else %}—{% endif %}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="8" class="text-center text-muted py-4">لا توجد كلاسات</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header"><strong>أعلى 10 كلاسات إيراداً</strong></div>
+            <div class="table-responsive">
+                <table class="table table-sm mb-0">
+                    <thead class="table-light"><tr><th>الكلاس</th><th class="text-end">صافي الإيراد</th></tr></thead>
+                    <tbody>
+                        {% for r in top_by_revenue %}
+                        <tr>
+                            <td>{{ r.gym_class.name }}</td>
+                            <td class="text-end">{{ '%.0f'|format(r.revenue_net) }} ر.س</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="2" class="text-center text-muted">—</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header"><strong>أعلى 10 كلاسات نسبة حضور</strong></div>
+            <div class="table-responsive">
+                <table class="table table-sm mb-0">
+                    <thead class="table-light"><tr><th>الكلاس</th><th class="text-center">نسبة الحضور</th></tr></thead>
+                    <tbody>
+                        {% for r in top_by_attendance %}
+                        <tr>
+                            <td>{{ r.gym_class.name }}</td>
+                            <td class="text-center">{{ '%.0f'|format(r.attendance_pct) }}%</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="2" class="text-center text-muted">لا توجد بيانات حضور بعد</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header"><strong>الأعضاء ذوو التغيب المتكرر</strong> <small class="text-muted">(≥30% غياب و≥3 حصص)</small></div>
+    <div class="table-responsive">
+        <table class="table table-sm mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>العضو</th>
+                    <th class="text-center">حضور</th>
+                    <th class="text-center">غياب</th>
+                    <th class="text-center">إجمالي</th>
+                    <th class="text-center">% غياب</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for a in absentees %}
+                <tr>
+                    <td><a href="{{ url_for('members.view', member_id=a.member.id) }}">{{ a.member.name }}</a></td>
+                    <td class="text-center">{{ a.attended }}</td>
+                    <td class="text-center">{{ a.no_show }}</td>
+                    <td class="text-center">{{ a.total }}</td>
+                    <td class="text-center text-danger fw-bold">{{ '%.0f'|format(a.no_show_pct) }}%</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="5" class="text-center text-muted py-4">لا يوجد</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

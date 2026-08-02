@@ -129,6 +129,16 @@
                         </td>
                         <td>
                             <div class="btn-group row-action-group" role="group" aria-label="إجراءات الكلاس">
+                                <a href="{{ url_for('classes.dashboard', class_id=cls.id) }}"
+                                   class="btn btn-outline-success row-action-btn"
+                                   aria-label="لوحة {{ cls.name }}" title="لوحة">
+                                    <i class="bi bi-speedometer2" aria-hidden="true"></i>
+                                </a>
+                                <a href="{{ url_for('classes.enroll', class_id=cls.id) }}"
+                                   class="btn btn-outline-warning row-action-btn"
+                                   aria-label="تسجيل عضو في {{ cls.name }}" title="تسجيل عضو">
+                                    <i class="bi bi-person-plus" aria-hidden="true"></i>
+                                </a>
                                 <a href="{{ url_for('classes.bookings', class_id=cls.id) }}"
                                    class="btn btn-outline-info row-action-btn"
                                    aria-label="حجوزات {{ cls.name }}" title="الحجوزات">

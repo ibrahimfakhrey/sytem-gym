@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}لوحة كلاس {{ gym_class.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-speedometer2"></i>
+        لوحة {{ gym_class.name }}
+        <span class="badge bg-{{ 'success' if gym_class.status == 'active' else 'secondary' }}">
+            {{ gym_class.status }}
+        </span>
+    </h1>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('classes.enroll', class_id=gym_class.id) }}" class="btn btn-success">
+            <i class="bi bi-person-plus"></i> تسجيل عضو
+        </a>
+        <a href="{{ url_for('classes.edit', class_id=gym_class.id) }}" class="btn btn-outline-primary">
+            <i class="bi bi-pencil"></i> تعديل
+        </a>
+        <a href="{{ url_for('classes.index') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-right"></i> رجوع
+        </a>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card border-primary">
+            <div class="card-body text-center">
+                <div class="text-muted small">المشتركون</div>
+                <div class="h3 mb-0">{{ attendees_count }}{% if gym_class.capacity %} / {{ gym_class.capacity }}{% endif %}</div>
+                {% if remaining_slots is not none %}
+                <small class="text-muted">متبقي {{ remaining_slots }}</small>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-info">
+            <div class="card-body text-center">
+                <div class="text-muted small">الحصص</div>
+                <div class="h3 mb-0">{{ sessions_done }} / {{ sessions_total }}</div>
+                <small class="text-muted">
+                    منفذ · متبقي {{ sessions_remaining }}{% if sessions_cancelled %} · ملغى {{ sessions_cancelled }}{% endif %}
+                </small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-success">
+            <div class="card-body text-center">
+                <div class="text-muted small">صافي الإيراد</div>
+                <div class="h3 mb-0">{{ '%.0f'|format(revenue_net) }} ر.س</div>
+                <small class="text-muted">
+                    إجمالي {{ '%.0f'|format(revenue) }} − استرداد {{ '%.0f'|format(refunds_total) }}
+                </small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-{{ 'success' if profit >= 0 else 'danger' }}">
+            <div class="card-body text-center">
+                <div class="text-muted small">صافي الربح</div>
+                <div class="h3 mb-0">{{ '%.0f'|format(profit) }} ر.س</div>
+                <small class="text-muted">
+                    − تكلفة {{ '%.0f'|format(cost) }} ({{ sessions_done }} × {{ gym_class.trainer_fee_per_session or 0 }})
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <strong><i class="bi bi-calendar3"></i> الحصص</strong>
+                <span class="badge bg-secondary">{{ session_stats|length }}</span>
+            </div>
+            <div class="table-responsive" style="max-height: 500px;">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light sticky-top">
+                        <tr>
+                            <th>التاريخ</th>
+                            <th>الحالة</th>
+                            <th class="text-center">حضور</th>
+                            <th class="text-center">غياب</th>
+                            <th class="text-center">%</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in session_stats %}
+                        <tr class="{{ 'table-warning' if row.session.session_date == today }}">
+                            <td>{{ row.session.session_date }}</td>
+                            <td>
+                                <span class="badge bg-{{ 'success' if row.session.status == 'held' else ('secondary' if row.session.status == 'cancelled' else 'info') }}">
+                                    {{ row.session.status_arabic }}
+                                </span>
+                            </td>
+                            <td class="text-center">{{ row.attended }}</td>
+                            <td class="text-center">{{ row.no_show }}</td>
+                            <td class="text-center">{% if row.pct is not none %}{{ '%.0f'|format(row.pct) }}%{% else %}—{% endif %}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <strong><i class="bi bi-people"></i> المشتركون</strong>
+                <span class="badge bg-secondary">{{ member_stats|length }}</span>
+            </div>
+            <div class="table-responsive" style="max-height: 500px;">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light sticky-top">
+                        <tr>
+                            <th>العضو</th>
+                            <th>الحالة</th>
+                            <th class="text-center">حضور</th>
+                            <th class="text-center">غياب</th>
+                            <th class="text-center">%</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in member_stats %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('members.view', member_id=row.member.id) }}">{{ row.member.name }}</a>
+                                {% if row.upcoming > 0 %}<small class="text-muted d-block">قادم {{ row.upcoming }}</small>{% endif %}
+                            </td>
+                            <td>
+                                <span class="badge bg-{{ 'success' if row.enrollment.status == 'active' else 'secondary' }}">
+                                    {{ row.enrollment.status_arabic }}
+                                </span>
+                            </td>
+                            <td class="text-center">{{ row.attended }}</td>
+                            <td class="text-center">{{ row.no_show }}</td>
+                            <td class="text-center">{% if row.pct is not none %}{{ '%.0f'|format(row.pct) }}%{% else %}—{% endif %}</td>
+                            <td>
+                                {% if row.enrollment.status == 'active' %}
+                                <form method="POST" action="{{ url_for('classes.cancel_enrollment', class_id=gym_class.id, enrollment_id=row.enrollment.id) }}"
+                                      onsubmit="return confirm('إلغاء التسجيل واسترداد المتبقي؟');" class="d-inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">إلغاء</button>
+                                </form>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

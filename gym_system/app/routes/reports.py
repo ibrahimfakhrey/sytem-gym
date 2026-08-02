@@ -13,6 +13,7 @@ from app.models.finance import Income, Expense
 from app.models.service import ServiceType
 from app.models.giftcard import GiftCard
 from app.models.offer import PromotionalOffer
+from app.models.classes import GymClass, ClassSession, ClassEnrollment, ClassBooking
 
 reports_bp = Blueprint('reports', __name__)
 
@@ -626,4 +627,166 @@ def daily_closing_export():
         ['التاريخ', 'الفرع', 'المبيعات', 'نقدي', 'شبكة', 'حوالة',
          'المصروفات', 'الفرق', 'الحالة'],
         rows,
+    )
+
+
+# ─── GYM-62 — class reports ──────────────────────────────────────────────
+
+def _class_report_rows(brand_id=None, branch_id=None):
+    """Aggregate per-class revenue/cost/profit/attendance. Returns list of
+    dicts sorted by revenue descending."""
+    q = GymClass.query
+    if brand_id:
+        q = q.filter(GymClass.brand_id == brand_id)
+    if branch_id:
+        q = q.filter(GymClass.branch_id == branch_id)
+    classes = q.all()
+
+    rows = []
+    for c in classes:
+        enrolls = ClassEnrollment.query.filter_by(class_id=c.id).all()
+        revenue = sum(float(e.paid_amount or 0) for e in enrolls
+                      if e.status in ('active', 'completed'))
+        refunds = sum(float(e.refund_amount or 0) for e in enrolls)
+        revenue_net = revenue - refunds
+        sessions_held = ClassSession.query.filter_by(
+            class_id=c.id, status='held'
+        ).count()
+        sessions_scheduled = ClassSession.query.filter_by(
+            class_id=c.id, status='scheduled'
+        ).count()
+        cost = sessions_held * float(c.trainer_fee_per_session or 0)
+        profit = revenue_net - cost
+        # Attendance %
+        n_attended = ClassBooking.query.filter_by(class_id=c.id, status='attended').count()
+        n_no_show = ClassBooking.query.filter_by(class_id=c.id, status='no_show').count()
+        eligible = n_attended + n_no_show
+        att_pct = (n_attended / eligible * 100) if eligible else None
+        rows.append({
+            'gym_class': c,
+            'active_enrollments': sum(1 for e in enrolls if e.status == 'active'),
+            'total_enrollments': len(enrolls),
+            'revenue': revenue,
+            'refunds': refunds,
+            'revenue_net': revenue_net,
+            'sessions_held': sessions_held,
+            'sessions_scheduled': sessions_scheduled,
+            'cost': cost,
+            'profit': profit,
+            'attended': n_attended,
+            'no_show': n_no_show,
+            'attendance_pct': att_pct,
+        })
+    rows.sort(key=lambda r: r['revenue_net'], reverse=True)
+    return rows
+
+
+def _frequent_absentees(brand_id=None, branch_id=None, min_bookings=3, min_pct=30):
+    """Members with no_show_rate ≥ min_pct% and total ≥ min_bookings."""
+    q = ClassEnrollment.query
+    if brand_id:
+        q = q.join(GymClass, GymClass.id == ClassEnrollment.class_id).filter(GymClass.brand_id == brand_id)
+    if branch_id:
+        q = q.join(GymClass, GymClass.id == ClassEnrollment.class_id).filter(GymClass.branch_id == branch_id)
+    # Aggregate per member across all their enrollments
+    tally = {}  # member_id → {name, attended, no_show}
+    for e in q.all():
+        bks = ClassBooking.query.filter_by(enrollment_id=e.id).all()
+        att = sum(1 for b in bks if b.status == 'attended')
+        ns = sum(1 for b in bks if b.status == 'no_show')
+        if e.member_id not in tally:
+            tally[e.member_id] = {'member': e.member, 'attended': 0, 'no_show': 0}
+        tally[e.member_id]['attended'] += att
+        tally[e.member_id]['no_show'] += ns
+    out = []
+    for mid, row in tally.items():
+        total = row['attended'] + row['no_show']
+        if total < min_bookings:
+            continue
+        pct = (row['no_show'] / total * 100)
+        if pct < min_pct:
+            continue
+        out.append({
+            'member': row['member'], 'attended': row['attended'],
+            'no_show': row['no_show'], 'total': total, 'no_show_pct': pct,
+        })
+    out.sort(key=lambda r: r['no_show_pct'], reverse=True)
+    return out
+
+
+@reports_bp.route('/classes')
+@login_required
+def classes_report():
+    """GYM-62 — per-class revenue / cost / profit / attendance + top lists +
+    frequent absentees."""
+    if not current_user.can_view_reports:
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('dashboard.index'))
+
+    if current_user.can_view_all_brands:
+        brand_id = request.args.get('brand_id', type=int)
+        brands = Brand.query.filter_by(is_active=True).all()
+    else:
+        brand_id = current_user.brand_id
+        brands = []
+    branch_id = request.args.get('branch_id', type=int) or (current_user.branch_id if not current_user.can_view_all_brands else None)
+
+    rows = _class_report_rows(brand_id=brand_id, branch_id=branch_id)
+    top_by_revenue = rows[:10]
+    top_by_attendance = sorted(
+        [r for r in rows if r['attendance_pct'] is not None],
+        key=lambda r: r['attendance_pct'], reverse=True,
+    )[:10]
+    absentees = _frequent_absentees(brand_id=brand_id, branch_id=branch_id)
+
+    totals = {
+        'revenue': sum(r['revenue'] for r in rows),
+        'refunds': sum(r['refunds'] for r in rows),
+        'revenue_net': sum(r['revenue_net'] for r in rows),
+        'cost': sum(r['cost'] for r in rows),
+        'profit': sum(r['profit'] for r in rows),
+        'classes': len(rows),
+        'active_enrollments': sum(r['active_enrollments'] for r in rows),
+    }
+    return render_template(
+        'reports/classes.html',
+        rows=rows, top_by_revenue=top_by_revenue,
+        top_by_attendance=top_by_attendance, absentees=absentees,
+        totals=totals, brands=brands, brand_id=brand_id,
+    )
+
+
+@reports_bp.route('/classes/export.xlsx')
+@login_required
+def classes_report_export():
+    if not current_user.can_view_reports:
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('dashboard.index'))
+
+    if current_user.can_view_all_brands:
+        brand_id = request.args.get('brand_id', type=int)
+    else:
+        brand_id = current_user.brand_id
+    branch_id = request.args.get('branch_id', type=int) or (current_user.branch_id if not current_user.can_view_all_brands else None)
+
+    rows = _class_report_rows(brand_id=brand_id, branch_id=branch_id)
+    xlsx_rows = [
+        [
+            r['gym_class'].name,
+            r['gym_class'].branch.name if r['gym_class'].branch else '-',
+            r['active_enrollments'], r['total_enrollments'],
+            r['sessions_held'], r['sessions_scheduled'],
+            round(r['revenue'], 2), round(r['refunds'], 2), round(r['revenue_net'], 2),
+            round(r['cost'], 2), round(r['profit'], 2),
+            r['attended'], r['no_show'],
+            round(r['attendance_pct'], 1) if r['attendance_pct'] is not None else '-',
+        ]
+        for r in rows
+    ]
+    return _xlsx_response(
+        f'classes-{date.today().isoformat()}',
+        ['الكلاس', 'الفرع', 'مشتركون نشطون', 'إجمالي مشتركين',
+         'حصص منفذة', 'حصص مجدولة', 'إجمالي', 'استرداد', 'صافي إيراد',
+         'تكلفة', 'صافي ربح', 'حضور', 'غياب', 'نسبة حضور %'],
+        xlsx_rows,
     )

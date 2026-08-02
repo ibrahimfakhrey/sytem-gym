@@ -2,15 +2,21 @@
 from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify
 from flask_login import login_required, current_user
 from flask_wtf import FlaskForm
-from wtforms import StringField, TextAreaField, SelectField, IntegerField, TimeField, BooleanField
+from wtforms import StringField, TextAreaField, SelectField, IntegerField, TimeField, BooleanField, DateField, DecimalField
 from wtforms.validators import DataRequired, Optional, NumberRange
 from datetime import datetime, date, timedelta
 
 from app import db
 from app.models import Brand, Branch, Member, User, ServiceType, GymClass, ClassBooking
+from app.models.classes import ClassSession, ClassEnrollment
 from app.utils.helpers import apply_branch_filter, check_entity_access
 
 classes_bp = Blueprint('classes', __name__, url_prefix='/classes')
+
+ARABIC_WEEKDAYS = [
+    (0, 'السبت'), (1, 'الأحد'), (2, 'الاثنين'), (3, 'الثلاثاء'),
+    (4, 'الأربعاء'), (5, 'الخميس'), (6, 'الجمعة'),
+]
 
 
 class GymClassForm(FlaskForm):
@@ -20,19 +26,31 @@ class GymClassForm(FlaskForm):
     service_type_id = SelectField('نوع الخدمة', coerce=int, validators=[DataRequired()])
     trainer_id = SelectField('المدرب', coerce=int, validators=[Optional()])
     description = TextAreaField('الوصف', validators=[Optional()])
-    day_of_week = SelectField('اليوم', coerce=int, choices=[
-        (0, 'السبت'),
-        (1, 'الأحد'),
-        (2, 'الاثنين'),
-        (3, 'الثلاثاء'),
-        (4, 'الأربعاء'),
-        (5, 'الخميس'),
-        (6, 'الجمعة')
-    ], validators=[DataRequired()])
+    # GYM-62: multi-day schedule. `day_of_week` is kept as a hidden legacy mirror
+    # (populated from min(weekdays)) — new code reads weekday_mask via the model.
+    day_of_week = SelectField('اليوم', coerce=int, choices=ARABIC_WEEKDAYS, validators=[Optional()])
     start_time = TimeField('وقت البداية', validators=[DataRequired()])
     end_time = TimeField('وقت النهاية', validators=[DataRequired()])
-    capacity = IntegerField('السعة', validators=[DataRequired(), NumberRange(min=1, max=100)], default=20)
+    start_date = DateField('تاريخ بداية الكلاس', validators=[DataRequired()])
+    end_date = DateField('تاريخ نهاية الكلاس', validators=[DataRequired()])
+    capacity = IntegerField('السعة', validators=[DataRequired(), NumberRange(min=1, max=500)], default=20)
+    price = DecimalField('سعر الاشتراك', validators=[Optional(), NumberRange(min=0)], default=0, places=2)
+    trainer_fee_per_session = DecimalField('تكلفة الحصة للمدرب', validators=[Optional(), NumberRange(min=0)], default=0, places=2)
+    status = SelectField('حالة الكلاس', choices=[
+        ('active', 'نشط'), ('ended', 'منتهي'), ('cancelled', 'ملغي'),
+    ], default='active')
     is_active = BooleanField('نشط', default=True)
+
+
+def _parse_weekdays_from_request():
+    """Read the 7 weekday checkboxes from the raw form (not on the WTForm).
+    Returns (mask, list_of_ints). If nothing selected, returns (0, [])."""
+    raw = request.form.getlist('weekdays')
+    days = sorted({int(d) for d in raw if str(d).isdigit() and 0 <= int(d) <= 6})
+    mask = 0
+    for d in days:
+        mask |= (1 << d)
+    return mask, days
 
 
 @classes_bp.route('/')
@@ -74,11 +92,14 @@ def index():
     classes = query.order_by(GymClass.day_of_week, GymClass.start_time).all()
     service_types = ServiceType.query.filter_by(brand_id=brand.id, is_active=True).all()
 
-    # Group classes by day
+    # Group classes by day — a multi-day class (GYM-62) appears under every
+    # weekday it meets, driven by weekday_mask; falls back to day_of_week for
+    # legacy rows.
     schedule = {i: [] for i in range(7)}
     for cls in classes:
-        if cls.day_of_week is not None:
-            schedule[cls.day_of_week].append(cls)
+        for dow in cls.weekdays_list():
+            if 0 <= dow <= 6:
+                schedule[dow].append(cls)
 
     return render_template('classes/index.html',
                          classes=classes,
@@ -264,6 +285,18 @@ def create():
     form.trainer_id.choices = [(0, '-- بدون مدرب --')] + [(t.id, t.name) for t in trainers]
 
     if form.validate_on_submit():
+        weekday_mask, weekdays = _parse_weekdays_from_request()
+        if not weekdays:
+            flash('اختر يوم واحد على الأقل من أيام الأسبوع', 'danger')
+            return render_template('classes/form.html', form=form, brand=brand,
+                                   brands=brands, branches=branches,
+                                   weekday_choices=ARABIC_WEEKDAYS, selected_weekdays=[])
+        if form.end_date.data < form.start_date.data:
+            flash('تاريخ النهاية يجب أن يكون بعد تاريخ البداية', 'danger')
+            return render_template('classes/form.html', form=form, brand=brand,
+                                   brands=brands, branches=branches,
+                                   weekday_choices=ARABIC_WEEKDAYS, selected_weekdays=weekdays)
+
         gym_class = GymClass(
             brand_id=brand_id,
             branch_id=form.branch_id.data if form.branch_id.data else None,
@@ -271,19 +304,29 @@ def create():
             service_type_id=form.service_type_id.data,
             trainer_id=form.trainer_id.data if form.trainer_id.data else None,
             description=form.description.data,
-            day_of_week=form.day_of_week.data,
+            day_of_week=weekdays[0],  # legacy mirror
+            weekday_mask=weekday_mask,
             start_time=form.start_time.data,
             end_time=form.end_time.data,
+            start_date=form.start_date.data,
+            end_date=form.end_date.data,
             capacity=form.capacity.data,
-            is_active=form.is_active.data
+            price=form.price.data or 0,
+            trainer_fee_per_session=form.trainer_fee_per_session.data or 0,
+            status=form.status.data or 'active',
+            is_active=form.is_active.data,
         )
         db.session.add(gym_class)
+        db.session.flush()
+        n_sessions = gym_class.generate_sessions()
         db.session.commit()
 
-        flash('تم إنشاء الكلاس بنجاح', 'success')
+        flash(f'تم إنشاء الكلاس بنجاح — {n_sessions} حصة مجدولة', 'success')
         return redirect(url_for('classes.index', brand_id=brand_id))
 
-    return render_template('classes/form.html', form=form, brand=brand, brands=brands, branches=branches)
+    return render_template('classes/form.html', form=form, brand=brand,
+                           brands=brands, branches=branches,
+                           weekday_choices=ARABIC_WEEKDAYS, selected_weekdays=[])
 
 
 @classes_bp.route('/<int:class_id>/edit', methods=['GET', 'POST'])
@@ -314,22 +357,81 @@ def edit(class_id):
     form.trainer_id.choices = [(0, '-- بدون مدرب --')] + [(t.id, t.name) for t in trainers]
 
     if form.validate_on_submit():
+        weekday_mask, weekdays = _parse_weekdays_from_request()
+        if not weekdays:
+            flash('اختر يوم واحد على الأقل من أيام الأسبوع', 'danger')
+            return render_template('classes/form.html', form=form, gym_class=gym_class,
+                                   brand=Brand.query.get(gym_class.brand_id),
+                                   weekday_choices=ARABIC_WEEKDAYS,
+                                   selected_weekdays=gym_class.weekdays_list())
+        if form.end_date.data < form.start_date.data:
+            flash('تاريخ النهاية يجب أن يكون بعد تاريخ البداية', 'danger')
+            return render_template('classes/form.html', form=form, gym_class=gym_class,
+                                   brand=Brand.query.get(gym_class.brand_id),
+                                   weekday_choices=ARABIC_WEEKDAYS,
+                                   selected_weekdays=weekdays)
+
+        schedule_changed = (
+            gym_class.start_date != form.start_date.data
+            or gym_class.end_date != form.end_date.data
+            or (gym_class.weekday_mask or 0) != weekday_mask
+        )
+
         gym_class.name = form.name.data
         gym_class.branch_id = form.branch_id.data if form.branch_id.data else None
         gym_class.service_type_id = form.service_type_id.data
         gym_class.trainer_id = form.trainer_id.data if form.trainer_id.data else None
         gym_class.description = form.description.data
-        gym_class.day_of_week = form.day_of_week.data
+        gym_class.day_of_week = weekdays[0]
+        gym_class.weekday_mask = weekday_mask
         gym_class.start_time = form.start_time.data
         gym_class.end_time = form.end_time.data
+        gym_class.start_date = form.start_date.data
+        gym_class.end_date = form.end_date.data
         gym_class.capacity = form.capacity.data
+        gym_class.price = form.price.data or 0
+        gym_class.trainer_fee_per_session = form.trainer_fee_per_session.data or 0
+        gym_class.status = form.status.data or 'active'
         gym_class.is_active = form.is_active.data
+
+        n_created = 0
+        n_cancelled_sessions = 0
+        n_cancelled_bookings = 0
+        if schedule_changed:
+            today = date.today()
+            # New scheduled sessions that match the new mask/range → insert if missing
+            n_created = gym_class.generate_sessions()
+            # Existing scheduled sessions that no longer fit → cancel (future only)
+            new_weekdays = set(gym_class.weekdays_list())
+            future_sessions = ClassSession.query.filter(
+                ClassSession.class_id == gym_class.id,
+                ClassSession.session_date >= today,
+                ClassSession.status == 'scheduled',
+            ).all()
+            for s in future_sessions:
+                arabic_dow = (s.session_date.weekday() + 2) % 7
+                out_of_range = not (gym_class.start_date <= s.session_date <= gym_class.end_date)
+                if out_of_range or arabic_dow not in new_weekdays:
+                    s.status = 'cancelled'
+                    n_cancelled_sessions += 1
+                    for b in ClassBooking.query.filter_by(session_id=s.id).all():
+                        if b.status == 'booked':
+                            b.status = 'cancelled'
+                            b.cancelled_at = datetime.utcnow()
+                            n_cancelled_bookings += 1
+
         db.session.commit()
 
-        flash('تم تحديث الكلاس بنجاح', 'success')
+        msg = 'تم تحديث الكلاس بنجاح'
+        if schedule_changed:
+            msg += f' — +{n_created} حصة جديدة / {n_cancelled_sessions} حصة ملغاة / {n_cancelled_bookings} حجز ملغى'
+        flash(msg, 'success')
         return redirect(url_for('classes.index'))
 
-    return render_template('classes/form.html', form=form, gym_class=gym_class, brand=Brand.query.get(gym_class.brand_id))
+    return render_template('classes/form.html', form=form, gym_class=gym_class,
+                           brand=Brand.query.get(gym_class.brand_id),
+                           weekday_choices=ARABIC_WEEKDAYS,
+                           selected_weekdays=gym_class.weekdays_list())
 
 
 @classes_bp.route('/<int:class_id>/delete', methods=['POST'])
@@ -532,3 +634,414 @@ def search_members():
         'phone': m.phone or '',
         'member_import_id': m.member_import_id or '',
     } for m in members])
+
+
+# ─── GYM-62 — class enrollment (subscribe a member to a class course) ──────
+
+def _get_or_create_class_plan(gym_class):
+    """Return a Plan tied to this class so /fp/access-list can find it via
+    Subscription.plan.requires_class_booking=True. Idempotent per class."""
+    from app.models.subscription import Plan
+    name = f'اشتراك كلاس {gym_class.name}'
+    plan = Plan.query.filter_by(brand_id=gym_class.brand_id, name=name).first()
+    if plan:
+        return plan
+    duration = 30
+    if gym_class.start_date and gym_class.end_date:
+        duration = max(1, (gym_class.end_date - gym_class.start_date).days + 1)
+    plan = Plan(
+        brand_id=gym_class.brand_id,
+        service_type_id=gym_class.service_type_id,
+        name=name,
+        description=f'خطة تلقائية للكلاس {gym_class.name}',
+        duration_days=duration,
+        price=gym_class.price or 0,
+        sessions_count=0,
+        requires_class_booking=True,
+        is_active=True,
+    )
+    db.session.add(plan)
+    db.session.flush()
+    return plan
+
+
+@classes_bp.route('/<int:class_id>/enroll', methods=['GET', 'POST'])
+@login_required
+def enroll(class_id):
+    """Enroll a member in a class course. Creates: ClassEnrollment +
+    auto-provisioned Plan + Subscription + Invoice + Income + one ClassBooking
+    per matching future ClassSession in the enrollment window."""
+    from app.models.subscription import Plan, Subscription, SubscriptionPayment
+    from app.models.finance import Income, Invoice
+    from app.models.fingerprint import DeviceCommand
+    import json
+
+    if not current_user.can_manage_members:
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('classes.index'))
+
+    gym_class = GymClass.query.get_or_404(class_id)
+    if not check_entity_access(gym_class):
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('classes.index'))
+
+    if gym_class.status != 'active':
+        flash('الكلاس ليس نشطاً — لا يمكن التسجيل فيه', 'warning')
+        return redirect(url_for('classes.index'))
+
+    today = date.today()
+    if gym_class.end_date and gym_class.end_date < today:
+        flash('الكلاس منتهي — لا يمكن التسجيل فيه', 'warning')
+        return redirect(url_for('classes.index'))
+
+    # Capacity check
+    active_enrolled = ClassEnrollment.query.filter_by(
+        class_id=gym_class.id, status='active'
+    ).count()
+    if gym_class.capacity and active_enrolled >= gym_class.capacity:
+        flash(f'الكلاس ممتلئ — {gym_class.capacity} مشترك', 'warning')
+        return redirect(url_for('classes.index'))
+
+    if request.method == 'GET':
+        return render_template(
+            'classes/enroll.html',
+            gym_class=gym_class,
+            active_enrolled=active_enrolled,
+            today=today,
+        )
+
+    # POST
+    member_id = request.form.get('member_id', type=int)
+    if not member_id:
+        flash('يرجى اختيار عضو', 'danger')
+        return redirect(url_for('classes.enroll', class_id=class_id))
+    member = Member.query.get(member_id)
+    if not member or member.brand_id != gym_class.brand_id:
+        flash('العضو غير موجود أو خارج نطاق البراند', 'danger')
+        return redirect(url_for('classes.enroll', class_id=class_id))
+
+    # Duplicate enrollment guard
+    existing = ClassEnrollment.query.filter_by(
+        class_id=gym_class.id, member_id=member.id, status='active'
+    ).first()
+    if existing:
+        flash('العضو مسجّل مسبقاً في هذا الكلاس', 'warning')
+        return redirect(url_for('classes.index'))
+
+    try:
+        total_amount = float(request.form.get('total_amount') or gym_class.price or 0)
+        paid_amount = float(request.form.get('paid_amount') or 0)
+    except (TypeError, ValueError):
+        flash('قيمة سعر غير صالحة', 'danger')
+        return redirect(url_for('classes.enroll', class_id=class_id))
+    if paid_amount < 0 or total_amount < 0 or paid_amount > total_amount:
+        flash('المدفوع لا يمكن أن يتجاوز الإجمالي', 'danger')
+        return redirect(url_for('classes.enroll', class_id=class_id))
+
+    payment_method = request.form.get('payment_method') or 'cash'
+    notes = request.form.get('notes') or None
+    enroll_start = today
+    enroll_end = gym_class.end_date
+
+    # Future sessions inside enrollment window
+    future_sessions = ClassSession.query.filter(
+        ClassSession.class_id == gym_class.id,
+        ClassSession.session_date >= enroll_start,
+        ClassSession.session_date <= enroll_end,
+        ClassSession.status == 'scheduled',
+    ).order_by(ClassSession.session_date).all()
+    sessions_total = len(future_sessions)
+
+    plan = _get_or_create_class_plan(gym_class)
+
+    subscription = Subscription(
+        member_id=member.id,
+        plan_id=plan.id,
+        brand_id=gym_class.brand_id,
+        branch_id=gym_class.branch_id or member.branch_id or current_user.branch_id,
+        service_type_id=gym_class.service_type_id,
+        start_date=enroll_start,
+        end_date=enroll_end,
+        original_end_date=enroll_end,
+        sessions_total=sessions_total,
+        sessions_consumed=0,
+        total_amount=total_amount,
+        paid_amount=paid_amount,
+        remaining_amount=total_amount - paid_amount,
+        status='active',
+        notes=notes,
+        created_by=current_user.id,
+    )
+    db.session.add(subscription)
+    db.session.flush()
+
+    enrollment = ClassEnrollment(
+        class_id=gym_class.id,
+        member_id=member.id,
+        subscription_id=subscription.id,
+        start_date=enroll_start,
+        end_date=enroll_end,
+        sessions_total=sessions_total,
+        total_amount=total_amount,
+        paid_amount=paid_amount,
+        status='active',
+        notes=notes,
+        created_by=current_user.id,
+    )
+    db.session.add(enrollment)
+    db.session.flush()
+
+    # Activate member if inactive
+    if not member.is_active:
+        member.is_active = True
+
+    invoice = None
+    if paid_amount > 0:
+        payment = SubscriptionPayment(
+            subscription_id=subscription.id,
+            brand_id=gym_class.brand_id,
+            amount=paid_amount,
+            payment_method=payment_method,
+            created_by=current_user.id,
+        )
+        db.session.add(payment)
+        db.session.flush()
+
+        income = Income(
+            brand_id=gym_class.brand_id,
+            branch_id=subscription.branch_id,
+            subscription_id=subscription.id,
+            service_type_id=gym_class.service_type_id,
+            amount=paid_amount,
+            type='class_subscription',
+            payment_method=payment_method,
+            date=today,
+            created_by=current_user.id,
+        )
+        db.session.add(income)
+
+        branch_for_invoice = gym_class.branch or (member.branch if hasattr(member, 'branch') else None)
+        invoice = Invoice(
+            brand_id=gym_class.brand_id,
+            branch_id=getattr(branch_for_invoice, 'id', None),
+            branch_name=getattr(branch_for_invoice, 'name', None),
+            branch_phone=getattr(branch_for_invoice, 'phone', None),
+            branch_address=getattr(branch_for_invoice, 'address', None),
+            subscription_id=subscription.id,
+            payment_id=payment.id,
+            member_id=member.id,
+            invoice_number=Invoice.generate_invoice_number(gym_class.brand_id),
+            member_name=member.name,
+            member_phone=member.phone,
+            member_email=member.email,
+            plan_name=f'اشتراك كلاس {gym_class.name}',
+            service_type_name=(gym_class.service_type.name if gym_class.service_type else None),
+            duration_text=f'{sessions_total} حصة',
+            original_price=total_amount,
+            discount=0,
+            subtotal=total_amount,
+            tax_rate=0,
+            tax_amount=0,
+            total_amount=total_amount,
+            amount_paid=paid_amount,
+            payment_method=payment_method,
+            notes=notes,
+            created_by=current_user.id,
+        )
+        db.session.add(invoice)
+        db.session.flush()
+        enrollment.invoice_id = invoice.id
+
+    # Pre-generate ClassBooking rows so /fp/access-list works unchanged.
+    for s in future_sessions:
+        db.session.add(ClassBooking(
+            class_id=gym_class.id,
+            member_id=member.id,
+            subscription_id=subscription.id,
+            session_id=s.id,
+            enrollment_id=enrollment.id,
+            booking_date=s.session_date,
+            status='booked',
+        ))
+
+    db.session.commit()
+
+    # Dispatch unblock to fingerprint device if member is enrolled
+    if member.fingerprint_id and member.branch and getattr(member.branch, 'uses_fingerprint', False):
+        unblock_cmd = DeviceCommand(
+            brand_id=member.brand_id,
+            command_type='unblock_member',
+            target_emp_id=member.fingerprint_id,
+            member_id=member.id,
+            command_data=json.dumps({'end_date': subscription.end_date.isoformat()}),
+            status='pending',
+        )
+        db.session.add(unblock_cmd)
+        db.session.commit()
+
+    flash(f'تم تسجيل {member.name} في {gym_class.name} — {sessions_total} حصة', 'success')
+    return redirect(url_for('members.view', member_id=member.id))
+
+
+@classes_bp.route('/<int:class_id>/enrollments/<int:enrollment_id>/cancel', methods=['POST'])
+@login_required
+def cancel_enrollment(class_id, enrollment_id):
+    """Cancel a class enrollment. Cancels future bookings, expires the linked
+    subscription, and creates a pro-rata Refund row."""
+    from app.models.finance import Refund
+
+    if not current_user.can_manage_members:
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('classes.index'))
+
+    enrollment = ClassEnrollment.query.get_or_404(enrollment_id)
+    gym_class = enrollment.gym_class
+    if not check_entity_access(gym_class):
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('classes.index'))
+    if enrollment.status != 'active':
+        flash('التسجيل ليس نشطاً', 'warning')
+        return redirect(url_for('members.view', member_id=enrollment.member_id))
+
+    today = date.today()
+    # Future bookings → cancel
+    future_bookings = ClassBooking.query.filter(
+        ClassBooking.enrollment_id == enrollment.id,
+        ClassBooking.booking_date >= today,
+        ClassBooking.status.in_(['booked', 'attended']),
+    ).all()
+    future_sessions_count = 0
+    for b in future_bookings:
+        if b.status == 'booked':
+            b.status = 'cancelled'
+            b.cancelled_at = datetime.utcnow()
+            future_sessions_count += 1
+
+    # Pro-rata refund
+    refund_amount = 0
+    if enrollment.sessions_total and float(enrollment.paid_amount or 0) > 0:
+        refund_amount = round(
+            (future_sessions_count / enrollment.sessions_total) * float(enrollment.paid_amount),
+            2,
+        )
+    enrollment.refund_amount = refund_amount
+    enrollment.status = 'cancelled'
+    enrollment.cancelled_at = datetime.utcnow()
+
+    # Expire subscription immediately so /fp/access-list blocks
+    if enrollment.subscription:
+        enrollment.subscription.end_date = today - timedelta(days=1)
+        enrollment.subscription.status = 'cancelled'
+
+    # Refund row (uses existing Refund model keyed by subscription_id)
+    if refund_amount > 0 and enrollment.subscription_id:
+        db.session.add(Refund(
+            brand_id=gym_class.brand_id,
+            subscription_id=enrollment.subscription_id,
+            member_id=enrollment.member_id,
+            amount=refund_amount,
+            reason=f'إلغاء اشتراك كلاس {gym_class.name} — {future_sessions_count}/{enrollment.sessions_total} حصة متبقية',
+            refund_date=today,
+            created_by=current_user.id,
+        ))
+
+    db.session.commit()
+
+    flash(
+        f'تم إلغاء التسجيل — {future_sessions_count} حصة ملغاة، استرداد {refund_amount:.2f} ر.س',
+        'success',
+    )
+    return redirect(url_for('members.view', member_id=enrollment.member_id))
+
+
+@classes_bp.route('/<int:class_id>/dashboard')
+@login_required
+def dashboard(class_id):
+    """GYM-62 — per-class dashboard: enrollment, sessions, revenue/cost/profit,
+    per-session attendance and per-member attendance history."""
+    from app.models.finance import Refund
+    from sqlalchemy import func
+
+    gym_class = GymClass.query.get_or_404(class_id)
+    if not check_entity_access(gym_class):
+        flash('ليس لديك صلاحية', 'danger')
+        return redirect(url_for('classes.index'))
+
+    today = date.today()
+
+    enrollments = ClassEnrollment.query.filter_by(class_id=class_id).order_by(
+        ClassEnrollment.created_at.desc()
+    ).all()
+    active_enrollments = [e for e in enrollments if e.status == 'active']
+    attendees_count = len(active_enrollments)
+    remaining_slots = (gym_class.capacity - attendees_count) if gym_class.capacity else None
+
+    sessions_all = ClassSession.query.filter_by(class_id=class_id).order_by(
+        ClassSession.session_date
+    ).all()
+    sessions_done = sum(1 for s in sessions_all if s.status == 'held')
+    sessions_remaining = sum(1 for s in sessions_all
+                             if s.status == 'scheduled' and s.session_date >= today)
+    sessions_cancelled = sum(1 for s in sessions_all if s.status == 'cancelled')
+
+    # Revenue = total paid − refunds (per enrollment)
+    revenue = sum(float(e.paid_amount or 0) for e in enrollments
+                  if e.status in ('active', 'completed'))
+    refunds_total = sum(float(e.refund_amount or 0) for e in enrollments)
+    revenue_net = revenue - refunds_total
+    cost = sessions_done * float(gym_class.trainer_fee_per_session or 0)
+    profit = revenue_net - cost
+
+    # Per-session breakdown
+    session_stats = []
+    for s in sessions_all:
+        bookings = ClassBooking.query.filter_by(session_id=s.id).all()
+        n_attended = sum(1 for b in bookings if b.status == 'attended')
+        n_no_show = sum(1 for b in bookings if b.status == 'no_show')
+        n_booked = sum(1 for b in bookings if b.status == 'booked')
+        n_cancelled = sum(1 for b in bookings if b.status == 'cancelled')
+        eligible = n_attended + n_no_show
+        pct = (n_attended / eligible * 100) if eligible else None
+        session_stats.append({
+            'session': s,
+            'attended': n_attended,
+            'no_show': n_no_show,
+            'booked': n_booked,
+            'cancelled': n_cancelled,
+            'pct': pct,
+        })
+
+    # Per-member breakdown
+    member_stats = []
+    for e in enrollments:
+        bks = ClassBooking.query.filter_by(enrollment_id=e.id).all()
+        n_attended = sum(1 for b in bks if b.status == 'attended')
+        n_no_show = sum(1 for b in bks if b.status == 'no_show')
+        n_upcoming = sum(1 for b in bks
+                         if b.status == 'booked' and b.booking_date >= today)
+        eligible = n_attended + n_no_show
+        pct = (n_attended / eligible * 100) if eligible else None
+        member_stats.append({
+            'enrollment': e, 'member': e.member,
+            'attended': n_attended, 'no_show': n_no_show,
+            'upcoming': n_upcoming, 'pct': pct,
+        })
+
+    return render_template(
+        'classes/dashboard.html',
+        gym_class=gym_class,
+        today=today,
+        attendees_count=attendees_count,
+        remaining_slots=remaining_slots,
+        sessions_done=sessions_done,
+        sessions_remaining=sessions_remaining,
+        sessions_cancelled=sessions_cancelled,
+        sessions_total=len(sessions_all),
+        revenue=revenue,
+        refunds_total=refunds_total,
+        revenue_net=revenue_net,
+        cost=cost,
+        profit=profit,
+        session_stats=session_stats,
+        member_stats=member_stats,
+    )

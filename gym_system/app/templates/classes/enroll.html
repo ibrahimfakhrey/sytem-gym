@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}تسجيل عضو في {{ gym_class.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-person-plus"></i>
+        تسجيل عضو في كلاس: {{ gym_class.name }}
+    </h1>
+    <a href="{{ url_for('classes.index') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-right"></i> رجوع
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-body">
+                <form method="POST" id="enroll-form">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                    <div class="mb-3">
+                        <label class="form-label">العضو *</label>
+                        <input type="text" id="member-search" class="form-control"
+                               placeholder="ابحث بالاسم / الهاتف / رقم الملف / البصمة" autocomplete="off">
+                        <input type="hidden" name="member_id" id="member_id" required>
+                        <div id="search-results" class="list-group mt-2" style="max-height: 260px; overflow-y: auto;"></div>
+                        <div id="member-picked" class="alert alert-success mt-2 d-none">
+                            <i class="bi bi-check-circle"></i> اخترت: <strong id="picked-name"></strong>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">إجمالي السعر (ر.س) *</label>
+                            <input type="number" name="total_amount" class="form-control"
+                                   step="0.01" min="0" value="{{ gym_class.price or 0 }}" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">المدفوع الآن (ر.س) *</label>
+                            <input type="number" name="paid_amount" class="form-control"
+                                   step="0.01" min="0" value="{{ gym_class.price or 0 }}" required>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">وسيلة الدفع *</label>
+                            <select name="payment_method" class="form-select">
+                                <option value="cash">نقدي</option>
+                                <option value="card">شبكة / كارد</option>
+                                <option value="transfer">تحويل بنكي</option>
+                                <option value="other">أخرى</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">ملاحظات</label>
+                        <textarea name="notes" class="form-control" rows="2"></textarea>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary" id="submit-btn" disabled>
+                            <i class="bi bi-check-lg"></i> تسجيل
+                        </button>
+                        <a href="{{ url_for('classes.index') }}" class="btn btn-secondary">إلغاء</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-info-circle"></i> بيانات الكلاس</div>
+            <div class="card-body small">
+                <p class="mb-2"><strong>الاسم:</strong> {{ gym_class.name }}</p>
+                <p class="mb-2"><strong>المدة:</strong> {{ gym_class.start_date }} → {{ gym_class.end_date }}</p>
+                <p class="mb-2"><strong>الوقت:</strong> {{ gym_class.start_time.strftime('%H:%M') }} - {{ gym_class.end_time.strftime('%H:%M') }}</p>
+                <p class="mb-2"><strong>السعة:</strong> {{ active_enrolled }} / {{ gym_class.capacity or '∞' }}</p>
+                <p class="mb-0"><strong>سعر الاشتراك:</strong> {{ gym_class.price or 0 }} ر.س</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    var searchInput = document.getElementById('member-search');
+    var resultsBox = document.getElementById('search-results');
+    var memberIdInput = document.getElementById('member_id');
+    var pickedBox = document.getElementById('member-picked');
+    var pickedName = document.getElementById('picked-name');
+    var submitBtn = document.getElementById('submit-btn');
+    var timer = null;
+
+    searchInput.addEventListener('input', function () {
+        var q = searchInput.value.trim();
+        if (timer) clearTimeout(timer);
+        if (q.length < 2) { resultsBox.innerHTML = ''; return; }
+        timer = setTimeout(function () {
+            fetch('{{ url_for("classes.search_members") }}?class_id={{ gym_class.id }}&q=' + encodeURIComponent(q))
+                .then(function (r) { return r.json(); })
+                .then(function (rows) {
+                    resultsBox.innerHTML = '';
+                    if (!rows.length) {
+                        resultsBox.innerHTML = '<div class="list-group-item text-muted">لا نتائج</div>';
+                        return;
+                    }
+                    rows.forEach(function (m) {
+                        var a = document.createElement('a');
+                        a.href = '#'; a.className = 'list-group-item list-group-item-action';
+                        a.innerHTML = '<strong>' + m.name + '</strong> · ' + (m.phone || '—') + (m.member_import_id ? ' · #' + m.member_import_id : '');
+                        a.addEventListener('click', function (e) {
+                            e.preventDefault();
+                            memberIdInput.value = m.id;
+                            pickedName.textContent = m.name;
+                            pickedBox.classList.remove('d-none');
+                            resultsBox.innerHTML = '';
+                            searchInput.value = m.name;
+                            submitBtn.disabled = false;
+                        });
+                        resultsBox.appendChild(a);
+                    });
+                });
+        }, 250);
+    });
+})();
+</script>
+{% endblock %}

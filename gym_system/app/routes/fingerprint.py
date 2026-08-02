@@ -325,6 +325,19 @@ def _record_member_scan_row(member, branch, timestamp, device_log_id, allowed, w
         warning_message=warning,
     )
     db.session.add(att)
+
+    # GYM-62 — flip today's ClassBooking to attended so per-session attendance
+    # + no-show reports stay accurate. Only mark for allowed scans; denied
+    # scans (blocked at gate) don't count as attendance.
+    if allowed:
+        today_bk = ClassBooking.query.filter(
+            ClassBooking.member_id == member.id,
+            ClassBooking.booking_date == timestamp.date(),
+            ClassBooking.status == 'booked',
+        ).first()
+        if today_bk:
+            today_bk.status = 'attended'
+            today_bk.check_in_time = timestamp
     return att
 
 
@@ -710,8 +723,12 @@ def _compute_access(member, now, today, window_minutes):
         return {'allowed': False, 'end_date': PAST_DATE, 'reason': 'اشتراك منتهي'}
 
     requires_class = False
-    if sub.plan and getattr(sub.plan, 'service_type', None):
-        requires_class = bool(getattr(sub.plan.service_type, 'requires_class_booking', False))
+    if sub.plan:
+        # GYM-62 — class-course auto-plans set this flag on the plan directly.
+        # Legacy path (swimming/karate) sets it on the plan's service_type.
+        requires_class = bool(getattr(sub.plan, 'requires_class_booking', False))
+        if not requires_class and getattr(sub.plan, 'service_type', None):
+            requires_class = bool(getattr(sub.plan.service_type, 'requires_class_booking', False))
 
     if not requires_class:
         return {'allowed': True, 'end_date': sub.end_date, 'reason': 'اشتراك نشط'}

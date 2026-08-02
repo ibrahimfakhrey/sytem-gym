@@ -1430,6 +1430,48 @@ def build_user_alerts():
                     'link': link,
                 })
 
+    # GYM-62 — course + enrollment expiry alerts.
+    from app.models.classes import GymClass, ClassEnrollment
+    # Course ending ≤ 7d (manager+ scope, matches iqama scoping).
+    if current_user.role and current_user.role.name_en in ('admin', 'owner', 'branch_manager'):
+        soon = today + timedelta(days=7)
+        gc_q = GymClass.query.filter(
+            GymClass.status == 'active',
+            GymClass.end_date != None,
+            GymClass.end_date >= today,
+            GymClass.end_date <= soon,
+        )
+        if not is_owner and user_brand_id:
+            gc_q = gc_q.filter(GymClass.brand_id == user_brand_id)
+        for gc in gc_q.all():
+            days_left = (gc.end_date - today).days
+            alerts.append({
+                'type': 'warning' if days_left > 2 else 'danger',
+                'icon': 'calendar-x',
+                'title': f'كلاس {gc.name} ينتهي خلال {days_left} يوم',
+                'link': url_for('classes.dashboard', class_id=gc.id),
+            })
+    # Enrollment expiring ≤ 3d — receptionist + manager scope.
+    if current_user.can_manage_members:
+        soon = today + timedelta(days=3)
+        en_q = ClassEnrollment.query.filter(
+            ClassEnrollment.status == 'active',
+            ClassEnrollment.end_date >= today,
+            ClassEnrollment.end_date <= soon,
+        )
+        if not is_owner and user_brand_id:
+            en_q = en_q.join(GymClass, GymClass.id == ClassEnrollment.class_id).filter(
+                GymClass.brand_id == user_brand_id
+            )
+        for e in en_q.all():
+            days_left = (e.end_date - today).days
+            alerts.append({
+                'type': 'warning' if days_left > 1 else 'danger',
+                'icon': 'person-x',
+                'title': f'اشتراك كلاس ينتهي — {e.member.name} خلال {days_left} يوم',
+                'link': url_for('members.view', member_id=e.member_id),
+            })
+
     return alerts
 
 

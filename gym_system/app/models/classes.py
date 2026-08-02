@@ -17,16 +17,26 @@ class GymClass(db.Model):
     trainer_id = db.Column(db.Integer, db.ForeignKey('users.id'))
 
     # Schedule - for recurring classes
-    day_of_week = db.Column(db.Integer)  # 0=Saturday, 1=Sunday, ..., 6=Friday (Arabic week)
+    day_of_week = db.Column(db.Integer)  # 0=Saturday, 1=Sunday, ..., 6=Friday (Arabic week). Kept for legacy read compat; new code uses weekday_mask.
     start_time = db.Column(db.Time, nullable=False)
     end_time = db.Column(db.Time, nullable=False)
+
+    # GYM-62 course schedule
+    start_date = db.Column(db.Date)  # course start
+    end_date = db.Column(db.Date)    # course end
+    weekday_mask = db.Column(db.Integer, default=0)  # bitmask, bit i = (1 << i) on Arabic-week 0=Sat..6=Fri
 
     # Capacity
     capacity = db.Column(db.Integer, default=20)
 
+    # GYM-62 pricing / cost
+    price = db.Column(db.Numeric(10, 2), default=0)
+    trainer_fee_per_session = db.Column(db.Numeric(10, 2), default=0)
+
     # Settings
     is_recurring = db.Column(db.Boolean, default=True)  # Repeats weekly
     is_active = db.Column(db.Boolean, default=True)
+    status = db.Column(db.String(20), default='active')  # GYM-62: active|ended|cancelled
 
     # Timestamps
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -130,6 +140,41 @@ class GymClass(db.Model):
         today_weekday = (date.today().weekday() + 2) % 7  # Convert Python weekday to Arabic
         return cls.get_schedule_for_day(brand_id, today_weekday, branch_id)
 
+    # GYM-62 helpers
+
+    def weekdays_list(self):
+        """Return the Arabic-week weekday indices this class meets on."""
+        if self.weekday_mask:
+            return [i for i in range(7) if self.weekday_mask & (1 << i)]
+        # Legacy fallback: single day_of_week
+        return [self.day_of_week] if self.day_of_week is not None else []
+
+    def generate_sessions(self):
+        """Create ClassSession rows for every matching weekday in [start_date, end_date].
+        Idempotent — skips existing (class_id, session_date) pairs. Returns count created."""
+        if not (self.start_date and self.end_date and self.start_time and self.end_time):
+            return 0
+        weekdays = set(self.weekdays_list())
+        if not weekdays:
+            return 0
+        existing = {s.session_date for s in ClassSession.query.filter_by(class_id=self.id).all()}
+        created = 0
+        d = self.start_date
+        while d <= self.end_date:
+            # Python weekday() Mon=0..Sun=6 → Arabic Sat=0..Fri=6
+            arabic_dow = (d.weekday() + 2) % 7
+            if arabic_dow in weekdays and d not in existing:
+                db.session.add(ClassSession(
+                    class_id=self.id,
+                    session_date=d,
+                    start_time=self.start_time,
+                    end_time=self.end_time,
+                    status='scheduled',
+                ))
+                created += 1
+            d += timedelta(days=1)
+        return created
+
 
 class ClassBooking(db.Model):
     """Class bookings by members"""
@@ -139,6 +184,8 @@ class ClassBooking(db.Model):
     class_id = db.Column(db.Integer, db.ForeignKey('gym_classes.id'), nullable=False)
     member_id = db.Column(db.Integer, db.ForeignKey('members.id'), nullable=False)
     subscription_id = db.Column(db.Integer, db.ForeignKey('subscriptions.id'))
+    session_id = db.Column(db.Integer, db.ForeignKey('class_sessions.id'))       # GYM-62
+    enrollment_id = db.Column(db.Integer, db.ForeignKey('class_enrollments.id'))  # GYM-62
 
     # Booking info
     booking_date = db.Column(db.Date, nullable=False)
@@ -246,3 +293,78 @@ class ClassBooking(db.Model):
         if class_id:
             query = query.filter_by(class_id=class_id)
         return query.first() is not None
+
+
+class ClassSession(db.Model):
+    """GYM-62: one row per (class, calendar date) inside a course's date range,
+    generated when the class is created/edited. Attendance = ClassBooking joined
+    back to this row."""
+    __tablename__ = 'class_sessions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    class_id = db.Column(db.Integer, db.ForeignKey('gym_classes.id'), nullable=False)
+    session_date = db.Column(db.Date, nullable=False)
+    start_time = db.Column(db.Time, nullable=False)
+    end_time = db.Column(db.Time, nullable=False)
+    status = db.Column(db.String(20), default='scheduled', nullable=False)  # scheduled|held|cancelled
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        db.UniqueConstraint('class_id', 'session_date', name='uq_class_session_date'),
+    )
+
+    gym_class = db.relationship('GymClass', backref=db.backref('sessions', lazy='dynamic'))
+    bookings = db.relationship('ClassBooking', backref='session', lazy='dynamic',
+                               foreign_keys='ClassBooking.session_id')
+
+    def __repr__(self):
+        return f'<ClassSession {self.class_id} @ {self.session_date}>'
+
+    @property
+    def status_arabic(self):
+        return {'scheduled': 'مجدول', 'held': 'منفذ', 'cancelled': 'ملغي'}.get(self.status, self.status)
+
+
+class ClassEnrollment(db.Model):
+    """GYM-62: a member's paid enrollment in a class course. Owns its linked
+    Subscription + Invoice + pre-generated ClassBooking rows for the enrollment
+    window."""
+    __tablename__ = 'class_enrollments'
+
+    id = db.Column(db.Integer, primary_key=True)
+    class_id = db.Column(db.Integer, db.ForeignKey('gym_classes.id'), nullable=False)
+    member_id = db.Column(db.Integer, db.ForeignKey('members.id'), nullable=False)
+    subscription_id = db.Column(db.Integer, db.ForeignKey('subscriptions.id'))
+    invoice_id = db.Column(db.Integer, db.ForeignKey('invoices.id'))
+
+    start_date = db.Column(db.Date, nullable=False)
+    end_date = db.Column(db.Date, nullable=False)
+    sessions_total = db.Column(db.Integer, default=0)
+
+    total_amount = db.Column(db.Numeric(10, 2), default=0)
+    paid_amount = db.Column(db.Numeric(10, 2), default=0)
+    refund_amount = db.Column(db.Numeric(10, 2), default=0)
+
+    status = db.Column(db.String(20), default='active', nullable=False)  # active|cancelled|completed|refunded
+    notes = db.Column(db.Text)
+
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    cancelled_at = db.Column(db.DateTime)
+
+    gym_class = db.relationship('GymClass', backref=db.backref('enrollments', lazy='dynamic'))
+    member = db.relationship('Member', backref=db.backref('class_enrollments', lazy='dynamic'))
+    subscription = db.relationship('Subscription', foreign_keys=[subscription_id])
+    invoice = db.relationship('Invoice', foreign_keys=[invoice_id])
+    bookings = db.relationship('ClassBooking', backref='enrollment', lazy='dynamic',
+                               foreign_keys='ClassBooking.enrollment_id')
+
+    def __repr__(self):
+        return f'<ClassEnrollment {self.id} member={self.member_id} class={self.class_id}>'
+
+    @property
+    def status_arabic(self):
+        return {
+            'active': 'نشط', 'cancelled': 'ملغي',
+            'completed': 'مكتمل', 'refunded': 'مسترد',
+        }.get(self.status, self.status)

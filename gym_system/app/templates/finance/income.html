@@ -78,6 +78,8 @@
                             <span class="badge bg-success">اشتراك جديد</span>
                             {% elif item.type == 'renewal' %}
                             <span class="badge bg-info">تجديد</span>
+                            {% elif item.type == 'class_subscription' %}
+                            <span class="badge bg-primary">اشتراك كلاس</span>
                             {% else %}
                             <span class="badge bg-secondary">{{ item.type or 'أخرى' }}</span>
                             {% endif %}

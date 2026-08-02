@@ -72,36 +72,79 @@
                     <h5 class="mb-3"><i class="bi bi-clock"></i> الجدول الزمني</h5>
 
                     <div class="row">
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label">اليوم *</label>
-                            {{ form.day_of_week(class="form-select") }}
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">تاريخ بداية الكلاس *</label>
+                            {{ form.start_date(class="form-control", type="date") }}
                         </div>
-                        <div class="col-md-4 mb-3">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">تاريخ نهاية الكلاس *</label>
+                            {{ form.end_date(class="form-control", type="date") }}
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">أيام الأسبوع *</label>
+                        <div class="d-flex flex-wrap gap-3 p-2 border rounded">
+                            {% for val, lbl in (weekday_choices or [(0,'السبت'),(1,'الأحد'),(2,'الاثنين'),(3,'الثلاثاء'),(4,'الأربعاء'),(5,'الخميس'),(6,'الجمعة')]) %}
+                            <div class="form-check">
+                                <input type="checkbox" name="weekdays" value="{{ val }}"
+                                       id="wd_{{ val }}"
+                                       class="form-check-input"
+                                       {% if val in (selected_weekdays or []) %}checked{% endif %}>
+                                <label class="form-check-label" for="wd_{{ val }}">{{ lbl }}</label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <small class="text-muted">اختر يوم واحد على الأقل — الحصص تتولد تلقائياً لكل يوم مطابق داخل الفترة أعلاه.</small>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
                             <label class="form-label">وقت البداية *</label>
                             {{ form.start_time(class="form-control", type="time") }}
                         </div>
-                        <div class="col-md-4 mb-3">
+                        <div class="col-md-6 mb-3">
                             <label class="form-label">وقت النهاية *</label>
                             {{ form.end_time(class="form-control", type="time") }}
                         </div>
                     </div>
 
+                    <hr class="my-4">
+                    <h5 class="mb-3"><i class="bi bi-cash-coin"></i> السعر والسعة</h5>
+
                     <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">السعة *</label>
-                            {{ form.capacity(class="form-control", type="number", min="1", max="100") }}
-                            <small class="text-muted">الحد الأقصى لعدد المشتركين</small>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">السعة</label>
+                            {{ form.capacity(class="form-control", type="number", min="1", max="500") }}
+                            <small class="text-muted">الحد الأقصى للمشتركين</small>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">سعر الاشتراك (ر.س)</label>
+                            {{ form.price(class="form-control", type="number", step="0.01", min="0") }}
+                            <small class="text-muted">سعر اشتراك العضو في هذا الكلاس</small>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">تكلفة الحصة للمدرب (ر.س)</label>
+                            {{ form.trainer_fee_per_session(class="form-control", type="number", step="0.01", min="0") }}
+                            <small class="text-muted">لحساب صافي الربح — × عدد الحصص المنفذة</small>
                         </div>
                     </div>
 
-                    <div class="mb-3">
-                        <div class="form-check">
-                            {{ form.is_active(class="form-check-input", id="is_active") }}
-                            <label class="form-check-label" for="is_active">
-                                الكلاس نشط
-                            </label>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">حالة الكلاس *</label>
+                            {{ form.status(class="form-select") }}
+                        </div>
+                        <div class="col-md-6 mb-3 d-flex align-items-end">
+                            <div class="form-check">
+                                {{ form.is_active(class="form-check-input", id="is_active") }}
+                                <label class="form-check-label" for="is_active">الكلاس مفعّل</label>
+                            </div>
                         </div>
                     </div>
+
+                    {# Legacy hidden field — server auto-populates from min(weekdays) #}
+                    <input type="hidden" name="day_of_week" value="0">
 
                     <hr class="my-4">
 

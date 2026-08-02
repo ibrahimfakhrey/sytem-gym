@@ -284,6 +284,87 @@ def create_app(config_name=None):
                             conn.exec_driver_sql(ddl)
                         except Exception:
                             pass
+                    # GYM-62 — class course schedule, sessions, enrollments.
+                    gc_cols = [r[1] for r in conn.exec_driver_sql(
+                        "PRAGMA table_info(gym_classes)"
+                    ).fetchall()]
+                    if gc_cols:
+                        for col, ddl in (
+                            ('start_date',              'ALTER TABLE gym_classes ADD COLUMN start_date DATE'),
+                            ('end_date',                'ALTER TABLE gym_classes ADD COLUMN end_date DATE'),
+                            ('weekday_mask',            'ALTER TABLE gym_classes ADD COLUMN weekday_mask INTEGER DEFAULT 0'),
+                            ('price',                   'ALTER TABLE gym_classes ADD COLUMN price NUMERIC(10,2) DEFAULT 0'),
+                            ('trainer_fee_per_session', 'ALTER TABLE gym_classes ADD COLUMN trainer_fee_per_session NUMERIC(10,2) DEFAULT 0'),
+                            ('status',                  "ALTER TABLE gym_classes ADD COLUMN status VARCHAR(20) DEFAULT 'active'"),
+                        ):
+                            if col not in gc_cols:
+                                conn.exec_driver_sql(ddl)
+                        # Backfill legacy rows so the new UI has something to render.
+                        conn.exec_driver_sql(
+                            "UPDATE gym_classes SET weekday_mask = (1 << day_of_week) "
+                            "WHERE day_of_week IS NOT NULL AND (weekday_mask IS NULL OR weekday_mask = 0)"
+                        )
+                        conn.exec_driver_sql(
+                            "UPDATE gym_classes SET start_date = date(created_at) "
+                            "WHERE start_date IS NULL AND created_at IS NOT NULL"
+                        )
+                        conn.exec_driver_sql(
+                            "UPDATE gym_classes SET end_date = date(created_at, '+365 days') "
+                            "WHERE end_date IS NULL AND created_at IS NOT NULL"
+                        )
+                        conn.exec_driver_sql(
+                            "UPDATE gym_classes SET status = 'active' WHERE status IS NULL"
+                        )
+                    cb_cols = [r[1] for r in conn.exec_driver_sql(
+                        "PRAGMA table_info(class_bookings)"
+                    ).fetchall()]
+                    if cb_cols:
+                        for col, ddl in (
+                            ('session_id',    'ALTER TABLE class_bookings ADD COLUMN session_id INTEGER'),
+                            ('enrollment_id', 'ALTER TABLE class_bookings ADD COLUMN enrollment_id INTEGER'),
+                        ):
+                            if col not in cb_cols:
+                                conn.exec_driver_sql(ddl)
+                    for ddl in (
+                        """CREATE TABLE IF NOT EXISTS class_sessions (
+                             id INTEGER PRIMARY KEY AUTOINCREMENT,
+                             class_id INTEGER NOT NULL,
+                             session_date DATE NOT NULL,
+                             start_time TIME NOT NULL,
+                             end_time TIME NOT NULL,
+                             status VARCHAR(20) DEFAULT 'scheduled' NOT NULL,
+                             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                             FOREIGN KEY(class_id) REFERENCES gym_classes(id)
+                           )""",
+                        "CREATE UNIQUE INDEX IF NOT EXISTS ix_class_sessions_class_date ON class_sessions(class_id, session_date)",
+                        """CREATE TABLE IF NOT EXISTS class_enrollments (
+                             id INTEGER PRIMARY KEY AUTOINCREMENT,
+                             class_id INTEGER NOT NULL,
+                             member_id INTEGER NOT NULL,
+                             subscription_id INTEGER,
+                             invoice_id INTEGER,
+                             start_date DATE NOT NULL,
+                             end_date DATE NOT NULL,
+                             sessions_total INTEGER DEFAULT 0,
+                             total_amount NUMERIC(10,2) DEFAULT 0,
+                             paid_amount NUMERIC(10,2) DEFAULT 0,
+                             refund_amount NUMERIC(10,2) DEFAULT 0,
+                             status VARCHAR(20) DEFAULT 'active' NOT NULL,
+                             notes TEXT,
+                             created_by INTEGER,
+                             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                             cancelled_at DATETIME,
+                             FOREIGN KEY(class_id) REFERENCES gym_classes(id),
+                             FOREIGN KEY(member_id) REFERENCES members(id),
+                             FOREIGN KEY(subscription_id) REFERENCES subscriptions(id),
+                             FOREIGN KEY(invoice_id) REFERENCES invoices(id),
+                             FOREIGN KEY(created_by) REFERENCES users(id)
+                           )""",
+                    ):
+                        try:
+                            conn.exec_driver_sql(ddl)
+                        except Exception:
+                            pass
                 except Exception:
                     pass
                 # complaint_attachments (GYM-21)
@@ -528,3 +609,29 @@ def register_cli_commands(app):
 
             db.session.commit()
             click.echo('Done!')
+
+    @app.cli.command('close-class-sessions')
+    def close_class_sessions():
+        """GYM-62 — flip past scheduled ClassSessions to 'held', and any
+        remaining 'booked' ClassBookings on those dates to 'no_show'. Run
+        daily via cron (or manually). Idempotent."""
+        from datetime import date
+        from .models.classes import ClassSession, ClassBooking
+        today = date.today()
+        stale = ClassSession.query.filter(
+            ClassSession.session_date < today,
+            ClassSession.status == 'scheduled',
+        ).all()
+        n_sessions = 0
+        n_no_shows = 0
+        for s in stale:
+            open_bookings = ClassBooking.query.filter_by(
+                session_id=s.id, status='booked'
+            ).all()
+            for b in open_bookings:
+                b.status = 'no_show'
+                n_no_shows += 1
+            s.status = 'held'
+            n_sessions += 1
+        db.session.commit()
+        click.echo(f'{n_sessions} sessions closed, {n_no_shows} bookings marked no-show')
