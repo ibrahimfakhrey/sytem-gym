@@ -575,7 +575,9 @@ def branch_detail(branch_id):
 @dashboard_bp.route('/brand-manager')
 @login_required
 def brand_manager():
-    """Brand manager/Finance dashboard - single brand"""
+    """Brand manager/Finance dashboard - single brand.
+    GYM-63: honor the owner branch picker so every card + list + alert
+    on this page respects the selected branch."""
     if not current_user.brand_id:
         return redirect(url_for('dashboard.owner'))
 
@@ -583,18 +585,28 @@ def brand_manager():
     today = date.today()
     month_start = today.replace(day=1)
 
-    stats = get_brand_stats(brand.id, month_start, today)
+    # GYM-63: brand-level owners have a "view as branch" picker in the sidebar.
+    # For branch-level users (branch_manager / branch_finance with branch_id
+    # set on their user), pin to their branch. For brand-level owner, use the
+    # picker's current value from the URL/session.
+    from app.utils.helpers import resolve_owner_branch_filter
+    branch_filter_id = current_user.branch_id or resolve_owner_branch_filter()
+
+    stats = get_brand_stats(brand.id, month_start, today, branch_id=branch_filter_id)
 
     # === SMART ALERTS ===
     alerts = []
 
     # 1. Urgent expiring subscriptions (48 hours) - FUTURE subscriptions only
-    expiring_48h = Subscription.query.filter(
+    exp48_q = Subscription.query.filter(
         Subscription.brand_id == brand.id,
         Subscription.status == 'active',
         Subscription.end_date > today,  # Must be in the future, not today
         Subscription.end_date <= today + timedelta(days=2)
-    ).count()
+    )
+    if branch_filter_id:
+        exp48_q = exp48_q.filter(Subscription.branch_id == branch_filter_id)
+    expiring_48h = exp48_q.count()
     if expiring_48h > 0:
         alerts.append({
             'type': 'warning',
@@ -604,10 +616,13 @@ def brand_manager():
         })
 
     # 2. Open complaints for this brand
-    open_complaints = Complaint.query.filter(
+    oc_q = Complaint.query.filter(
         Complaint.brand_id == brand.id,
         Complaint.status.in_(['pending', 'in_progress'])
-    ).count()
+    )
+    if branch_filter_id:
+        oc_q = oc_q.filter(Complaint.branch_id == branch_filter_id)
+    open_complaints = oc_q.count()
     if open_complaints > 0:
         alerts.append({
             'type': 'danger',
@@ -616,12 +631,12 @@ def brand_manager():
             'link': url_for('complaints.index')
         })
 
-    # 3. Missing daily closing
+    # 3. Missing daily closing (per branch when scoped)
     yesterday = today - timedelta(days=1)
-    closing = DailyClosing.query.filter_by(
-        brand_id=brand.id,
-        closing_date=yesterday
-    ).first()
+    dc_q = DailyClosing.query.filter_by(brand_id=brand.id, closing_date=yesterday)
+    if branch_filter_id:
+        dc_q = dc_q.filter(DailyClosing.branch_id == branch_filter_id)
+    closing = dc_q.first()
     if not closing:
         alerts.append({
             'type': 'info',
@@ -631,10 +646,10 @@ def brand_manager():
         })
 
     # 4. Pending expense approvals
-    pending_expenses = Expense.query.filter_by(
-        brand_id=brand.id,
-        status='pending'
-    ).count()
+    pe_q = Expense.query.filter_by(brand_id=brand.id, status='pending')
+    if branch_filter_id:
+        pe_q = pe_q.filter(Expense.branch_id == branch_filter_id)
+    pending_expenses = pe_q.count()
     if pending_expenses > 0:
         alerts.append({
             'type': 'info',
@@ -644,33 +659,46 @@ def brand_manager():
         })
 
     # Expiring soon (FUTURE subscriptions only)
-    expiring_soon = Subscription.query.filter(
+    exp7_q = Subscription.query.filter(
         Subscription.brand_id == brand.id,
         Subscription.status == 'active',
-        Subscription.end_date > today,  # Must be in the future, not today or past
+        Subscription.end_date > today,
         Subscription.end_date <= today + timedelta(days=7)
-    ).order_by(Subscription.end_date).limit(10).all()
+    )
+    if branch_filter_id:
+        exp7_q = exp7_q.filter(Subscription.branch_id == branch_filter_id)
+    expiring_soon = exp7_q.order_by(Subscription.end_date).limit(10).all()
 
     # Recent activity
-    recent_subscriptions = Subscription.query.filter_by(
-        brand_id=brand.id
-    ).order_by(Subscription.created_at.desc()).limit(5).all()
+    rs_q = Subscription.query.filter_by(brand_id=brand.id)
+    if branch_filter_id:
+        rs_q = rs_q.filter(Subscription.branch_id == branch_filter_id)
+    recent_subscriptions = rs_q.order_by(Subscription.created_at.desc()).limit(5).all()
 
-    recent_attendance = MemberAttendance.query.filter_by(
-        brand_id=brand.id
-    ).order_by(MemberAttendance.check_in.desc()).limit(10).all()
+    ra_q = MemberAttendance.query.filter_by(brand_id=brand.id)
+    if branch_filter_id:
+        ra_q = ra_q.filter(MemberAttendance.branch_id == branch_filter_id)
+    recent_attendance = ra_q.order_by(MemberAttendance.check_in.desc()).limit(10).all()
 
-    # Recent complaints
-    recent_complaints = Complaint.query.filter_by(
-        brand_id=brand.id
-    ).order_by(Complaint.created_at.desc()).limit(5).all()
+    rc_q = Complaint.query.filter_by(brand_id=brand.id)
+    if branch_filter_id:
+        rc_q = rc_q.filter(Complaint.branch_id == branch_filter_id)
+    recent_complaints = rc_q.order_by(Complaint.created_at.desc()).limit(5).all()
 
     # Fingerprint sync status — show if any branch in the brand uses fingerprint
     sync_status = None
     from app.models.company import Branch
-    has_fp_branch = Branch.query.filter_by(brand_id=brand.id, uses_fingerprint=True).first() is not None
+    fp_branch_q = Branch.query.filter_by(brand_id=brand.id, uses_fingerprint=True)
+    if branch_filter_id:
+        fp_branch_q = fp_branch_q.filter(Branch.id == branch_filter_id)
+    has_fp_branch = fp_branch_q.first() is not None
     if has_fp_branch:
         sync_status = FingerprintSyncLog.get_sync_status(brand.id)
+
+    # Which branch (if any) is currently pinned — for the "شامل / فرع X" badge
+    filtered_branch = None
+    if branch_filter_id:
+        filtered_branch = Branch.query.get(branch_filter_id)
 
     return render_template('dashboard/brand_manager.html',
                           brand=brand,
@@ -680,7 +708,8 @@ def brand_manager():
                           recent_subscriptions=recent_subscriptions,
                           recent_attendance=recent_attendance,
                           recent_complaints=recent_complaints,
-                          sync_status=sync_status)
+                          sync_status=sync_status,
+                          filtered_branch=filtered_branch)
 
 
 @dashboard_bp.route('/receptionist')
@@ -1062,29 +1091,39 @@ def employee():
                           pending_salaries_count=pending_salaries_count)
 
 
-def get_brand_stats(brand_id, start_date, end_date):
-    """Get statistics for a brand"""
+def get_brand_stats(brand_id, start_date, end_date, branch_id=None):
+    """Get statistics for a brand.
+    GYM-63: optional branch_id narrows every stat to a single branch."""
     today = date.today()
 
-    members = Member.query.filter_by(brand_id=brand_id, is_active=True).count()
+    members_q = Member.query.filter_by(brand_id=brand_id, is_active=True)
+    if branch_id:
+        members_q = members_q.filter(Member.branch_id == branch_id)
+    members = members_q.count()
 
-    active_subscriptions = Subscription.query.filter(
+    active_subs_q = Subscription.query.filter(
         Subscription.brand_id == brand_id,
         Subscription.status == 'active',
-        Subscription.end_date >= today
-    ).count()
+        Subscription.end_date >= today,
+    )
+    if branch_id:
+        active_subs_q = active_subs_q.filter(Subscription.branch_id == branch_id)
+    active_subscriptions = active_subs_q.count()
 
-    income = Income.get_total_for_period(brand_id, start_date, end_date)
-    expenses = Expense.get_total_for_period(brand_id, start_date, end_date)
+    income = Income.get_total_for_period(brand_id, start_date, end_date, branch_id=branch_id)
+    expenses = Expense.get_total_for_period(brand_id, start_date, end_date, branch_id=branch_id)
 
-    today_attendance = MemberAttendance.get_today_count(brand_id)
+    today_attendance = MemberAttendance.get_today_count(brand_id, branch_id=branch_id)
 
     # Count employees for this brand
-    employee_count = User.query.filter_by(brand_id=brand_id, is_active=True, is_deleted=False).count()  # GYM-43
+    emp_q = User.query.filter_by(brand_id=brand_id, is_active=True, is_deleted=False)  # GYM-43
+    if branch_id:
+        emp_q = emp_q.filter(User.branch_id == branch_id)
+    employee_count = emp_q.count()
 
     # Service demand analytics - Revenue by service type
     from app.models.service import ServiceType
-    service_performance = db.session.query(
+    sp_q = db.session.query(
         ServiceType.name,
         func.sum(Income.amount).label('revenue'),
         func.count(Subscription.id).label('subscription_count')
@@ -1096,11 +1135,14 @@ def get_brand_stats(brand_id, start_date, end_date):
         Income.date <= end_date,
         Income.is_deleted == False,  # GYM-32
         Subscription.is_deleted == False,
-    ).group_by(ServiceType.id, ServiceType.name
+    )
+    if branch_id:
+        sp_q = sp_q.filter(Income.branch_id == branch_id)
+    service_performance = sp_q.group_by(ServiceType.id, ServiceType.name
     ).order_by(func.sum(Income.amount).desc()).all()
 
     # Payment method distribution
-    payment_distribution = db.session.query(
+    pd_q = db.session.query(
         Income.payment_method,
         func.sum(Income.amount).label('amount')
     ).filter(
@@ -1108,33 +1150,45 @@ def get_brand_stats(brand_id, start_date, end_date):
         Income.date >= start_date,
         Income.date <= end_date,
         Income.is_deleted == False,  # GYM-32
-    ).group_by(Income.payment_method).all()
+    )
+    if branch_id:
+        pd_q = pd_q.filter(Income.branch_id == branch_id)
+    payment_distribution = pd_q.group_by(Income.payment_method).all()
 
     # Gift card analytics
     from app.models.giftcard import GiftCard
-    gift_cards_sold = GiftCard.query.filter(
-        GiftCard.brand_id == brand_id,
+    gc_base = GiftCard.query.filter(GiftCard.brand_id == brand_id)
+    if branch_id and hasattr(GiftCard, 'branch_id'):
+        gc_base = gc_base.filter(GiftCard.branch_id == branch_id)
+
+    gift_cards_sold = gc_base.filter(
         func.date(GiftCard.created_at) >= start_date,
         func.date(GiftCard.created_at) <= end_date
     ).count()
 
-    gift_card_revenue = db.session.query(func.sum(GiftCard.original_amount)).filter(
+    gcr_q = db.session.query(func.sum(GiftCard.original_amount)).filter(
         GiftCard.brand_id == brand_id,
         func.date(GiftCard.created_at) >= start_date,
         func.date(GiftCard.created_at) <= end_date
-    ).scalar() or 0
+    )
+    if branch_id and hasattr(GiftCard, 'branch_id'):
+        gcr_q = gcr_q.filter(GiftCard.branch_id == branch_id)
+    gift_card_revenue = gcr_q.scalar() or 0
 
-    gift_cards_redeemed = GiftCard.query.filter(
-        GiftCard.brand_id == brand_id,
+    gcred_q = gc_base.filter(
         GiftCard.status == 'redeemed',
         func.date(GiftCard.redeemed_at) >= start_date,
         func.date(GiftCard.redeemed_at) <= end_date
-    ).count()
+    )
+    gift_cards_redeemed = gcred_q.count()
 
-    outstanding_liability = db.session.query(func.sum(GiftCard.remaining_amount)).filter(
+    ol_q = db.session.query(func.sum(GiftCard.remaining_amount)).filter(
         GiftCard.brand_id == brand_id,
         GiftCard.status.in_(['active', 'partially_used'])
-    ).scalar() or 0
+    )
+    if branch_id and hasattr(GiftCard, 'branch_id'):
+        ol_q = ol_q.filter(GiftCard.branch_id == branch_id)
+    outstanding_liability = ol_q.scalar() or 0
 
     return {
         'members': members,

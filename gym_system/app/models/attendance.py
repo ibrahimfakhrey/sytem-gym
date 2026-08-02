@@ -57,13 +57,17 @@ class MemberAttendance(db.Model):
         return source_map.get(self.source, self.source)
 
     @classmethod
-    def get_today_count(cls, brand_id):
-        """Get today's attendance count for brand"""
+    def get_today_count(cls, brand_id, branch_id=None):
+        """Get today's attendance count for brand.
+        GYM-63: optional branch_id narrows to a single branch."""
         today = date.today()
-        return cls.query.filter(
+        q = cls.query.filter(
             cls.brand_id == brand_id,
-            db.func.date(cls.check_in) == today
-        ).count()
+            db.func.date(cls.check_in) == today,
+        )
+        if branch_id:
+            q = q.filter(cls.branch_id == branch_id)
+        return q.count()
 
     @classmethod
     def get_date_range_count(cls, brand_id, start_date, end_date):

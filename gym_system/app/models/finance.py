@@ -118,14 +118,18 @@ class Income(db.Model):
         ).group_by(cls.payment_method).all()
 
     @classmethod
-    def get_total_for_period(cls, brand_id, start_date, end_date):
-        """Get total income for period (GYM-32: skip soft-deleted)"""
-        result = db.session.query(db.func.sum(cls.amount)).filter(
+    def get_total_for_period(cls, brand_id, start_date, end_date, branch_id=None):
+        """Get total income for period (GYM-32: skip soft-deleted).
+        GYM-63: optional branch_id narrows to a single branch."""
+        q = db.session.query(db.func.sum(cls.amount)).filter(
             cls.brand_id == brand_id,
             cls.date >= start_date,
             cls.date <= end_date,
             cls.is_deleted == False,
-        ).scalar()
+        )
+        if branch_id:
+            q = q.filter(cls.branch_id == branch_id)
+        result = q.scalar()
         return float(result) if result else 0.0
 
 
@@ -208,14 +212,18 @@ class Expense(db.Model):
         return query.order_by(cls.date.desc()).all()
 
     @classmethod
-    def get_total_for_period(cls, brand_id, start_date, end_date):
-        """Get total expenses for period (GYM-32: skip soft-deleted)"""
-        result = db.session.query(db.func.sum(cls.amount)).filter(
+    def get_total_for_period(cls, brand_id, start_date, end_date, branch_id=None):
+        """Get total expenses for period (GYM-32: skip soft-deleted).
+        GYM-63: optional branch_id narrows to a single branch."""
+        q = db.session.query(db.func.sum(cls.amount)).filter(
             cls.brand_id == brand_id,
             cls.date >= start_date,
             cls.date <= end_date,
             cls.is_deleted == False,
-        ).scalar()
+        )
+        if branch_id:
+            q = q.filter(cls.branch_id == branch_id)
+        result = q.scalar()
         return float(result) if result else 0.0
 
     @classmethod
