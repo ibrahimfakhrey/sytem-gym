@@ -92,6 +92,9 @@
                                 {{ form.payment_method.errors[0] }}
                             </div>
                             {% endif %}
+                            {% with paid_amount_id='amount_paid' %}
+                              {% include "_partials/payment_split.html" %}
+                            {% endwith %}
                         </div>
                     </div>
 

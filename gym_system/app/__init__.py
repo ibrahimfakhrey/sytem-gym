@@ -365,6 +365,14 @@ def create_app(config_name=None):
                             conn.exec_driver_sql(ddl)
                         except Exception:
                             pass
+                    # GYM-65 — split-payment link on subscription_payments.
+                    sp_cols = [r[1] for r in conn.exec_driver_sql(
+                        "PRAGMA table_info(subscription_payments)"
+                    ).fetchall()]
+                    if sp_cols and 'invoice_id' not in sp_cols:
+                        conn.exec_driver_sql(
+                            "ALTER TABLE subscription_payments ADD COLUMN invoice_id INTEGER"
+                        )
                     # GYM-67 — NO backfill by design. On prod, brand 10's
                     # service_type "درة الدخل الرياضي" was mistakenly flagged
                     # requires_class_booking=1, cascading to 12 regular gym

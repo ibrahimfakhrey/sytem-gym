@@ -1,0 +1,96 @@
+{# GYM-65 — split-payment toggle. Include from any form that has a
+   payment_method dropdown + a paid_amount input.
+
+   Requires the caller to have already rendered:
+     - a <select name="payment_method"> element (any id/class)
+     - an <input name="paid_amount"> element (or the total to match)
+
+   Pass the id of the paid_amount input via `paid_amount_id` (default 'paid_amount').
+   The JS below reads that field's value as the target sum.
+#}
+{% set _paid_id = paid_amount_id | default('paid_amount') %}
+
+<div class="mt-2" data-payment-split-root>
+    <button type="button" class="btn btn-sm btn-outline-secondary" data-toggle-split>
+        <i class="bi bi-collection"></i> تقسيم الدفعة
+    </button>
+
+    <div class="payment-split-fields mt-2 d-none" data-split-fields>
+        {# Disabled by default so a hidden 'split=1' is NOT submitted while
+           the box is closed. Toggle JS flips this. #}
+        <input type="hidden" name="split" value="1" disabled>
+        <div class="row g-2">
+            <div class="col-md-4">
+                <label class="form-label small mb-1">كاش</label>
+                <input type="number" step="0.01" min="0" name="paid_cash"
+                       class="form-control" placeholder="0" data-split-input>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small mb-1">شبكة</label>
+                <input type="number" step="0.01" min="0" name="paid_card"
+                       class="form-control" placeholder="0" data-split-input>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small mb-1">حوالة</label>
+                <input type="number" step="0.01" min="0" name="paid_transfer"
+                       class="form-control" placeholder="0" data-split-input>
+            </div>
+        </div>
+        <small class="text-muted" data-split-hint>
+            المجموع: <strong data-split-sum>0</strong> / <strong data-split-target>0</strong>
+        </small>
+    </div>
+</div>
+
+<script>
+(function () {
+    document.querySelectorAll('[data-payment-split-root]').forEach(function (root) {
+        var btn = root.querySelector('[data-toggle-split]');
+        var box = root.querySelector('[data-split-fields]');
+        var sumEl = root.querySelector('[data-split-sum]');
+        var targetEl = root.querySelector('[data-split-target]');
+        var inputs = root.querySelectorAll('[data-split-input]');
+        var paidInput = document.querySelector('input[name="{{ _paid_id }}"]')
+                     || document.querySelector('input[name="paid_amount"]');
+
+        function updateSum() {
+            var s = 0;
+            inputs.forEach(function (i) { s += parseFloat(i.value) || 0; });
+            var t = paidInput ? (parseFloat(paidInput.value) || 0) : 0;
+            sumEl.textContent = s.toFixed(2);
+            targetEl.textContent = t.toFixed(2);
+            var ok = Math.abs(s - t) < 0.01;
+            sumEl.style.color = ok ? '' : '#c0392b';
+            sumEl.style.fontWeight = ok ? '' : 'bold';
+        }
+
+        btn.addEventListener('click', function () {
+            // classList.toggle returns TRUE when the class was added (box now
+            // hidden), FALSE when removed (box now shown).
+            var nowHidden = box.classList.toggle('d-none');
+            var nowOpen = !nowHidden;
+
+            btn.innerHTML = '';
+            var icon = document.createElement('i');
+            icon.className = 'bi bi-' + (nowOpen ? 'x-circle' : 'collection');
+            btn.appendChild(icon);
+            btn.appendChild(document.createTextNode(
+                nowOpen ? ' إلغاء التقسيم' : ' تقسيم الدفعة'
+            ));
+
+            var hidden = box.querySelector('input[name="split"]');
+            if (nowOpen) {
+                if (hidden) hidden.disabled = false;
+                updateSum();
+            } else {
+                // Clear when closing so form doesn't send stale split values.
+                inputs.forEach(function (i) { i.value = ''; });
+                if (hidden) hidden.disabled = true;
+            }
+        });
+
+        inputs.forEach(function (i) { i.addEventListener('input', updateSum); });
+        if (paidInput) paidInput.addEventListener('input', updateSum);
+    });
+})();
+</script>

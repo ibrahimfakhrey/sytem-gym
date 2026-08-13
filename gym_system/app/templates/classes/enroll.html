@@ -52,6 +52,9 @@
                                 <option value="transfer">تحويل بنكي</option>
                                 <option value="other">أخرى</option>
                             </select>
+                            {% with paid_amount_id='paid_amount' %}
+                              {% include "_partials/payment_split.html" %}
+                            {% endwith %}
                         </div>
                     </div>
 

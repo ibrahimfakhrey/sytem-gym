@@ -326,3 +326,107 @@ def check_entity_access(entity, user=None):
             return False
 
     return True
+
+
+# ─── GYM-65 — split payment methods on one invoice ─────────────────────────
+
+def parse_payment_splits(form, paid_amount, default_method):
+    """GYM-65 — return a list of (amount, method) tuples for the payment.
+
+    If the request form has `split=1`, parses `paid_cash`, `paid_card`,
+    `paid_transfer` and validates that they sum to ``paid_amount``.
+    Otherwise returns a single-tuple list ``[(paid_amount, default_method)]``.
+
+    Raises ``ValueError`` with an Arabic message on mismatch — the caller
+    should flash it and re-render.
+    """
+    def _num(key):
+        raw = (form.get(key) or '').strip()
+        if not raw:
+            return 0.0
+        try:
+            return float(raw)
+        except (TypeError, ValueError):
+            return 0.0
+
+    if str(form.get('split') or '') != '1':
+        return [(float(paid_amount or 0), default_method)]
+
+    parts = []
+    for key, method in (('paid_cash', 'cash'),
+                        ('paid_card', 'card'),
+                        ('paid_transfer', 'transfer')):
+        amt = _num(key)
+        if amt > 0:
+            parts.append((amt, method))
+
+    if not parts:
+        raise ValueError('التقسيم فارغ — أدخل مبلغاً واحداً على الأقل')
+
+    total = sum(a for a, _ in parts)
+    # 1-cent tolerance for float rounding
+    if abs(total - float(paid_amount or 0)) > 0.01:
+        raise ValueError(
+            f'مجموع التقسيم ({total:.2f}) لا يساوي المدفوع ({float(paid_amount or 0):.2f})'
+        )
+    return parts
+
+
+def write_split_payments(subscription, splits, income_type, current_user):
+    """GYM-65 — write N SubscriptionPayment + N Income rows for one subscription.
+
+    Args:
+        subscription: the Subscription row (already flushed, has .id).
+        splits: list of (amount, method) tuples from ``parse_payment_splits``.
+        income_type: 'subscription' | 'class_subscription' | etc.
+        current_user: for ``created_by``.
+
+    Returns the list of created SubscriptionPayment objects. Caller is
+    expected to create the Invoice afterwards, use ``payments[0]`` for
+    ``invoice.payment_id`` (backward compat), and then back-fill
+    ``invoice_id`` on each payment via ``attach_invoice_to_payments``.
+    """
+    from datetime import date
+    from app import db
+    from app.models.subscription import SubscriptionPayment
+    from app.models.finance import Income
+
+    payments = []
+    branch_id = subscription.branch_id or getattr(current_user, 'branch_id', None)
+    for amount, method in splits:
+        p = SubscriptionPayment(
+            subscription_id=subscription.id,
+            brand_id=subscription.brand_id,
+            amount=amount,
+            payment_method=method,
+            created_by=current_user.id,
+        )
+        db.session.add(p)
+        payments.append(p)
+        inc = Income(
+            brand_id=subscription.brand_id,
+            branch_id=branch_id,
+            subscription_id=subscription.id,
+            service_type_id=subscription.service_type_id,
+            amount=amount,
+            type=income_type,
+            payment_method=method,
+            date=date.today(),
+            created_by=current_user.id,
+        )
+        db.session.add(inc)
+    db.session.flush()
+    return payments
+
+
+def attach_invoice_to_payments(invoice, payments):
+    """GYM-65 — back-fill invoice_id on each SubscriptionPayment after the
+    Invoice has been created + flushed. Used by every callsite that creates
+    a split invoice."""
+    for p in payments:
+        p.invoice_id = invoice.id
+
+
+def invoice_method_label(splits):
+    """GYM-65 — 'split' when >1 method, else the single method string."""
+    return 'split' if len(splits) > 1 else splits[0][1]

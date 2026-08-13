@@ -38,6 +38,10 @@
                     <div class="mb-3">
                         <label class="form-label">طريقة الدفع *</label>
                         {{ form.payment_method(class="form-select") }}
+                        {# GYM-65 — split-payment toggle. Uses input[name=amount] as the target. #}
+                        {% with paid_amount_id='amount' %}
+                          {% include "_partials/payment_split.html" %}
+                        {% endwith %}
                     </div>
 
                     <div class="mb-3">

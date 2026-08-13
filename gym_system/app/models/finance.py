@@ -419,6 +419,16 @@ class Invoice(db.Model):
         method_map = {
             'cash': 'نقدي',
             'card': 'بطاقة',
-            'transfer': 'تحويل'
+            'transfer': 'تحويل',
+            'split': 'مقسّم',  # GYM-65
         }
         return method_map.get(self.payment_method, self.payment_method)
+
+    @property
+    def split_payments(self):
+        """GYM-65 — for split invoices, return the SubscriptionPayment rows
+        that share this invoice_id. Empty for single-method invoices."""
+        from app.models.subscription import SubscriptionPayment
+        return SubscriptionPayment.query.filter_by(
+            invoice_id=self.id, is_deleted=False
+        ).order_by(SubscriptionPayment.amount.desc()).all()

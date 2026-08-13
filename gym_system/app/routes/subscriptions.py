@@ -505,33 +505,30 @@ def create():
             if saved_path:
                 subscription.proof_image = saved_path
 
-        # Create payment record
+        # Create payment record(s)
+        # GYM-65 — parse either single or split payment methods.
         if paid_amount > 0:
-            payment = SubscriptionPayment(
-                subscription_id=subscription.id,
-                brand_id=member.brand_id,
-                amount=paid_amount,
-                payment_method=form.payment_method.data,
-                created_by=current_user.id
+            from app.utils.helpers import (
+                parse_payment_splits, write_split_payments,
+                attach_invoice_to_payments, invoice_method_label,
             )
-            db.session.add(payment)
-            db.session.flush()  # Get payment ID
+            try:
+                splits = parse_payment_splits(
+                    request.form, paid_amount, form.payment_method.data
+                )
+            except ValueError as e:
+                flash(str(e), 'danger')
+                return render_template('subscriptions/create.html', form=form,
+                                       member=member, plans=plans, offers=offers,
+                                       service_types=service_types)
 
-            # Create income record
-            income = Income(
-                brand_id=member.brand_id,
-                branch_id=member.branch_id or current_user.branch_id,  # Fallback to user's branch
-                subscription_id=subscription.id,
-                service_type_id=subscription.service_type_id,
-                amount=paid_amount,
-                type='subscription',
-                payment_method=form.payment_method.data,
-                date=date.today(),
-                created_by=current_user.id
+            payments = write_split_payments(
+                subscription, splits, income_type='subscription',
+                current_user=current_user,
             )
-            db.session.add(income)
 
-            # Generate invoice
+            # Generate invoice — links to the first (largest) payment for
+            # backward compat on invoice.payment_id.
             service_type_name = None
             if subscription.service_type:
                 service_type_name = subscription.service_type.name
@@ -545,7 +542,7 @@ def create():
                 branch_phone=getattr(branch_for_invoice, 'phone', None),
                 branch_address=getattr(branch_for_invoice, 'address', None),
                 subscription_id=subscription.id,
-                payment_id=payment.id,
+                payment_id=payments[0].id,
                 member_id=member.id,
                 invoice_number=Invoice.generate_invoice_number(member.brand_id),
                 member_name=member.name,
@@ -557,15 +554,17 @@ def create():
                 original_price=plan.price,
                 discount=discount,
                 subtotal=total_amount,
-                tax_rate=0,  # Can be configured later
+                tax_rate=0,
                 tax_amount=0,
                 total_amount=total_amount,
                 amount_paid=paid_amount,
-                payment_method=form.payment_method.data,
+                payment_method=invoice_method_label(splits),
                 notes=form.notes.data,
                 created_by=current_user.id
             )
             db.session.add(invoice)
+            db.session.flush()
+            attach_invoice_to_payments(invoice, payments)
 
         db.session.commit()
 
@@ -694,34 +693,25 @@ def renew(subscription_id):
         subscription.remaining_amount = float(subscription.total_amount) - float(subscription.paid_amount)
         subscription.status = 'active'
 
-        # Create payment record
+        # Create payment record — GYM-65 split-aware
         if paid_amount > 0:
-            payment = SubscriptionPayment(
-                subscription_id=subscription.id,
-                brand_id=subscription.brand_id,
-                amount=paid_amount,
-                payment_method=form.payment_method.data,
-                notes=form.notes.data,
-                created_by=current_user.id
+            from app.utils.helpers import (
+                parse_payment_splits, write_split_payments,
+                attach_invoice_to_payments, invoice_method_label,
             )
-            db.session.add(payment)
-            db.session.flush()  # Get payment ID
+            try:
+                splits = parse_payment_splits(
+                    request.form, paid_amount, form.payment_method.data
+                )
+            except ValueError as e:
+                flash(str(e), 'danger')
+                return redirect(url_for('subscriptions.renew', subscription_id=subscription.id))
 
-            # Create income record
-            income = Income(
-                brand_id=subscription.brand_id,
-                branch_id=subscription.member.branch_id or current_user.branch_id,  # Fallback
-                subscription_id=subscription.id,
-                service_type_id=subscription.service_type_id,
-                amount=paid_amount,
-                payment_method=form.payment_method.data,
-                type='renewal',
-                date=date.today(),
-                created_by=current_user.id
+            payments = write_split_payments(
+                subscription, splits, income_type='renewal',
+                current_user=current_user,
             )
-            db.session.add(income)
 
-            # Generate invoice for renewal
             service_type_name = None
             if subscription.service_type:
                 service_type_name = subscription.service_type.name
@@ -729,7 +719,7 @@ def renew(subscription_id):
             invoice = Invoice(
                 brand_id=subscription.brand_id,
                 subscription_id=subscription.id,
-                payment_id=payment.id,
+                payment_id=payments[0].id,
                 member_id=subscription.member_id,
                 invoice_number=Invoice.generate_invoice_number(subscription.brand_id),
                 member_name=subscription.member.name,
@@ -745,11 +735,13 @@ def renew(subscription_id):
                 tax_amount=0,
                 total_amount=plan.price,
                 amount_paid=paid_amount,
-                payment_method=form.payment_method.data,
+                payment_method=invoice_method_label(splits),
                 notes=form.notes.data,
                 created_by=current_user.id
             )
             db.session.add(invoice)
+            db.session.flush()
+            attach_invoice_to_payments(invoice, payments)
 
         db.session.commit()
 
@@ -941,38 +933,30 @@ def add_payment(subscription_id):
             flash(f'المبلغ ({amount:.0f}) أكبر من المتبقي ({remaining:.0f})', 'danger')
             return render_template('subscriptions/payment.html', form=form, subscription=subscription)
 
-        # Create payment
-        payment = SubscriptionPayment(
-            subscription_id=subscription.id,
-            brand_id=subscription.brand_id,
-            amount=amount,
-            payment_method=form.payment_method.data,
-            notes=form.notes.data,
-            created_by=current_user.id
+        # GYM-65 split-aware payment
+        from app.utils.helpers import (
+            parse_payment_splits, write_split_payments,
+            attach_invoice_to_payments, invoice_method_label,
         )
-        db.session.add(payment)
-        db.session.flush()  # Get payment ID
+        try:
+            splits = parse_payment_splits(
+                request.form, amount, form.payment_method.data
+            )
+        except ValueError as e:
+            flash(str(e), 'danger')
+            return redirect(url_for('subscriptions.add_payment', subscription_id=subscription.id))
 
-        # Update subscription
+        # Update subscription running totals
         subscription.paid_amount = float(subscription.paid_amount) + amount
         subscription.remaining_amount = float(subscription.total_amount) - float(subscription.paid_amount)
 
-        # Create income
-        income = Income(
-            brand_id=subscription.brand_id,
-            branch_id=subscription.member.branch_id or current_user.branch_id,  # Fallback
-            subscription_id=subscription.id,
-            service_type_id=subscription.service_type_id,
-            amount=amount,
-            type='subscription',
-            payment_method=form.payment_method.data,
-            description='سداد دفعة',
-            date=date.today(),
-            created_by=current_user.id
+        payments = write_split_payments(
+            subscription, splits, income_type='subscription',
+            current_user=current_user,
         )
-        db.session.add(income)
+        # First payment carries the shared notes
+        payments[0].notes = form.notes.data
 
-        # Generate invoice for payment
         service_type_name = None
         if subscription.service_type:
             service_type_name = subscription.service_type.name
@@ -980,7 +964,7 @@ def add_payment(subscription_id):
         invoice = Invoice(
             brand_id=subscription.brand_id,
             subscription_id=subscription.id,
-            payment_id=payment.id,
+            payment_id=payments[0].id,
             member_id=subscription.member_id,
             invoice_number=Invoice.generate_invoice_number(subscription.brand_id),
             member_name=subscription.member.name,
@@ -996,11 +980,13 @@ def add_payment(subscription_id):
             tax_amount=0,
             total_amount=amount,
             amount_paid=amount,
-            payment_method=form.payment_method.data,
+            payment_method=invoice_method_label(splits),
             notes=form.notes.data,
             created_by=current_user.id
         )
         db.session.add(invoice)
+        db.session.flush()
+        attach_invoice_to_payments(invoice, payments)
 
         db.session.commit()
 

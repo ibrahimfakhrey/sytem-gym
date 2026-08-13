@@ -134,7 +134,8 @@
                     <div class="mb-3">
                         <label for="payment_method" class="form-label">طريقة الدفع *</label>
                         {{ form.payment_method(class="form-control") }}
-                        <div class="form-text">يجب اختيار طريقة الدفع قبل إنشاء الاشتراك</div>
+                        <div class="form-text">أو اضغط "تقسيم الدفعة" لتوزيع المبلغ على أكثر من طريقة</div>
+                        {% include "_partials/payment_split.html" with context %}
                     </div>
 
                     <div class="mb-3">

@@ -349,6 +349,11 @@ class SubscriptionPayment(db.Model):
     amount = db.Column(db.Numeric(10, 2), nullable=False)
     payment_method = db.Column(db.String(20), default='cash')
     payment_date = db.Column(db.DateTime, default=datetime.utcnow)
+    # GYM-65 — split-payment link. When an invoice is paid via multiple
+    # methods, each method gets its own SubscriptionPayment row and all of
+    # them share the same invoice_id. Nullable for backward compat with
+    # rows created before this column existed.
+    invoice_id = db.Column(db.Integer, db.ForeignKey('invoices.id'))
 
     notes = db.Column(db.Text)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'))

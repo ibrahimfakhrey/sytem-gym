@@ -797,28 +797,23 @@ def enroll(class_id):
 
     invoice = None
     if paid_amount > 0:
-        payment = SubscriptionPayment(
-            subscription_id=subscription.id,
-            brand_id=gym_class.brand_id,
-            amount=paid_amount,
-            payment_method=payment_method,
-            created_by=current_user.id,
+        # GYM-65 — split-aware
+        from app.utils.helpers import (
+            parse_payment_splits, write_split_payments,
+            attach_invoice_to_payments, invoice_method_label,
         )
-        db.session.add(payment)
-        db.session.flush()
+        try:
+            splits = parse_payment_splits(
+                request.form, paid_amount, payment_method
+            )
+        except ValueError as e:
+            flash(str(e), 'danger')
+            return redirect(url_for('classes.enroll', class_id=class_id))
 
-        income = Income(
-            brand_id=gym_class.brand_id,
-            branch_id=subscription.branch_id,
-            subscription_id=subscription.id,
-            service_type_id=gym_class.service_type_id,
-            amount=paid_amount,
-            type='class_subscription',
-            payment_method=payment_method,
-            date=today,
-            created_by=current_user.id,
+        payments = write_split_payments(
+            subscription, splits, income_type='class_subscription',
+            current_user=current_user,
         )
-        db.session.add(income)
 
         branch_for_invoice = gym_class.branch or (member.branch if hasattr(member, 'branch') else None)
         invoice = Invoice(
@@ -828,7 +823,7 @@ def enroll(class_id):
             branch_phone=getattr(branch_for_invoice, 'phone', None),
             branch_address=getattr(branch_for_invoice, 'address', None),
             subscription_id=subscription.id,
-            payment_id=payment.id,
+            payment_id=payments[0].id,
             member_id=member.id,
             invoice_number=Invoice.generate_invoice_number(gym_class.brand_id),
             member_name=member.name,
@@ -844,12 +839,13 @@ def enroll(class_id):
             tax_amount=0,
             total_amount=total_amount,
             amount_paid=paid_amount,
-            payment_method=payment_method,
+            payment_method=invoice_method_label(splits),
             notes=notes,
             created_by=current_user.id,
         )
         db.session.add(invoice)
         db.session.flush()
+        attach_invoice_to_payments(invoice, payments)
         enrollment.invoice_id = invoice.id
 
     # Pre-generate ClassBooking rows so /fp/access-list works unchanged.

@@ -109,6 +109,16 @@
         <div class="row mb-4">
             <div class="col-6">
                 <p class="mb-1"><strong>طريقة الدفع:</strong> {{ invoice.payment_method_text }}</p>
+                {# GYM-65 — show breakdown badges when payment was split. #}
+                {% if invoice.payment_method == 'split' %}
+                <div class="mb-1 d-flex flex-wrap gap-1">
+                    {% for p in invoice.split_payments %}
+                    <span class="badge bg-secondary">
+                        {{ p.payment_method_text }} · {{ "{:,.2f}".format(p.amount) }} ر.س
+                    </span>
+                    {% endfor %}
+                </div>
+                {% endif %}
                 {% if invoice.notes %}
                 <p class="mb-1"><strong>ملاحظات:</strong> {{ invoice.notes }}</p>
                 {% endif %}
