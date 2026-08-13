@@ -74,6 +74,35 @@ def _utc_to_ksa_iso(dt):
     return dt.astimezone(KSA_TZ).isoformat()
 
 
+def _has_manual_allow_today(member_id, today_ksa, last_change_lookup=None):
+    """GYM-64 — return True if the most recent FingerprintAccessLog entry for
+    this member is 'allow' and it was created today (Asia/Riyadh). Enables
+    the admin same-day override that bypasses the class-booking gate.
+
+    ``last_change_lookup`` is an optional pre-fetched dict
+    ``{member_id: (action, ts_utc)}`` — passed by _build_access_list to
+    avoid an N+1 lookup. When absent we run a single-row query.
+    """
+    if last_change_lookup is not None:
+        entry = last_change_lookup.get(member_id)
+    else:
+        from datetime import timezone
+        row = (db.session.query(FingerprintAccessLog.action,
+                                FingerprintAccessLog.created_at)
+               .filter(FingerprintAccessLog.member_id == member_id)
+               .order_by(FingerprintAccessLog.created_at.desc())
+               .first())
+        entry = (row[0], row[1]) if row else None
+    if not entry:
+        return False
+    action, ts_utc = entry
+    if action != 'allow' or not ts_utc:
+        return False
+    from datetime import timezone
+    ts_aware = ts_utc if ts_utc.tzinfo else ts_utc.replace(tzinfo=timezone.utc)
+    return ts_aware.astimezone(KSA_TZ).date() == today_ksa
+
+
 def parse_iso_dt(s):
     if not s:
         return None
@@ -622,7 +651,8 @@ def _build_access_list(branch):
         elif m.is_staff:
             decision = {'allowed': True, 'end_date': FAR_FUTURE_DATE, 'reason': 'موظف'}
         else:
-            decision = _compute_access(m, now, today, window_minutes)
+            decision = _compute_access(m, now, today, window_minutes,
+                                       last_change_lookup=last_change_by_member)
 
         last = last_change_by_member.get(m.id)
         rows.append({
@@ -710,7 +740,13 @@ def _access_window(branch):
     return settings.class_access_window_minutes if settings else 15
 
 
-def _compute_access(member, now, today, window_minutes):
+def _compute_access(member, now, today, window_minutes, last_change_lookup=None):
+    """Decide whether the door should open for this member RIGHT NOW.
+
+    ``last_change_lookup`` (optional): batch-fetched {member_id: (action, ts)}
+    from _build_access_list. Used by the GYM-64 manual-allow override so
+    we don't run one extra query per member.
+    """
     sub = Subscription.query.filter(
         Subscription.member_id == member.id,
         Subscription.status == 'active',
@@ -732,6 +768,12 @@ def _compute_access(member, now, today, window_minutes):
 
     if not requires_class:
         return {'allowed': True, 'end_date': sub.end_date, 'reason': 'اشتراك نشط'}
+
+    # GYM-64 — admin same-day override. If the operator pressed "allow" on
+    # this member today (Riyadh time), bypass the class-booking rule and
+    # grant access for the rest of the day. Auto-expires at midnight.
+    if _has_manual_allow_today(member.id, today, last_change_lookup):
+        return {'allowed': True, 'end_date': today, 'reason': 'سماح يدوي - ينتهي اليوم'}
 
     booking = ClassBooking.query.filter(
         ClassBooking.member_id == member.id,
