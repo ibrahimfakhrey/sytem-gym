@@ -24,7 +24,38 @@
                         </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label">رقم الهاتف *</label>
-                            {{ form.phone(class="form-control", placeholder="05xxxxxxxx") }}
+                            {{ form.phone(class="form-control", placeholder="05xxxxxxxx", id="phone-input") }}
+                            {# GYM-66 — soft duplicate-phone warning. Populated by JS
+                               on blur; also pre-filled when the server rejected
+                               submission because of an unconfirmed duplicate. #}
+                            <div id="phone-dup-alert"
+                                 class="alert alert-warning small mt-2 {% if not duplicate_of %}d-none{% endif %}"
+                                 role="alert">
+                                <div>
+                                    <i class="bi bi-exclamation-triangle"></i>
+                                    <strong>يوجد عضو آخر بنفس الرقم:</strong>
+                                    <ul class="mb-2 mt-1" id="phone-dup-list">
+                                        {% if duplicate_of %}
+                                        <li>
+                                            <a href="{{ url_for('members.view', member_id=duplicate_of.id) }}" target="_blank">
+                                                {{ duplicate_of.name }}
+                                            </a>
+                                            {% if duplicate_of.member_import_id %} · #{{ duplicate_of.member_import_id }}{% endif %}
+                                            {% if duplicate_of.branch %} · {{ duplicate_of.branch.name }}{% endif %}
+                                        </li>
+                                        {% endif %}
+                                    </ul>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox"
+                                           name="phone_duplicate_confirmed" value="1"
+                                           id="phone-dup-confirm"
+                                           {% if duplicate_of %}{% else %}disabled{% endif %}>
+                                    <label class="form-check-label" for="phone-dup-confirm">
+                                        متابعة على أي حال — سأسجّل هذا كعضو منفصل
+                                    </label>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -225,4 +256,62 @@
         {% endif %}
     </div>
 </div>
+
+{# GYM-66 — live check for duplicate phones. On blur of the phone input,
+   hit /members/api/phone-check and render matches inline. If matches
+   exist, enable the "متابعة على أي حال" checkbox. Silent on error. #}
+<script>
+(function () {
+    var input = document.getElementById('phone-input');
+    if (!input) return;
+    var alertBox = document.getElementById('phone-dup-alert');
+    var list = document.getElementById('phone-dup-list');
+    var checkbox = document.getElementById('phone-dup-confirm');
+    {% if member %}
+    var excludeId = {{ member.id }};
+    {% else %}
+    var excludeId = null;
+    {% endif %}
+
+    function check() {
+        var phone = (input.value || '').trim();
+        if (phone.length < 4) {
+            alertBox.classList.add('d-none');
+            checkbox.disabled = true; checkbox.checked = false;
+            return;
+        }
+        var url = '{{ url_for("members.phone_check") }}?phone=' + encodeURIComponent(phone);
+        if (excludeId) url += '&exclude=' + excludeId;
+        fetch(url)
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data.has_duplicates) {
+                    alertBox.classList.add('d-none');
+                    checkbox.disabled = true; checkbox.checked = false;
+                    return;
+                }
+                list.innerHTML = '';
+                data.matches.forEach(function (m) {
+                    var li = document.createElement('li');
+                    var a = document.createElement('a');
+                    a.href = '/members/' + m.id;
+                    a.target = '_blank';
+                    a.textContent = m.name;
+                    li.appendChild(a);
+                    var extras = [];
+                    if (m.member_import_id) extras.push('#' + m.member_import_id);
+                    if (m.branch) extras.push(m.branch);
+                    if (extras.length) li.appendChild(document.createTextNode(' · ' + extras.join(' · ')));
+                    list.appendChild(li);
+                });
+                alertBox.classList.remove('d-none');
+                checkbox.disabled = false;
+            })
+            .catch(function () { /* silent */ });
+    }
+
+    input.addEventListener('blur', check);
+    // If server pre-loaded a warning (unconfirmed POST), keep it visible.
+})();
+</script>
 {% endblock %}

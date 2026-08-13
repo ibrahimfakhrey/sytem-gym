@@ -186,14 +186,23 @@ def create():
             flash(f'تاريخ الحظر: {blocked.blocked_at.strftime("%Y-%m-%d")}', 'warning')
             return render_template('members/form.html', form=form, brand=brand, branches=branches)
         
-        # Check phone uniqueness in brand
-        existing = Member.query.filter_by(
-            brand_id=brand_id,
-            phone=form.phone.data
-        ).first()
-        if existing:
-            flash('رقم الهاتف مسجل مسبقاً في هذا البراند', 'danger')
-            return render_template('members/form.html', form=form, brand=brand, branches=branches)
+        # GYM-66 — duplicate phones are allowed (family members share a number).
+        # The form UI shows a soft warning + "متابعة على أي حال" checkbox that
+        # posts phone_duplicate_confirmed=1. We only re-render the form with a
+        # warning if the operator hits the endpoint directly (not through the
+        # UI) and the checkbox is missing.
+        if not request.form.get('phone_duplicate_confirmed'):
+            dup = Member.query.filter_by(
+                brand_id=brand_id, phone=form.phone.data
+            ).first()
+            if dup:
+                flash(
+                    f'يوجد عضو آخر بنفس الرقم ({dup.name}). '
+                    f'إذا كنت متأكداً من التسجيل كعضو منفصل، ارجع للنموذج وأشّر على "متابعة على أي حال".',
+                    'warning'
+                )
+                return render_template('members/form.html', form=form, brand=brand,
+                                       branches=branches, duplicate_of=dup)
 
         # Get branch_id from form
         branch_id_val = request.form.get('branch_id', type=int)
@@ -314,15 +323,22 @@ def edit(member_id):
     form = MemberForm(obj=member)
 
     if form.validate_on_submit():
-        # Check phone uniqueness
-        existing = Member.query.filter(
-            Member.brand_id == member.brand_id,
-            Member.phone == form.phone.data,
-            Member.id != member_id
-        ).first()
-        if existing:
-            flash('رقم الهاتف مسجل مسبقاً', 'danger')
-            return render_template('members/form.html', form=form, member=member, brand=member.brand, branches=branches)
+        # GYM-66 — soft-check phone duplicates. Allowed with confirmation.
+        if (form.phone.data != member.phone
+                and not request.form.get('phone_duplicate_confirmed')):
+            dup = Member.query.filter(
+                Member.brand_id == member.brand_id,
+                Member.phone == form.phone.data,
+                Member.id != member_id,
+            ).first()
+            if dup:
+                flash(
+                    f'يوجد عضو آخر بنفس الرقم ({dup.name}). '
+                    f'إذا كان مقصود، أشّر على "متابعة على أي حال" وحاول الحفظ مرة ثانية.',
+                    'warning'
+                )
+                return render_template('members/form.html', form=form, member=member,
+                                       brand=member.brand, branches=branches, duplicate_of=dup)
 
         member.name = form.name.data
         member.phone = form.phone.data
@@ -388,6 +404,47 @@ def search():
     } for m in members]
 
     return {'results': results}
+
+
+@members_bp.route('/api/phone-check')
+@login_required
+@members_required
+def phone_check():
+    """GYM-66 — live check for members sharing the same phone number.
+
+    Called from the create/edit form via JS on phone blur. Returns any
+    OTHER members in the current brand with the same phone. The form
+    surfaces the warning + an "متابعة على أي حال" checkbox that lets
+    the operator save anyway.
+    """
+    phone = (request.args.get('phone') or '').strip()
+    exclude_id = request.args.get('exclude', type=int)
+    if not phone or len(phone) < 4:
+        return {'has_duplicates': False, 'matches': []}
+
+    if current_user.can_view_all_brands:
+        brand_id = request.args.get('brand_id', type=int)
+        q = Member.query
+        if brand_id:
+            q = q.filter(Member.brand_id == brand_id)
+    else:
+        q = Member.query.filter(Member.brand_id == current_user.brand_id)
+
+    q = q.filter(Member.phone == phone)
+    if exclude_id:
+        q = q.filter(Member.id != exclude_id)
+
+    matches = q.limit(10).all()
+    return {
+        'has_duplicates': bool(matches),
+        'matches': [{
+            'id': m.id,
+            'name': m.name,
+            'phone': m.phone,
+            'member_import_id': m.member_import_id or '',
+            'branch': (m.branch.name if m.branch else '-'),
+        } for m in matches],
+    }
 
 
 @members_bp.route('/<int:member_id>/block', methods=['GET', 'POST'])
