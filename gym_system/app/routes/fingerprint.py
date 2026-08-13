@@ -758,13 +758,15 @@ def _compute_access(member, now, today, window_minutes, last_change_lookup=None)
     if sub.end_date < today:
         return {'allowed': False, 'end_date': PAST_DATE, 'reason': 'اشتراك منتهي'}
 
-    requires_class = False
-    if sub.plan:
-        # GYM-62 — class-course auto-plans set this flag on the plan directly.
-        # Legacy path (swimming/karate) sets it on the plan's service_type.
-        requires_class = bool(getattr(sub.plan, 'requires_class_booking', False))
-        if not requires_class and getattr(sub.plan, 'service_type', None):
-            requires_class = bool(getattr(sub.plan.service_type, 'requires_class_booking', False))
+    # GYM-67: plan.requires_class_booking is authoritative. The old
+    # `plan OR service_type` inference caused false-positives when a
+    # regular gym plan was linked to a service_type that happened to
+    # have the flag (e.g. plan #37 → drة الدخل الرياضي on prod). Boot
+    # guard now backfills the flag onto every plan whose service_type
+    # had it set, so real swimming/karate/class plans keep working; a
+    # misconfigured plan can be corrected by unchecking the flag in
+    # the plan admin form.
+    requires_class = bool(sub.plan and getattr(sub.plan, 'requires_class_booking', False))
 
     if not requires_class:
         return {'allowed': True, 'end_date': sub.end_date, 'reason': 'اشتراك نشط'}

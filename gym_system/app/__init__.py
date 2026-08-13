@@ -365,6 +365,17 @@ def create_app(config_name=None):
                             conn.exec_driver_sql(ddl)
                         except Exception:
                             pass
+                    # GYM-67 — NO backfill by design. On prod, brand 10's
+                    # service_type "درة الدخل الرياضي" was mistakenly flagged
+                    # requires_class_booking=1, cascading to 12 regular gym
+                    # plans and blocking 370 members every non-class day.
+                    # Backfilling plan.requires_class_booking from the
+                    # service_type flag would preserve that damage. Instead,
+                    # we simply make plan.requires_class_booking authoritative
+                    # in _compute_access (see app/routes/fingerprint.py) and
+                    # trust the flag the operator actually set on each plan.
+                    # Real class plans (plan.requires_class_booking=1) keep
+                    # enforcing the class-window rule.
                 except Exception:
                     pass
                 # complaint_attachments (GYM-21)
