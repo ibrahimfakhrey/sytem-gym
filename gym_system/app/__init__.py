@@ -373,6 +373,35 @@ def create_app(config_name=None):
                         conn.exec_driver_sql(
                             "ALTER TABLE subscription_payments ADD COLUMN invoice_id INTEGER"
                         )
+                    # GYM-68 — backfill an initial fp-access log row for every
+                    # member with a fingerprint_id who has no log entries yet.
+                    # Sharif's desktop client is diff-based: it only writes to
+                    # backup.mdb when it sees a changed `last_changed_at` per
+                    # member. Members with no log row have last_changed_at=null,
+                    # which the diff logic never sees as "changed", so they
+                    # were silently skipped and never appeared at the gate.
+                    # Idempotent — the NOT EXISTS clause skips members that
+                    # already have any log row.
+                    try:
+                        conn.exec_driver_sql("""
+                            INSERT INTO fingerprint_access_logs
+                                (brand_id, branch_id, member_id, member_name,
+                                 fingerprint_id, member_import_id, action,
+                                 source, notes, created_at)
+                            SELECT m.brand_id, m.branch_id, m.id, m.name,
+                                   m.fingerprint_id, m.member_import_id,
+                                   'allow', 'system',
+                                   'backfilled initial log row (GYM-68)',
+                                   CURRENT_TIMESTAMP
+                            FROM members m
+                            WHERE m.fingerprint_id IS NOT NULL
+                              AND NOT EXISTS (
+                                  SELECT 1 FROM fingerprint_access_logs fal
+                                  WHERE fal.member_id = m.id
+                              )
+                        """)
+                    except Exception:
+                        pass
                     # GYM-67 — NO backfill by design. On prod, brand 10's
                     # service_type "درة الدخل الرياضي" was mistakenly flagged
                     # requires_class_booking=1, cascading to 12 regular gym

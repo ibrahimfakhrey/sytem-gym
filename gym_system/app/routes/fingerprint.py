@@ -599,6 +599,19 @@ def _upsert_member_from_mdb(m, brand_id, branch_id, allow_create=True, return_st
     )
     db.session.add(new_member)
     db.session.flush()
+    # GYM-68 — initial fp-access log so the desktop bridge picks up the row.
+    if fingerprint_id:
+        db.session.add(FingerprintAccessLog(
+            brand_id=brand_id,
+            branch_id=branch_id,
+            member_id=new_member.id,
+            member_name=new_member.name,
+            fingerprint_id=fingerprint_id,
+            member_import_id=emp_id,
+            action='allow',
+            source='desktop',
+            notes='initial log row (GYM-68)',
+        ))
     return ('created', new_member) if return_status else new_member
 
 

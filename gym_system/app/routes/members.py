@@ -258,6 +258,31 @@ def create():
                     member.photo = photo_path
 
         db.session.add(member)
+        db.session.flush()  # Get member.id for the fp-log row below.
+
+        # GYM-68 — write an initial FingerprintAccessLog row so the desktop
+        # bridge picks up the new member. Sharif's client is diff-based: it
+        # only updates backup.mdb when it detects a changed `last_changed_at`
+        # per member. Members without any log row have `last_action=null` +
+        # `last_changed_at=null`, which the diff logic can never see as
+        # "changed", so newly-created members were silently skipped.
+        if member.fingerprint_id and member_branch:
+            from app.models.fingerprint import FingerprintAccessLog
+            db.session.add(FingerprintAccessLog(
+                brand_id=brand_id,
+                branch_id=member_branch.id,
+                member_id=member.id,
+                member_name=member.name,
+                fingerprint_id=member.fingerprint_id,
+                member_import_id=member.member_import_id,
+                action='allow',  # neutral default; the actual door decision
+                                  # is still computed by _compute_access.
+                source='system',
+                actor_user_id=current_user.id,
+                actor_name=current_user.name,
+                notes='initial log row (GYM-68)',
+            ))
+
         db.session.commit()
 
         flash('تم إضافة العضو بنجاح', 'success')
