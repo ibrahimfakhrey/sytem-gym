@@ -117,19 +117,24 @@
                     <li>الشكاوى والحظر والبطاقات والعروض</li>
                     <li>سجلات البصمة والأجهزة</li>
                 </ul>
-                <div class="alert alert-info small mb-3">
-                    <i class="bi bi-info-circle"></i>
+                {# NOTE: not using .alert-warning here because the project's
+                   style.css forces .alert to display:flex + align-items:center
+                   which compresses the label + input side-by-side. Plain
+                   bordered div keeps stacked layout. #}
+                <div class="p-3 small mb-3 rounded"
+                     style="background:#e8f4fc; border-right:4px solid #0F3460; color:#0F3460;">
                     <strong>ملاحظة:</strong> الفواتير والإيرادات والمصروفات
                     يتم إخفاؤها فقط (soft-delete) للاحتفاظ بها للمراجعة الضريبية.
                 </div>
-                <div class="alert alert-warning mb-0">
-                    <label for="deleteBrandConfirmInput" class="form-label mb-1 fw-semibold">
+                <div class="p-3 rounded"
+                     style="background:#fff8e1; border-right:4px solid #f39c12;">
+                    <label for="deleteBrandConfirmInput" class="form-label mb-1 fw-semibold d-block">
                         للتأكيد اكتب اسم البراند بالضبط:
                     </label>
-                    <div class="text-danger fw-bold mb-2" id="deleteBrandNameHint"></div>
+                    <div class="text-danger fw-bold mb-2 d-block" id="deleteBrandNameHint"></div>
                     <input type="text"
                            id="deleteBrandConfirmInput"
-                           class="form-control"
+                           class="form-control d-block w-100"
                            placeholder="اكتب الاسم هنا…"
                            autocomplete="off">
                 </div>
