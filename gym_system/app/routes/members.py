@@ -304,6 +304,18 @@ def view(member_id):
         flash('ليس لديك صلاحية لعرض هذا العضو', 'danger')
         return redirect(url_for('members.index'))
 
+    # GYM-69 — persistent fingerprint-stopped banner. The template can't rely
+    # on `member.is_active` alone because subscriptions.create() and
+    # classes.enroll() silently flip it back to True. We check the latest
+    # FingerprintAccessLog entry instead — if the last operator action was
+    # 'stop', the banner shows regardless of what happened to is_active.
+    from app.models.fingerprint import FingerprintAccessLog
+    latest_fp_log = FingerprintAccessLog.query.filter_by(
+        member_id=member_id
+    ).order_by(FingerprintAccessLog.created_at.desc()).first()
+    fp_last_action = latest_fp_log.action if latest_fp_log else None
+    fp_stopped = fp_last_action == 'stop' or not member.is_active
+
     # Get subscriptions
     subscriptions = member.subscriptions.all()
 
@@ -329,7 +341,9 @@ def view(member_id):
                           attendance=attendance,
                           health_reports=health_reports,
                           latest_health=latest_health,
-                          complaints=complaints)
+                          complaints=complaints,
+                          fp_stopped=fp_stopped,
+                          fp_last_action=fp_last_action)
 
 
 @members_bp.route('/<int:member_id>/edit', methods=['GET', 'POST'])
