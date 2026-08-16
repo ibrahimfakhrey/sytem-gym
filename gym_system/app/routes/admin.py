@@ -315,8 +315,18 @@ def brands_delete(brand_id):
             except Exception:
                 pass
 
-        # 13. Brand row
-        db.session.delete(brand)
+        # 13. Brand row — use raw SQL to bypass ORM relationship cascade.
+        # SQLAlchemy's default cascade on backref='expenses'/'incomes'/etc.
+        # tries to UPDATE those child rows SET brand_id=NULL when the brand
+        # is deleted via db.session.delete(brand), which fails because the
+        # child brand_id columns are NOT NULL. Raw DELETE skips that logic.
+        from sqlalchemy import text as _sql_text
+        logo_path = brand.logo
+        db.session.expunge(brand)
+        db.session.execute(
+            _sql_text('DELETE FROM brands WHERE id = :bid'),
+            {'bid': brand_id},
+        )
         db.session.commit()
         flash(f'تم حذف البراند "{brand_name}" وكل بياناته', 'success')
     except Exception as e:
