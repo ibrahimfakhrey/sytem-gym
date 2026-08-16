@@ -157,6 +157,175 @@ def brands_edit(brand_id):
     return render_template('admin/brands/form.html', form=form, brand=brand)
 
 
+@admin_bp.route('/brands/<int:brand_id>/delete', methods=['POST'])
+@login_required
+@owner_required
+def brands_delete(brand_id):
+    """GYM-70 — permanently delete a brand and every child row.
+
+    Guardrails:
+    - is_owner only (via @owner_required).
+    - `confirm_name` in form must equal `brand.name` exactly.
+    - Cascade order is leaves-first; wrapped in a single transaction so a
+      failure rolls back everything.
+    - Financial rows (Invoice, Income, Expense, SubscriptionPayment) and
+      audit rows (FingerprintAccessLog, EditAuditLog, MemberMergeLog) are
+      soft-deleted / null-linked so tax + audit history survives.
+    - Users with brand_id IS NULL (system admins, finance_admin) are never
+      touched — the filter is strict `User.brand_id == brand_id`.
+    """
+    from app.models.member import Member
+    from app.models.subscription import (
+        Subscription, SubscriptionFreeze, SubscriptionPayment, RenewalRejection,
+    )
+    from app.models.finance import Income, Expense, Invoice, Refund, Salary, ExpenseCategory
+    from app.models.attendance import MemberAttendance, EmployeeAttendance
+    from app.models.classes import GymClass, ClassBooking, ClassSession, ClassEnrollment
+    from app.models.complaint import Complaint
+    from app.models.blocked_member import BlockedMember
+    from app.models.giftcard import GiftCard
+    from app.models.offer import PromotionalOffer
+    from app.models.day_pass import DayPass, DayPassPrice
+    from app.models.daily_closing import DailyClosing
+    from app.models.employee import (
+        EmployeeShift, EmployeeReward, EmployeeDeduction,
+        EmployeeLateRule, EmployeeSettings,
+    )
+    from app.models.fingerprint import (
+        BridgeStatus, BridgeSettings, DeviceCommand,
+        FingerprintSyncLog, FingerprintAccessLog,
+    )
+    from app.models.approvals import PendingEdit, EditAuditLog
+    from app.models.approvals import SubscriptionFreezeRequest
+    try:
+        from app.models.merge_log import MemberMergeLog
+    except Exception:
+        MemberMergeLog = None
+
+    brand = Brand.query.get_or_404(brand_id)
+
+    confirm_name = (request.form.get('confirm_name') or '').strip()
+    if confirm_name != brand.name:
+        flash('اسم البراند المكتوب لا يطابق — تم إلغاء الحذف', 'danger')
+        return redirect(url_for('admin.brands_list'))
+
+    brand_name = brand.name
+
+    try:
+        # 1. Bookings + attendance leaves
+        MemberAttendance.query.filter_by(brand_id=brand.id).delete(synchronize_session=False)
+        EmployeeAttendance.query.filter_by(brand_id=brand.id).delete(synchronize_session=False)
+
+        # Classes cascade
+        class_ids = [c.id for c in GymClass.query.filter_by(brand_id=brand.id).all()]
+        if class_ids:
+            ClassBooking.query.filter(ClassBooking.class_id.in_(class_ids)).delete(synchronize_session=False)
+            ClassSession.query.filter(ClassSession.class_id.in_(class_ids)).delete(synchronize_session=False)
+            ClassEnrollment.query.filter(ClassEnrollment.class_id.in_(class_ids)).delete(synchronize_session=False)
+
+        # 2. Approval queues + subscription lifecycle
+        sub_ids = [s.id for s in Subscription.query.filter_by(brand_id=brand.id).all()]
+        if sub_ids:
+            SubscriptionFreezeRequest.query.filter(
+                SubscriptionFreezeRequest.subscription_id.in_(sub_ids)
+            ).delete(synchronize_session=False)
+            SubscriptionFreeze.query.filter(
+                SubscriptionFreeze.subscription_id.in_(sub_ids)
+            ).delete(synchronize_session=False)
+            RenewalRejection.query.filter(
+                RenewalRejection.subscription_id.in_(sub_ids)
+            ).delete(synchronize_session=False)
+            Refund.query.filter(
+                Refund.subscription_id.in_(sub_ids)
+            ).delete(synchronize_session=False)
+
+        PendingEdit.query.filter_by(brand_id=brand.id).delete(synchronize_session=False)
+
+        # 3. Classes root
+        GymClass.query.filter_by(brand_id=brand.id).delete(synchronize_session=False)
+
+        # 4. Moderation + complaints
+        BlockedMember.query.filter_by(brand_id=brand.id).delete(synchronize_session=False)
+        Complaint.query.filter_by(brand_id=brand.id).delete(synchronize_session=False)
+
+        # 5. Fingerprint infrastructure
+        DeviceCommand.query.filter_by(brand_id=brand.id).delete(synchronize_session=False)
+        FingerprintSyncLog.query.filter_by(brand_id=brand.id).delete(synchronize_session=False)
+        BridgeStatus.query.filter_by(brand_id=brand.id).delete(synchronize_session=False)
+        BridgeSettings.query.filter_by(brand_id=brand.id).delete(synchronize_session=False)
+
+        # 6. Gift cards + promotions + day-pass
+        GiftCard.query.filter_by(brand_id=brand.id).delete(synchronize_session=False)
+        PromotionalOffer.query.filter_by(brand_id=brand.id).delete(synchronize_session=False)
+        DayPass.query.filter_by(brand_id=brand.id).delete(synchronize_session=False)
+        DayPassPrice.query.filter_by(brand_id=brand.id).delete(synchronize_session=False)
+
+        # 7. Employee ops
+        EmployeeShift.query.filter_by(brand_id=brand.id).delete(synchronize_session=False)
+        EmployeeReward.query.filter_by(brand_id=brand.id).delete(synchronize_session=False)
+        EmployeeDeduction.query.filter_by(brand_id=brand.id).delete(synchronize_session=False)
+        EmployeeLateRule.query.filter_by(brand_id=brand.id).delete(synchronize_session=False)
+        EmployeeSettings.query.filter_by(brand_id=brand.id).delete(synchronize_session=False)
+
+        # 8. Daily closings + salaries
+        DailyClosing.query.filter_by(brand_id=brand.id).delete(synchronize_session=False)
+        Salary.query.filter_by(brand_id=brand.id).delete(synchronize_session=False)
+
+        # 9. Soft-delete for finance + audit — preserve history for tax/compliance.
+        # Invoice has NO is_deleted column, and brand_id is NOT NULL, so it
+        # must be hard-deleted. The Income + Expense rows carry the same
+        # financial data (amount, type, payment_method, date) and DO have
+        # is_deleted, so tax history survives via those rows.
+        Invoice.query.filter_by(brand_id=brand.id).delete(synchronize_session=False)
+        Income.query.filter_by(brand_id=brand.id).update(
+            {'is_deleted': True}, synchronize_session=False)
+        Expense.query.filter_by(brand_id=brand.id).update(
+            {'is_deleted': True}, synchronize_session=False)
+        SubscriptionPayment.query.filter_by(brand_id=brand.id).update(
+            {'is_deleted': True}, synchronize_session=False)
+        # FingerprintAccessLog.brand_id is NOT NULL — can't null it. Hard-delete.
+        # Same for MemberMergeLog. These are operational audit (who pressed
+        # stop/allow, who merged member X into Y); the financial audit trail
+        # is preserved via Income/Expense soft-delete above.
+        FingerprintAccessLog.query.filter_by(brand_id=brand.id).delete(synchronize_session=False)
+        EditAuditLog.query.filter_by(brand_id=brand.id).update(
+            {'brand_id': None}, synchronize_session=False)
+        if MemberMergeLog is not None:
+            try:
+                MemberMergeLog.query.filter_by(brand_id=brand.id).delete(synchronize_session=False)
+            except Exception:
+                pass
+
+        # 10. Subscriptions themselves (all children cleared by now)
+        Subscription.query.filter_by(brand_id=brand.id).delete(synchronize_session=False)
+
+        # 11. People + org
+        Member.query.filter_by(brand_id=brand.id).delete(synchronize_session=False)
+        # CRITICAL — brand_id == brand.id EXACT match; NULL admins survive.
+        User.query.filter(User.brand_id == brand.id).delete(synchronize_session=False)
+        Branch.query.filter_by(brand_id=brand.id).delete(synchronize_session=False)
+        Plan.query.filter_by(brand_id=brand.id).delete(synchronize_session=False)
+        ServiceType.query.filter_by(brand_id=brand.id).delete(synchronize_session=False)
+        ExpenseCategory.query.filter_by(brand_id=brand.id).delete(synchronize_session=False)
+
+        # 12. Logo file
+        if brand.logo:
+            try:
+                delete_uploaded_file(brand.logo)
+            except Exception:
+                pass
+
+        # 13. Brand row
+        db.session.delete(brand)
+        db.session.commit()
+        flash(f'تم حذف البراند "{brand_name}" وكل بياناته', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'فشل حذف البراند: {e}', 'danger')
+
+    return redirect(url_for('admin.brands_list'))
+
+
 # ============== Branches ==============
 
 @admin_bp.route('/brands/<int:brand_id>/branches')

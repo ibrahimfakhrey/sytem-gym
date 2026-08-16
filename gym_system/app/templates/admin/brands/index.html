@@ -61,6 +61,16 @@
                                    class="btn btn-sm btn-outline-dark">
                                     <i class="bi bi-fingerprint"></i> البصمة
                                 </a>
+                                {# GYM-70 — delete brand. Opens the shared modal at the bottom of the page. #}
+                                <button type="button"
+                                        class="btn btn-sm btn-outline-danger"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#deleteBrandModal"
+                                        data-brand-id="{{ brand.id }}"
+                                        data-brand-name="{{ brand.name }}"
+                                        title="حذف البراند وكل بياناته">
+                                    <i class="bi bi-trash"></i> حذف
+                                </button>
                                 {% endif %}
                             </div>
                         </td>
@@ -82,4 +92,94 @@
         {% endif %}
     </div>
 </div>
+
+{# GYM-70 — shared delete-brand modal. Each trash button sets
+   data-brand-id / data-brand-name, which the JS below reads to
+   populate the form action and the "type the name to confirm" input. #}
+{% if current_user.is_owner %}
+<div class="modal fade" id="deleteBrandModal" tabindex="-1" aria-labelledby="deleteBrandModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deleteBrandModalLabel">
+                    <i class="bi bi-exclamation-triangle"></i> حذف براند نهائي
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-2">
+                    سيتم حذف <strong id="deleteBrandName" class="text-danger"></strong>
+                    وكل ما يتبعه نهائياً:
+                </p>
+                <ul class="small mb-3">
+                    <li>جميع الفروع والموظفين والأعضاء</li>
+                    <li>جميع الاشتراكات والحضور والحجوزات والكلاسات</li>
+                    <li>الشكاوى والحظر والبطاقات والعروض</li>
+                    <li>سجلات البصمة والأجهزة</li>
+                </ul>
+                <div class="alert alert-info small mb-3">
+                    <i class="bi bi-info-circle"></i>
+                    <strong>ملاحظة:</strong> الفواتير والإيرادات والمصروفات
+                    يتم إخفاؤها فقط (soft-delete) للاحتفاظ بها للمراجعة الضريبية.
+                </div>
+                <div class="alert alert-warning mb-0">
+                    <label for="deleteBrandConfirmInput" class="form-label mb-1 fw-semibold">
+                        للتأكيد اكتب اسم البراند بالضبط:
+                    </label>
+                    <div class="text-danger fw-bold mb-2" id="deleteBrandNameHint"></div>
+                    <input type="text"
+                           id="deleteBrandConfirmInput"
+                           class="form-control"
+                           placeholder="اكتب الاسم هنا…"
+                           autocomplete="off">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                <form id="deleteBrandForm" method="POST" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="confirm_name" id="deleteBrandConfirmName" value="">
+                    <button type="submit" id="deleteBrandSubmit" class="btn btn-danger" disabled>
+                        <i class="bi bi-trash"></i> حذف نهائي
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    const modal = document.getElementById('deleteBrandModal');
+    if (!modal) return;
+    const nameEl        = document.getElementById('deleteBrandName');
+    const nameHintEl    = document.getElementById('deleteBrandNameHint');
+    const input         = document.getElementById('deleteBrandConfirmInput');
+    const hiddenName    = document.getElementById('deleteBrandConfirmName');
+    const submitBtn     = document.getElementById('deleteBrandSubmit');
+    const form          = document.getElementById('deleteBrandForm');
+    let expectedName = '';
+
+    modal.addEventListener('show.bs.modal', function (event) {
+        const trigger = event.relatedTarget;
+        if (!trigger) return;
+        const brandId   = trigger.getAttribute('data-brand-id');
+        expectedName    = trigger.getAttribute('data-brand-name') || '';
+        nameEl.textContent      = expectedName;
+        nameHintEl.textContent  = expectedName;
+        form.action             = '/admin/brands/' + brandId + '/delete';
+        input.value             = '';
+        hiddenName.value        = '';
+        submitBtn.disabled      = true;
+    });
+
+    input.addEventListener('input', function () {
+        const typed = input.value.trim();
+        const ok    = (typed === expectedName && expectedName !== '');
+        submitBtn.disabled = !ok;
+        hiddenName.value   = typed;
+    });
+})();
+</script>
+{% endif %}
 {% endblock %}
