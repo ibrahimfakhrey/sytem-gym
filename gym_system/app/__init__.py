@@ -683,3 +683,60 @@ def register_cli_commands(app):
             n_sessions += 1
         db.session.commit()
         click.echo(f'{n_sessions} sessions closed, {n_no_shows} bookings marked no-show')
+
+    @app.cli.command('auto-unfreeze-expired')
+    def auto_unfreeze_expired():
+        """GYM-71 — flip subscriptions from 'frozen' back to 'active' when
+        the latest SubscriptionFreeze.freeze_end < today (Asia/Riyadh).
+
+        Runs the same code path as the manual /unfreeze route but for
+        every eligible subscription in one pass. Idempotent — subsequent
+        runs no-op. Meant to be scheduled daily on PythonAnywhere:
+
+            0 3 * * *  cd ~/sytem-gym/gym_system && FLASK_APP=run.py flask auto-unfreeze-expired
+
+        (3 AM KSA = 00:00 UTC — first minute of the new KSA day.)
+        """
+        import json as _json
+        from .routes.fingerprint import ksa_today
+        from .models.subscription import Subscription, SubscriptionFreeze
+        from .models.fingerprint import DeviceCommand
+
+        today = ksa_today()  # KSA date, not UTC. Matches _compute_access.
+        frozen_subs = Subscription.query.filter_by(status='frozen').all()
+
+        n_unfrozen = 0
+        n_skipped = 0
+        for sub in frozen_subs:
+            latest = SubscriptionFreeze.query.filter_by(
+                subscription_id=sub.id
+            ).order_by(SubscriptionFreeze.freeze_end.desc()).first()
+            if not latest or latest.freeze_end is None:
+                n_skipped += 1
+                continue
+            if latest.freeze_end >= today:
+                # Still inside the freeze window
+                n_skipped += 1
+                continue
+
+            sub.status = 'active'
+            n_unfrozen += 1
+
+            # Dispatch unblock — same shape as /subscriptions/<id>/unfreeze
+            member = sub.member
+            if (member and member.fingerprint_id and member.branch
+                    and getattr(member.branch, 'uses_fingerprint', False)):
+                db.session.add(DeviceCommand(
+                    brand_id=sub.brand_id,
+                    command_type='unblock_member',
+                    target_emp_id=member.fingerprint_id,
+                    member_id=member.id,
+                    command_data=_json.dumps({'end_date': sub.end_date.isoformat()}),
+                    status='pending',
+                ))
+
+        db.session.commit()
+        click.echo(
+            f'auto-unfreeze: {n_unfrozen} unfrozen, {n_skipped} still frozen '
+            f'(KSA today = {today.isoformat()})'
+        )
