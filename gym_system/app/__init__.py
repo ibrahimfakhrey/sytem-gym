@@ -696,11 +696,15 @@ def register_cli_commands(app):
             0 3 * * *  cd ~/sytem-gym/gym_system && FLASK_APP=run.py flask auto-unfreeze-expired
 
         (3 AM KSA = 00:00 UTC — first minute of the new KSA day.)
+
+        Also writes a FingerprintAccessLog row with action='allow' per
+        unfrozen member so Sharif's diff-based desktop client picks up
+        the change on its next poll (last_changed_at gets bumped to now).
         """
         import json as _json
         from .routes.fingerprint import ksa_today
         from .models.subscription import Subscription, SubscriptionFreeze
-        from .models.fingerprint import DeviceCommand
+        from .models.fingerprint import DeviceCommand, FingerprintAccessLog
 
         today = ksa_today()  # KSA date, not UTC. Matches _compute_access.
         frozen_subs = Subscription.query.filter_by(status='frozen').all()
@@ -722,18 +726,35 @@ def register_cli_commands(app):
             sub.status = 'active'
             n_unfrozen += 1
 
-            # Dispatch unblock — same shape as /subscriptions/<id>/unfreeze
             member = sub.member
-            if (member and member.fingerprint_id and member.branch
-                    and getattr(member.branch, 'uses_fingerprint', False)):
-                db.session.add(DeviceCommand(
-                    brand_id=sub.brand_id,
-                    command_type='unblock_member',
-                    target_emp_id=member.fingerprint_id,
+            if member:
+                # Bump FingerprintAccessLog.last_changed_at so the diff-based
+                # desktop client picks up the change on its next poll.
+                # GYM-68 keeps every member with at least one log row; here
+                # we add a fresh 'allow' entry with source='system'.
+                db.session.add(FingerprintAccessLog(
+                    brand_id=member.brand_id,
+                    branch_id=member.branch_id,
                     member_id=member.id,
-                    command_data=_json.dumps({'end_date': sub.end_date.isoformat()}),
-                    status='pending',
+                    member_name=member.name,
+                    fingerprint_id=member.fingerprint_id,
+                    member_import_id=member.member_import_id,
+                    action='allow',
+                    source='system',
+                    notes='auto-unfreeze (GYM-71)',
                 ))
+
+                # Dispatch unblock (existing behavior for legacy queue-based clients).
+                if (member.fingerprint_id and member.branch
+                        and getattr(member.branch, 'uses_fingerprint', False)):
+                    db.session.add(DeviceCommand(
+                        brand_id=sub.brand_id,
+                        command_type='unblock_member',
+                        target_emp_id=member.fingerprint_id,
+                        member_id=member.id,
+                        command_data=_json.dumps({'end_date': sub.end_date.isoformat()}),
+                        status='pending',
+                    ))
 
         db.session.commit()
         click.echo(

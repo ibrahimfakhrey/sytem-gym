@@ -876,11 +876,30 @@ def unfreeze(subscription_id):
         return redirect(url_for('subscriptions.view', subscription_id=subscription_id))
 
     subscription.status = 'active'
+
+    # GYM-71 — bump FingerprintAccessLog so the desktop's diff-based sync
+    # picks up the change on its next poll (same reason as auto-unfreeze).
+    member = subscription.member
+    if member:
+        from app.models.fingerprint import FingerprintAccessLog
+        db.session.add(FingerprintAccessLog(
+            brand_id=member.brand_id,
+            branch_id=member.branch_id,
+            member_id=member.id,
+            member_name=member.name,
+            fingerprint_id=member.fingerprint_id,
+            member_import_id=member.member_import_id,
+            action='allow',
+            source='web',
+            actor_user_id=current_user.id,
+            actor_name=current_user.name,
+            notes='manual unfreeze',
+        ))
+
     db.session.commit()
 
     # Send command to fingerprint device to unblock member after unfreeze
-    member = subscription.member
-    if member.fingerprint_id and member.branch and member.branch.uses_fingerprint:
+    if member and member.fingerprint_id and member.branch and member.branch.uses_fingerprint:
         unblock_cmd = DeviceCommand(
             brand_id=subscription.brand_id,
             command_type='unblock_member',
