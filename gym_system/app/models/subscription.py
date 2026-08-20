@@ -168,8 +168,30 @@ class Subscription(db.Model):
         return sum(f.freeze_days for f in self.freezes.all())
 
     @property
+    def effective_status(self):
+        """GYM-72 — the real current status, accounting for expiry that the
+        raw ``status`` field doesn't know about.
+
+        The DB ``status`` field stays 'active' even after ``end_date`` passes
+        and even after a session-based sub burns through all its sessions,
+        because nothing auto-flips it. The fingerprint gate handles this
+        separately (`_compute_access` checks end_date directly), but the
+        member-view UI was showing "نشط" for subscriptions that were
+        clearly expired. This property returns 'expired' in those cases
+        so status_text/status_class render correctly.
+        """
+        if self.status != 'active':
+            return self.status
+        if self.end_date and self.end_date < date.today():
+            return 'expired'
+        # Session-based sub with all sessions burned = also expired.
+        if (self.sessions_total or 0) > 0 and (self.sessions_consumed or 0) >= self.sessions_total:
+            return 'expired'
+        return 'active'
+
+    @property
     def status_text(self):
-        """Status in Arabic"""
+        """Effective status in Arabic (see effective_status)."""
         status_map = {
             'active': 'نشط',
             'frozen': 'مجمد',
@@ -177,11 +199,11 @@ class Subscription(db.Model):
             'cancelled': 'ملغي',
             'stopped': 'موقوف'
         }
-        return status_map.get(self.status, self.status)
+        return status_map.get(self.effective_status, self.effective_status)
 
     @property
     def status_class(self):
-        """CSS class for status"""
+        """CSS class for effective status."""
         class_map = {
             'active': 'success',
             'frozen': 'warning',
@@ -189,7 +211,7 @@ class Subscription(db.Model):
             'cancelled': 'secondary',
             'stopped': 'dark'
         }
-        return class_map.get(self.status, 'secondary')
+        return class_map.get(self.effective_status, 'secondary')
 
     @property
     def is_session_based(self):
