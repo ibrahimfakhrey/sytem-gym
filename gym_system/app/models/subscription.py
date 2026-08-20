@@ -168,6 +168,13 @@ class Subscription(db.Model):
         return sum(f.freeze_days for f in self.freezes.all())
 
     @property
+    def current_freeze_end(self):
+        """GYM-74 — the freeze_end date of the latest SubscriptionFreeze row.
+        Used by the member view to show 'ينفك يوم X' next to a frozen sub."""
+        latest = self.freezes.order_by(SubscriptionFreeze.freeze_end.desc()).first()
+        return latest.freeze_end if latest else None
+
+    @property
     def effective_status(self):
         """GYM-72 — the real current status, accounting for expiry that the
         raw ``status`` field doesn't know about.

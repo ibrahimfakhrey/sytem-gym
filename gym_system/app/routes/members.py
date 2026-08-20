@@ -1,3 +1,4 @@
+from datetime import date
 from flask import Blueprint, render_template, redirect, url_for, flash, request, abort
 from flask_login import login_required, current_user
 from flask_wtf import FlaskForm
@@ -346,7 +347,8 @@ def view(member_id):
                           latest_health=latest_health,
                           complaints=complaints,
                           fp_stopped=fp_stopped,
-                          fp_last_action=fp_last_action)
+                          fp_last_action=fp_last_action,
+                          today=date.today())  # GYM-74: for freeze countdown
 
 
 @members_bp.route('/<int:member_id>/edit', methods=['GET', 'POST'])
