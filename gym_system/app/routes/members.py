@@ -316,8 +316,11 @@ def view(member_id):
     fp_last_action = latest_fp_log.action if latest_fp_log else None
     fp_stopped = fp_last_action == 'stop' or not member.is_active
 
-    # Get subscriptions
-    subscriptions = member.subscriptions.all()
+    # Get subscriptions — GYM-73: hide soft-deleted rows from the history
+    # table. The `active_subscription` property (used by the top card) already
+    # filters is_deleted=False, so the top said "no active sub" while the
+    # history still listed the deleted one as نشط. Both views must agree.
+    subscriptions = member.subscriptions.filter_by(is_deleted=False).all()
 
     # Get attendance
     attendance = member.attendance.limit(20).all()
